@@ -1,0 +1,107 @@
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlay.open {
+  display: flex;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px;
+  width: 440px;
+  max-width: 92vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modalTitle {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--km-text);
+}
+
+.formGroup {
+  margin-bottom: 14px;
+}
+
+.formLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--km-muted);
+  margin-bottom: 5px;
+  display: block;
+}
+
+.required {
+  color: var(--km-red);
+}
+
+.formInput,
+.formSelect {
+  width: 100%;
+  border: 1px solid var(--km-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--km-text);
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+  background: #fff;
+}
+
+.formInput:focus,
+.formSelect:focus {
+  border-color: var(--km-orange);
+}
+
+.formInput.error {
+  border-color: var(--km-red);
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--km-border);
+}
+
+.btnCancel {
+  padding: 9px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--km-border);
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.btnCancel:hover { background: var(--km-bg); }
+
+.btnSave {
+  padding: 9px 20px;
+  border-radius: 8px;
+  background: var(--km-orange);
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.btnSave:hover { background: #d14600; }

@@ -1,0 +1,6 @@
+.wrapper {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid var(--km-border);
+  overflow: hidden;
+}

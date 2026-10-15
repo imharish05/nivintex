@@ -1,0 +1,220 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ── ROOT ── */
+:root {
+  --km-orange: #0f5447;
+  --km-orange-light: #126354;
+  --km-blue: #0f5447;
+  --km-blue-dark: #0b3a31;
+  --km-yellow: #A2C579;
+  --km-bg: #2C2F33;
+  --km-card: #2C2F33;
+  --km-border: rgba(255,255,255,0.08);
+  --km-text: #e8edf5;
+  --km-muted: #7a8fa8;
+  --km-green: #0f5447;
+}
+
+/* ── CONTAINER ── */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--km-bg);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(15, 84, 71, 0.18) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(162, 197, 121, 0.12) 0%, transparent 50%);
+  font-family: 'DM Sans', sans-serif;
+  padding: 1rem;
+}
+
+/* ── BOX ── */
+.login-box {
+  width: 100%;
+  max-width: 430px;
+  background: var(--km-card);
+  padding: 44px 40px 32px;
+  border-radius: 24px;
+  border: 1px solid var(--km-border);
+  box-shadow:
+    0 32px 64px rgba(0,0,0,0.45),
+    0 0 0 1px rgba(15, 84, 71, 0.1);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-box::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--km-blue) 0%, var(--km-orange) 50%, var(--km-yellow) 100%);
+}
+
+/* ── BRANDING TEXT ── */
+.login-branding h2 {
+  font-family: 'Nunito', sans-serif;
+  font-size: 30px;
+  font-weight: 900;
+  color: var(--km-text);
+  letter-spacing: -0.5px;
+  margin: 0 0 4px;
+}
+
+.km-orange  { color: var(--km-green); }
+.km-green-text { color: var(--km-orange); }
+
+.km-tagline {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--km-yellow);
+  margin: 0 0 6px;
+  opacity: 0.85;
+}
+
+.km-sub {
+  font-size: 13px;
+  color: var(--km-muted);
+  margin-bottom: 28px;
+  font-weight: 300;
+}
+
+/* ── ERROR ALERT ── */
+.error-alert {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* ── INPUT FIELD ── */
+.input-field {
+  position: relative;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.input-field .icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--km-orange);
+  font-size: 19px;
+  pointer-events: none;
+}
+
+.input-field input {
+  width: 100%;
+  padding: 14px 14px 14px 48px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--km-border);
+  border-radius: 12px;
+  color: #FFFFFF !important;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.25s, background 0.25s, box-shadow 0.25s;
+  box-sizing: border-box;
+}
+
+.input-field input:focus {
+  border-color: var(--km-orange);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(15, 84, 71, 0.15);
+  color: #FFFFFF;
+}
+
+.input-field input::placeholder {
+  color: var(--km-muted);
+}
+
+/* ── PASSWORD EYE BUTTON ── */
+.pw-eye-btn {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--km-muted);
+  font-size: 19px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.pw-eye-btn:hover {
+  color: var(--km-orange);
+}
+
+/* ── SUBMIT BUTTON ── */
+.login-submit-btn {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(135deg, var(--km-orange) 0%, var(--km-orange-light) 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.25s;
+  margin-top: 8px;
+  box-shadow: 0 6px 20px rgba(15, 84, 71, 0.3);
+}
+
+.login-submit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--km-orange-light) 0%, var(--km-orange) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(15, 84, 71, 0.4);
+}
+
+.login-submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.login-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── FOOTER NOTE ── */
+.km-footer-note {
+  font-size: 11.5px;
+  color: var(--km-muted);
+  margin-top: 24px;
+  opacity: 0.7;
+}
+
+.sidebarFooter {
+  padding: 1.5rem 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+}
+
+.adminBadge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.5rem;
+}

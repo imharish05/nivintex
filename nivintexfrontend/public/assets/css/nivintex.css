@@ -1,0 +1,394 @@
+/* =========================================
+   NIVINTEX — Brand Color Override
+   Primary:   #1B6153  (Deep Forest Green)
+   Secondary: #C9A84C  (Golden Accent)
+   ========================================= */
+
+:root {
+  --theme:   #1B6153 !important;
+  --theme-2: #145041 !important;
+}
+
+/* Direct color overrides for any hardcoded values */
+.theme-btn,
+.theme-btn.load-btn,
+.theme-btn.header-btn {
+  background-color: #1B6153 !important;
+}
+
+.theme-btn::before,
+.theme-btn.load-btn::before,
+.theme-btn.header-btn::before {
+  background-color: #145041 !important;
+}
+
+.theme-btn:hover {
+  color: #fff !important;
+  background-color: #145041 !important;
+}
+
+/* Sub-titles and accent text */
+.sub-title,
+h6.sub-title {
+  color: #C9A84C !important;
+}
+
+/* Active nav links */
+.main-menu ul li.active > a,
+.main-menu ul li > a:hover {
+  color: #1B6153 !important;
+}
+
+/* Nav underline */
+.main-menu ul li > a::after {
+  background-color: #1B6153 !important;
+}
+
+/* Product card action icons hover */
+.product-card-item .social-icon li a:hover,
+.product-card-item .social-icon li button:hover {
+  background-color: #1B6153 !important;
+  color: #fff !important;
+}
+
+/* Header number badge */
+.header-icon .number,
+.number {
+  background-color: #C9A84C !important;
+}
+
+/* Footer link hover */
+.footer-section .list-items li a:hover {
+  color: #C9A84C !important;
+  padding-left: 6px;
+}
+
+/* Breadcrumb active */
+.breadcrumb-active,
+.breadcrumb span {
+  color: #C9A84C !important;
+}
+
+/* Back to top */
+.back-to-top {
+  background-color: #1B6153 !important;
+}
+
+/* Section title underline / after */
+.section-title h2::after,
+.section-title.style-2 h2::after {
+  background-color: #C9A84C !important;
+}
+
+/* Input focus border */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #1B6153 !important;
+  outline: none;
+}
+
+/* Consistent soft corners across storefront boxes and controls. This stylesheet
+   loads after the legacy theme CSS and overrides inline radius values as well. */
+#root :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select,
+  button,
+  .ck-card,
+  .ck-summary,
+  .cp-info,
+  .cp-form-panel,
+  .product-card-item,
+  .product-card,
+  .single-product,
+  .card,
+  .modal-content,
+  .dropdown-menu,
+  .form-control,
+  .nice-select,
+  .theme-btn,
+  .back-to-top
+) {
+  border-radius: 8px !important;
+}
+
+/* Shop layout: fluid gutters keep filters and products usable on phones. */
+.shop-page-container {
+  padding-left: 40px !important;
+  padding-right: 40px !important;
+}
+
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+@media (max-width: 767.98px) {
+  #root .shop-page-header .shop-page-container,
+  #root .shop-page-content .shop-page-container {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  #root .shop-page-header {
+    padding-top: 40px !important;
+    padding-bottom: 28px !important;
+  }
+
+  #root .shop-page-header h1 {
+    font-size: clamp(30px, 8vw, 38px) !important;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  #root .shop-page-header p {
+    font-size: 14px !important;
+    line-height: 1.65 !important;
+  }
+
+  #root .shop-page-content .col-lg-3 > div {
+    position: static !important;
+    padding: 18px !important;
+  }
+
+  #root .shop-page-content .row > [class*="col-"] {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 575.98px) {
+  #root .shop-page-content .row.g-4 {
+    --bs-gutter-x: 1rem;
+  }
+
+  #root .shop-page-content .col-sm-6 {
+    width: 50%;
+  }
+}
+
+/* Pagination active */
+.pagination .page-item.active .page-link {
+  background-color: #1B6153 !important;
+  border-color: #1B6153 !important;
+}
+
+/* Product price color */
+.product-card-item .product-content span,
+.product-card-item .product-content .doller li {
+  color: #C9A84C !important;
+}
+
+/* Cart total color */
+.shopping-items span:last-child {
+  color: #C9A84C !important;
+}
+
+/* Offer card CTA */
+.offer-card-item .content p,
+.offer-bg-box .content p {
+  color: #C9A84C !important;
+}
+
+/* Wishlist heart filled */
+.fa-solid.fa-heart {
+  color: #1B6153 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar-thumb {
+  background-color: #1B6153 !important;
+}
+
+/* =========================================
+   Global Responsiveness & Speed Optimizations
+   ========================================= */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Fluid media */
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Smooth touch scrolling */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Prevent auto-zoom on mobile inputs in iOS */
+@media screen and (max-width: 767.98px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Mobile Nav Drawer Styles */
+.mobile-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 84, 71, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 1050;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.mobile-nav-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-nav-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 320px;
+  max-width: 85vw;
+  background: #ffffff;
+  z-index: 1051;
+  transform: translateX(-100%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.mobile-nav-drawer.open {
+  transform: translateX(0);
+}
+
+/* =========================================
+   Search Modal Responsive Styling (Lap + Phone)
+   ========================================= */
+@keyframes fadeInSearch {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.search-overlay-wrapper {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: rgba(10, 35, 28, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: min(6vh, 48px) 16px 24px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  animation: fadeInSearch 0.25s ease-out;
+}
+
+.search-modal-container {
+  width: 100%;
+  max-width: 760px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: fadeInSearch 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(234, 228, 214, 0.9);
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  text-decoration: none;
+  border-bottom: 1px solid #F4F0E8;
+  transition: background-color 0.18s ease;
+  cursor: pointer;
+  background: transparent;
+  width: 100%;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  text-align: left;
+}
+
+.search-result-item:hover,
+.search-result-item:active {
+  background-color: #F8F6F0;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-trending-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #F4F0E8;
+  color: #0f5447;
+  border-radius: 20px;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #EAE4D6;
+  font-family: inherit;
+}
+
+.search-trending-chip:hover,
+.search-trending-chip:active {
+  background: #0f5447;
+  color: #ffffff;
+  border-color: #0f5447;
+}
+
+@media (max-width: 767.98px) {
+  .search-overlay-wrapper {
+    padding: 0 !important;
+  }
+  .search-modal-container {
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+  .search-results-list {
+    max-height: calc(100dvh - 160px) !important;
+  }
+}
+

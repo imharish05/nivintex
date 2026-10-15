@@ -5,6 +5,7 @@ import WishlistDrawer from './WishlistDrawer';
 import { categoryApi, subCategoryApi, productApi, getImageUrl } from '../utils/api';
 import logo from '../assets/img/logo2.png';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import Skeleton, { CategoryCircleSkeleton } from './Skeleton';
 
 // Fonts are loaded via index.html
 
@@ -652,8 +653,12 @@ const Header = () => {
                           </Link>
                         </div>
                         {catLoading ? (
-                          <div style={styles.collLoading}>
-                            <i className="fa-solid fa-circle-notch fa-spin" style={{ marginRight: '8px' }} />Loading…
+                          <div style={styles.collGrid}>
+                            {[...Array(8)].map((_, i) => (
+                              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '12px 8px' }}>
+                                <CategoryCircleSkeleton size={64} />
+                              </div>
+                            ))}
                           </div>
                         ) : categories.length === 0 ? (
                           <div style={styles.collEmpty}>No collections found.</div>
@@ -929,23 +934,31 @@ const Header = () => {
 
                   {mobileCollOpen && (
                     <div style={{ background: '#FAF8F5', padding: '8px 16px 12px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                        {categories.map(cat => (
-                          <div
-                            key={cat.id}
-                            onClick={() => { setMobileNavOpen(false); handleCatNav(cat); }}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: '8px',
-                              padding: '8px', background: '#fff', borderRadius: '4px',
-                              cursor: 'pointer', border: '1px solid #EAE4D6',
-                            }}
-                          >
-                            <span style={{ fontSize: '11px', color: C.brand, letterSpacing: '0.5px' }}>
-                              {cat.name}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                      {catLoading ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                          {[...Array(4)].map((_, i) => (
+                            <div key={i} style={{ height: 36, background: '#e8ede4', borderRadius: 4 }} className="fa-skeleton" />
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                          {categories.map(cat => (
+                            <div
+                              key={cat.id}
+                              onClick={() => { setMobileNavOpen(false); handleCatNav(cat); }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                padding: '8px', background: '#fff', borderRadius: '4px',
+                                cursor: 'pointer', border: '1px solid #EAE4D6',
+                              }}
+                            >
+                              <span style={{ fontSize: '11px', color: C.brand, letterSpacing: '0.5px' }}>
+                                {cat.name}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <Link
                         to="/shop"
                         onClick={() => setMobileNavOpen(false)}

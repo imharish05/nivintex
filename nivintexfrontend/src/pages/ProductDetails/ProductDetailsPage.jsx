@@ -5,6 +5,7 @@ import { useShop } from '../../context/ShopContext';
 import { productApi, productSpecificationApi, sizeChartApi, stockApi, reviewApi, getImageUrl } from '../../utils/api';
 import SizeChartModal from '../../components/SizeChartModal';
 import defaultLogo from '../../assets/img/logo2.png';
+import { ProductDetailsSkeleton } from '../../components/Skeleton';
 /* ── Tokens ─────────────────────────────────────────────────────── */
 const BRAND  = '#0f5447';
 const GREEN  = '#0f5447';
@@ -359,8 +360,9 @@ const ProductDetailsPage = () => {
   const wished = isWishlisted(product?.id || productName, selectedVariant?.id || null);
 
   if (loading) return (
-    <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: BG }}>
-      <p style={{ fontFamily: F.sub, color: '#888', fontWeight: 200, letterSpacing: 2, fontSize: 12 }}>Loading product…</p>
+    <div style={{ background: BG, minHeight: '100vh', padding: '24px 0' }}>
+      <ProductDetailsSkeleton />
+      <Footer />
     </div>
   );
   if (!product) return (

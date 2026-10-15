@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { categoryApi, getImageUrl } from "../utils/api";
 import logo from "../assets/img/logo2.png";
+import { CategoryCircleSkeleton } from "./Skeleton";
 
 const catStyles = `
   .cat-section {
@@ -201,7 +202,21 @@ export default function CategorySection() {
   }, [categories]);
 
   if (loading) return (
-    <><style>{catStyles}</style><div className="cat-loading">Loading categories…</div></>
+    <>
+      <style>{catStyles}</style>
+      <section className="cat-section">
+        <h2 className="cat-title">Shop by Category</h2>
+        <div className="cat-track-wrapper">
+          <div className="cat-track">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="cat-item">
+                <CategoryCircleSkeleton size={150} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </>
   );
 
   if (!categories.length) return null;

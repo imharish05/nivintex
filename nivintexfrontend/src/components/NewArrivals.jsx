@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useShop } from "../context/ShopContext";
 import { getImageUrl, getLocalImageUrl } from "../utils/api";
 import logo from "../assets/img/logo2.png";
+import { ProductCardSkeleton } from "./Skeleton";
 
 const BASE = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -345,7 +346,13 @@ export default function NewArrivalsSection() {
         <div className="na-left">
           <h2 className="na-heading">New Arrivals</h2>
           <div className="na-grid">
-            {loading && <div className="na-loading">Loading new arrivals…</div>}
+            {loading && (
+              <>
+                {[...Array(6)].map((_, i) => (
+                  <ProductCardSkeleton key={i} />
+                ))}
+              </>
+            )}
             {!loading && products.length === 0 && (
               <div className="na-empty">No new arrivals yet.</div>
             )}

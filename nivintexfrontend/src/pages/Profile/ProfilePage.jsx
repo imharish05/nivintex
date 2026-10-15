@@ -242,22 +242,10 @@ const ProfilePage = () => {
 
   // Removed redundant runtime font injection
 
-  useEffect(() => {
-    if (!user) navigate('/login', { replace: true });
-  }, [user, navigate]);
-
-  if (!user) {
-    return null;
-  }
-
-  const initials = user.name
-    ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-    : (user.username ? user.username[0].toUpperCase() : '?');
-
   const [profile, setProfile] = useState({
-    name:  user.name || user.username || '',
-    phone: user.phone || '',
-    email: user.email || '',
+    name:  user?.name || user?.username || '',
+    phone: user?.phone || '',
+    email: user?.email || '',
   });
   const setP = (key) => (val) => setProfile(p => ({ ...p, [key]: val }));
 
@@ -269,6 +257,30 @@ const ProfilePage = () => {
   const [toast, setToast] = useState('');
   const [toastShow, setToastShow] = useState(false);
   const [toastError, setToastError] = useState(false);
+
+  // Keep the profile form in sync once the authenticated user is available.
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        name:  user.name || user.username || '',
+        phone: user.phone || '',
+        email: user.email || '',
+      });
+    }
+  }, [user?.id]);
+
+  // Redirect unauthenticated visitors to login (side effect, never during render).
+  useEffect(() => {
+    if (!user) navigate('/login', { replace: true });
+  }, [user, navigate]);
+
+  if (!user) {
+    return null;
+  }
+
+  const initials = user.name
+    ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : (user.username ? user.username[0].toUpperCase() : '?');
 
   const showToast = (msg, isError = false) => {
     setToast(msg); setToastError(isError); setToastShow(true);

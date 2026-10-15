@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useShop } from "../context/ShopContext";
 import { getImageUrl, getLocalImageUrl } from "../utils/api";
 import logo from "../assets/img/logo2.png";
+import { ProductCardSkeleton } from "./Skeleton";
 
 const BASE = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -576,7 +577,15 @@ export default function BestSellersSection() {
                 </div>
               </div>
 
-              {loading && <div className="bs-loading">Loading best sellers…</div>}
+              {loading && (
+                <>
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} style={{ width: 'var(--card-width)', flexShrink: 0 }}>
+                      <ProductCardSkeleton />
+                    </div>
+                  ))}
+                </>
+              )}
               {!loading && products.length === 0 && (
                 <div className="bs-empty">No best sellers found.</div>
               )}

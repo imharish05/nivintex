@@ -4,6 +4,7 @@ import defaultLogo from '../../assets/img/logo2.png';
 import Footer from '../../components/Footer';
 import { useShop } from '../../context/ShopContext';
 import { productApi, categoryApi, subCategoryApi, getImageUrl, comboApi } from '../../utils/api';
+import Skeleton, { ProductCardSkeleton, SidebarItemSkeleton, ComboCardSkeleton } from '../../components/Skeleton';
 
 const BRAND   = '#2C2F33';
 const ACCENT  = '#0f5447';
@@ -260,6 +261,21 @@ const qvStyles = `
 
 export default function ShopGridPage({ saleOnly = false }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchTerm, setSearchTerm] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('search') || params.get('q') || sessionStorage.getItem('shopSearchQuery') || '';
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get('search') || params.get('q') || sessionStorage.getItem('shopSearchQuery') || '';
+    if (q !== searchTerm) {
+      setSearchTerm(q);
+      setPage(1);
+    }
+  }, [location.search]);
+
   const goToProduct = (product) => {
     sessionStorage.setItem('selectedProduct', JSON.stringify({ id: product.id }));
     navigate('/product-details');
@@ -521,7 +537,21 @@ export default function ShopGridPage({ saleOnly = false }) {
       matchSize = selectedSizes.some(s => pSizes.includes(s));
     }
 
-    return matchCat && matchSubCategory && matchPrice && matchSale && matchSize;
+    const matchSearch = !searchTerm.trim() || [
+      p.productName,
+      p.name,
+      p.product_code,
+      p.productCode,
+      p.barcode,
+      p.hsn_code,
+      p.shortDescription,
+      p.description,
+      p.longDescription,
+      p.Category?.name,
+      p.SubCategory?.name,
+    ].some(val => val && String(val).toLowerCase().includes(searchTerm.toLowerCase().trim()));
+
+    return matchCat && matchSubCategory && matchPrice && matchSale && matchSize && matchSearch;
   });
 
   if (sortBy === 'price-asc')  filtered = [...filtered].sort((a, b) => Number(a.franchise_price_final ?? a.salesPrice ?? a.mrp ?? 0) - Number(b.franchise_price_final ?? b.salesPrice ?? b.mrp ?? 0));
@@ -538,6 +568,11 @@ export default function ShopGridPage({ saleOnly = false }) {
     setSelectedSizes([]);
     setFilterSale(saleOnly ? true : false);
     setSortBy('default');
+    setSearchTerm('');
+    sessionStorage.removeItem('shopSearchQuery');
+    if (window.location.search) {
+      navigate('/shop', { replace: true });
+    }
     const productMax = products.length ? Math.max(...products.map(p => Number(p.franchise_price_final ?? p.salesPrice ?? p.mrp ?? 0))) : 0;
     const comboMax = storefrontCombos.flatMap(root =>
       (root.ChildCombos || []).map(c => Number(c.comboPrice || 0))
@@ -682,17 +717,25 @@ export default function ShopGridPage({ saleOnly = false }) {
             </div>
             <span style={{ color: selectedComboRootId === 'all' ? BRAND : '#4a5a44', fontWeight: selectedComboRootId === 'all' ? 700 : 400, fontSize: 14, fontFamily: F.sub }}>All Combos</span>
           </label>
-          {storefrontCombos.map(root => {
-            const active = selectedComboRootId === root.id;
-            const rootImgUrl = root.image ? getImageUrl(root.image) : null;
-            return (
-              <label key={root.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', cursor: 'pointer', borderBottom: '1px solid #EAF0E2' }}>
-                <input type="radio" name="comboGroup" checked={active} onChange={() => { setSelectedComboRootId(root.id); setPage(1); }} style={{ accentColor: BRAND }} />
-                <SidebarThumb src={rootImgUrl} alt={root.name} active={active} />
-                <span style={{ color: active ? BRAND : '#4a5a44', fontWeight: active ? 700 : 400, fontSize: 14, fontFamily: F.sub }}>{root.name}</span>
-              </label>
-            );
-          })}
+          {combosLoading ? (
+            <>
+              <SidebarItemSkeleton />
+              <SidebarItemSkeleton />
+              <SidebarItemSkeleton />
+            </>
+          ) : (
+            storefrontCombos.map(root => {
+              const active = selectedComboRootId === root.id;
+              const rootImgUrl = root.image ? getImageUrl(root.image) : null;
+              return (
+                <label key={root.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', cursor: 'pointer', borderBottom: '1px solid #EAF0E2' }}>
+                  <input type="radio" name="comboGroup" checked={active} onChange={() => { setSelectedComboRootId(root.id); setPage(1); }} style={{ accentColor: BRAND }} />
+                  <SidebarThumb src={rootImgUrl} alt={root.name} active={active} />
+                  <span style={{ color: active ? BRAND : '#4a5a44', fontWeight: active ? 700 : 400, fontSize: 14, fontFamily: F.sub }}>{root.name}</span>
+                </label>
+              );
+            })
+          )}
         </div>
       ) : (
         <div style={{ marginBottom: 24 }}>
@@ -709,7 +752,16 @@ export default function ShopGridPage({ saleOnly = false }) {
             <span style={{ color: activeCategoryId === 'all' ? BRAND : '#4a5a44', fontWeight: activeCategoryId === 'all' ? 700 : 400, fontSize: 14, fontFamily: F.sub }}>All</span>
           </label>
 
-          {categories.map(cat => {
+          {loading ? (
+            <>
+              <SidebarItemSkeleton />
+              <SidebarItemSkeleton />
+              <SidebarItemSkeleton />
+              <SidebarItemSkeleton />
+              <SidebarItemSkeleton />
+            </>
+          ) : (
+            categories.map(cat => {
             const categoryIds = [cat.id, cat.billingCategoryId, cat.billing_category_id, cat.category_id]
               .filter(id => id !== undefined && id !== null)
               .map(String);
@@ -745,8 +797,9 @@ export default function ShopGridPage({ saleOnly = false }) {
                 })}
               </div>
             );
-          })}
-        </div>
+          })
+        )}
+      </div>
       )}
 
       {/* Size Filter */}
@@ -977,8 +1030,14 @@ export default function ShopGridPage({ saleOnly = false }) {
             <div className="col-lg-9">
 
               {/* ── Active Filters ── */}
-              {(selectedSizes.length > 0 || priceMin > 0 || priceMax < (maxComputedValue || 1) || activeCategoryId !== 'all' || false || (saleOnly && selectedComboRootId !== 'all')) && (
+              {(selectedSizes.length > 0 || priceMin > 0 || priceMax < (maxComputedValue || 1) || activeCategoryId !== 'all' || Boolean(searchTerm) || (saleOnly && selectedComboRootId !== 'all')) && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+                  {searchTerm && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0f5447', padding: '6px 14px', borderRadius: 20, fontSize: 13, color: '#ffffff', fontFamily: F.sub }}>
+                      <span>Search: <strong>"{searchTerm}"</strong></span>
+                      <span onClick={() => { setSearchTerm(''); sessionStorage.removeItem('shopSearchQuery'); navigate('/shop', { replace: true }); setPage(1); }} style={{ cursor: 'pointer', fontWeight: 700, marginLeft: 6, fontSize: 16 }}>&times;</span>
+                    </div>
+                  )}
                   {selectedSizes.map(sz => (
                     <div key={sz} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#EAF0E2', padding: '6px 14px', borderRadius: 20, fontSize: 13, color: BRAND, fontFamily: F.sub }}>
                       {sz}
@@ -1041,7 +1100,11 @@ export default function ShopGridPage({ saleOnly = false }) {
               {/* Toolbar */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
                 <p style={{ color: '#4a5a44', margin: 0, fontSize: 14, fontFamily: F.sub }}>
-                  {saleViewMode === 'combos' ? (
+                  {loading ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      Loading <Skeleton as="span" width={90} height={14} style={{ display: 'inline-block' }} />
+                    </span>
+                  ) : saleViewMode === 'combos' ? (
                     <>Showing <strong>{paginatedChildren.length}</strong> of <strong>{filteredChildren.length}</strong> combo packs</>
                   ) : (
                     <>Showing <strong>{paginated.length}</strong> of <strong>{filtered.length}</strong> products</>
@@ -1115,8 +1178,24 @@ export default function ShopGridPage({ saleOnly = false }) {
                 </div>
               </div>
 
-              {/* Empty state */}
-              {(saleViewMode === 'combos' ? paginatedChildren.length : paginated.length) === 0 ? (
+              {/* Product Grid / Loading / Empty state */}
+              {loading ? (
+                <div className={activeTab === 'grid' ? 'row g-3' : 'd-flex flex-column gap-3'}>
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className="col-xxl-3 col-xl-4 col-md-6 col-6">
+                      <ProductCardSkeleton />
+                    </div>
+                  ))}
+                </div>
+              ) : (saleViewMode === 'combos' && combosLoading) ? (
+                <div className="row g-3">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="col-xxl-3 col-xl-4 col-md-6 col-6">
+                      <ComboCardSkeleton />
+                    </div>
+                  ))}
+                </div>
+              ) : (saleViewMode === 'combos' ? paginatedChildren.length : paginated.length) === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 0', color: '#aaa', fontFamily: F.sub }}>
                   <i className="fa-regular fa-face-sad-cry" style={{ fontSize: 48, marginBottom: 16, display: 'block' }} />
                   <p>No {saleViewMode === 'combos' ? 'combo deals' : 'products'} found for the selected filters.</p>
@@ -1994,4 +2073,6 @@ export default function ShopGridPage({ saleOnly = false }) {
           </div>
         );
       })()}
-  
+    </>
+  );
+}

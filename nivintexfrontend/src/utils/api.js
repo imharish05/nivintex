@@ -307,6 +307,9 @@ const enrichProductsWithBillingPrices = async products => {
 export const productApi = {
 
   getAll:          async () => { const r = await get('/product_varients'); const arr = r?.product_varients || r?.products || r?.data || (Array.isArray(r) ? r : []); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(arr))); },
+  // Use on listing pages that should render before the optional live price lookup.
+  getAllFast:      async () => { const r = await get('/product_varients'); const arr = r?.product_varients || r?.products || r?.data || (Array.isArray(r) ? r : []); return mapProducts(arr); },
+  enrichWithBillingPrices: async products => enrichProductsWithBillingPrices(products),
   getById:         async (id) => { const r = await get(`/product_details/${id}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r?.product || r))); },
   getBySlug:       async (slug) => { const r = await get(`/products/slug/${encodeURIComponent(slug)}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.product || r?.products || r))); },
   getByCategory:   async (catId) => { const r = await get(`/products/category/${catId}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r))); },

@@ -1,5 +1,6 @@
 const Stock = require('../models/Stock');
 const Product = require('../models/Product');
+const { billingRequestManager } = require('../services/billingRequestManager');
 
 // 1. Add Stock
 exports.createStock = async (req, res) => {
@@ -216,9 +217,12 @@ exports.decrementBillingStock = async (req, res) => {
     const baseUrl = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
     const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
     if (process.env.BILLING_API_TOKEN) headers.Authorization = `Bearer ${process.env.BILLING_API_TOKEN}`;
-    const response = await axios.post(`${baseUrl}/stocks/decrement`, { product_variant_id: variantId, quantity }, {
-      headers,
-      timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
+    const response = await billingRequestManager.request({
+      method: 'POST', label: '/stocks/decrement',
+      execute: () => axios.post(`${baseUrl}/stocks/decrement`, { product_variant_id: variantId, quantity }, {
+        headers,
+        timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
+      }),
     });
     return res.status(200).json({ success: true, billing: response.data });
   } catch (error) {

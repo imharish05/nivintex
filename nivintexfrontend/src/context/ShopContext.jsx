@@ -120,18 +120,18 @@ export const ShopProvider = ({ children }) => {
   useEffect(() => {
     if (!cartItems.some(item => item.billingVariantId)) return undefined;
     let active = true;
+    let stockSyncPending = false;
     const syncStock = async () => {
+      if (stockSyncPending) return;
+      stockSyncPending = true;
       try {
-        const [products, stockByVariant] = await Promise.all([
-          billingCatalogApi.getProductVariants(),
-          billingCatalogApi.getStocksByVariant(),
-        ]);
+        const products = await billingCatalogApi.getProductVariants();
         if (!active) return;
         const byVariantId = new Map(products.flatMap(product => (product?.variants || product?.product_variants || product?.product_varients || []).map(variant => [normId(variant.id), variant])));
         setCartItems(current => current.map(item => {
           if (!item.billingVariantId) return item;
           const variant = byVariantId.get(normId(item.billingVariantId));
-          const availableStock = variant ? billingStockWithDedicatedRows(variant, stockByVariant) : 0;
+          const availableStock = variant ? billingStockWithDedicatedRows(variant, null) : 0;
           const stockSyncStatus = availableStock === null ? 'unverified' : 'verified';
           if (item.availableStock === availableStock && item.stockSyncStatus === stockSyncStatus) return item;
           return { ...item, availableStock, stockSyncStatus };
@@ -142,6 +142,8 @@ export const ShopProvider = ({ children }) => {
         setCartItems(current => current.map(item => item.billingVariantId && (item.availableStock !== null || item.stockSyncStatus !== 'unverified')
           ? { ...item, availableStock: null, stockSyncStatus: 'unverified' }
           : item));
+      } finally {
+        stockSyncPending = false;
       }
     };
     syncStock();
@@ -449,12 +451,9 @@ export const ShopProvider = ({ children }) => {
     let availableStock = null;
     if (billingVariantId) {
       try {
-        const [products, stockByVariant] = await Promise.all([
-          billingCatalogApi.getProductVariants(),
-          billingCatalogApi.getStocksByVariant(),
-        ]);
+        const products = await billingCatalogApi.getProductVariants();
         const variant = products.flatMap(row => row?.variants || row?.product_variants || row?.product_varients || []).find(row => normId(row.id) === normId(billingVariantId));
-        availableStock = variant ? billingStockWithDedicatedRows(variant, stockByVariant) : 0;
+        availableStock = variant ? billingStockWithDedicatedRows(variant, null) : 0;
         const existingQty = cartItems.filter(item => normId(item.billingVariantId) === normId(billingVariantId)).reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
         if (availableStock === null) throw new Error('Billing did not return a usable stock quantity. Please try again.');
         if (availableStock < existingQty + addQty) throw new Error(`Only ${availableStock} unit${availableStock === 1 ? '' : 's'} are currently available for ${name}.`);

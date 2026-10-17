@@ -74,16 +74,26 @@ exports.createOrder = async (req, res) => {
             stockCheck = await assertBillingStock(billingItems);
             orderFlowLog.logResponse(`${flowId} stock check`, 200, stockCheck);
         } catch (stockError) {
+            const stockErrorCode = stockError.code || (stockError.status === 409 ? 'INSUFFICIENT_BILLING_STOCK'
+                : stockError.billingHttpStatus === 429 || stockError.retryAfterMs != null ? 'BILLING_RATE_LIMITED'
+                    : 'BILLING_STOCK_CHECK_FAILED');
             orderFlowLog.logResponse(`${flowId} stock check`, stockError.status || 503, {
                 message: stockError.message,
                 stockIssues: stockError.stockIssues || [],
-                code: stockError.status === 409 ? 'INSUFFICIENT_BILLING_STOCK' : 'BILLING_STOCK_CHECK_FAILED',
+                code: stockErrorCode,
             });
+            const retryHeader = stockError.retryAfter;
+            const parsedRetryHeader = retryHeader == null ? null : Number.isFinite(Number(retryHeader))
+                ? Math.max(0, Number(retryHeader))
+                : Number.isFinite(Date.parse(retryHeader)) ? Math.max(0, Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000)) : null;
+            const retryAfterSeconds = parsedRetryHeader ?? (stockError.retryAfterMs != null ? Math.ceil(stockError.retryAfterMs / 1000) : null);
+            if (retryAfterSeconds) res.set('Retry-After', String(retryAfterSeconds));
             return res.status(stockError.status || 503).json({
                 success: false,
-                code: stockError.status === 409 ? 'INSUFFICIENT_BILLING_STOCK' : 'BILLING_STOCK_CHECK_FAILED',
+                code: stockErrorCode,
                 message: stockError.message,
                 ...(stockError.stockIssues ? { stockIssues: stockError.stockIssues } : {}),
+                ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
             });
         }
 

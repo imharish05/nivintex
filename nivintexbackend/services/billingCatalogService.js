@@ -3,35 +3,45 @@ const { Op } = require('sequelize');
 const Product = require('../models/Product');
 const ProductVariant = require('../models/ProductVariant');
 const orderFlowLog = require('../utils/orderFlowLogger');
-let productVariantsRequest = null;
+const { billingRequestManager } = require('./billingRequestManager');
+const { configuredStockLocationId, normalizeStockLocationId } = require('./billingInvoicePayload');
 
 const getBaseUrl = () => (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
 const getOptions = () => ({
-  headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+  headers: {
+    Accept: 'application/json',
+    ...(process.env.BILLING_API_TOKEN ? { Authorization: `Bearer ${process.env.BILLING_API_TOKEN}` } : {}),
+  },
   timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
   maxRedirects: 0,
 });
 
-async function getProductVariants() {
-  if (!productVariantsRequest) {
-    productVariantsRequest = axios.get(`${getBaseUrl()}/product_varients`, getOptions()).then(response => response.data);
-  }
-  try {
-    return await productVariantsRequest;
-  } finally {
-    productVariantsRequest = null;
-  }
+async function billingGet(path, params = {}, options = {}) {
+  const url = `${getBaseUrl()}${path}`;
+  const queryKey = Object.keys(params).sort().map(key => `${key}=${String(params[key])}`).join('&');
+  const key = `GET:${url}${queryKey ? `?${queryKey}` : ''}`;
+  const configuredTtl = Number(process.env.BILLING_API_CATALOG_CACHE_TTL_MS);
+  const cacheTtlMs = options.cache === false ? 0 : Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 10000;
+  const response = await billingRequestManager.request({
+    method: 'GET', key, label: path,
+    cacheTtlMs,
+    bypassCache: options.fresh === true,
+    execute: () => axios.get(url, { ...getOptions(), ...(Object.keys(params).length ? { params } : {}) }),
+  });
+  return response.data;
+}
+
+async function getProductVariants(options = {}) {
+  return billingGet('/product_varients', {}, { cache: options.cache !== false, fresh: options.fresh === true });
 }
 
 async function getProducts() {
-  const firstResponse = await axios.get(`${getBaseUrl()}/products`, getOptions());
-  const firstPayload = firstResponse.data;
+  const firstPayload = await billingGet('/products');
   const lastPage = Math.max(1, Number(firstPayload?.meta?.last_page ?? firstPayload?.data?.meta?.last_page ?? 1) || 1);
   if (lastPage <= 1) return firstPayload;
   const pages = [];
   for (let page = 2; page <= lastPage; page += 1) {
-    const response = await axios.get(`${getBaseUrl()}/products`, { ...getOptions(), params: { page } });
-    pages.push(response.data);
+    pages.push(await billingGet('/products', { page }));
   }
   return {
     ...firstPayload,
@@ -41,18 +51,19 @@ async function getProducts() {
 }
 
 async function getVariants() {
-  const response = await axios.get(`${getBaseUrl()}/varients`, getOptions());
-  return response.data;
+  return billingGet('/varients');
 }
 
 async function getStocks() {
-  const response = await axios.get(`${getBaseUrl()}/stocks`, getOptions());
-  return response.data;
+  return billingGet('/stocks');
 }
 
 async function getProductDetails(productId) {
-  const response = await axios.get(`${getBaseUrl()}/product_details/${encodeURIComponent(productId)}`, getOptions());
-  return response.data;
+  return billingGet(`/product_details/${encodeURIComponent(productId)}`);
+}
+
+async function getEndpoint(path) {
+  return billingGet(path, {}, { cache: false });
 }
 
 function productsFromResponse(payload) {
@@ -122,6 +133,22 @@ function stockValue(variant) {
   return null;
 }
 
+// The product catalog's total_stock is aggregated across locations. Billing's
+// invoice controller deducts Stock.quantity for one franchise_location_id, so
+// checkout only trusts a row that identifies both the variant and exact location.
+function locationStockValue(variant, requestedLocationId) {
+  if (!variant || !Object.prototype.hasOwnProperty.call(variant, 'franchise_location_id')) return null;
+  const rowLocationId = variant.franchise_location_id == null || variant.franchise_location_id === ''
+    ? null : String(variant.franchise_location_id);
+  const expectedLocationId = requestedLocationId == null || requestedLocationId === ''
+    ? null : String(requestedLocationId);
+  if (rowLocationId !== expectedLocationId) return null;
+  const variantId = variant.product_variant_id ?? variant.product_varient_id ?? variant.variant_id ?? variant.id;
+  if (variantId == null || !/^\d+$/.test(String(variantId))) return null;
+  const quantity = Number(variant.quantity);
+  return Number.isFinite(quantity) && quantity >= 0 ? quantity : null;
+}
+
 function assertResponseStatus(payload, endpoint) {
   const status = Number(payload?.status);
   if (Number.isFinite(status) && status >= 400) {
@@ -136,7 +163,7 @@ function variantIdOf(variant) {
   return id === undefined || id === null || String(id).trim() === '' ? null : String(id).trim();
 }
 
-async function assertBillingStock(items) {
+async function assertBillingStock(items, { locationId = configuredStockLocationId() } = {}) {
   if (!Array.isArray(items) || items.length === 0) {
     const error = new Error('Add at least one product variant before starting payment.');
     error.status = 400;
@@ -147,7 +174,7 @@ async function assertBillingStock(items) {
   orderFlowLog.logRequest('Billing stock preflight', 'GET', stockUrl, {});
   let payload;
   try {
-    payload = await getProductVariants();
+    payload = await getProductVariants({ fresh: true });
     assertResponseStatus(payload, '/product_varients');
     orderFlowLog.logResponse('Billing stock preflight /product_varients', Number(payload?.status) || 200, requestedVariantSnapshot(payload, items));
   } catch (cause) {
@@ -161,6 +188,7 @@ async function assertBillingStock(items) {
     error.status = 503;
     error.billingHttpStatus = upstreamStatus || null;
     error.retryAfter = cause.response?.headers?.['retry-after'] || null;
+    error.retryAfterMs = cause.retryAfterMs ?? null;
     error.cause = cause;
     throw error;
   }
@@ -180,7 +208,8 @@ async function assertBillingStock(items) {
   const allProducts = productsFromResponse(payload);
   const auxiliaryVariants = flatVariants;
   const variantsById = new Map();
-  for (const variant of [...variants, ...auxiliaryVariants]) {
+  const locationStockRows = stocksFromResponse(payload);
+  for (const variant of [...variants, ...auxiliaryVariants, ...locationStockRows]) {
     const id = variantIdOf(variant);
     if (id) {
       variantsById.set(id, [...(variantsById.get(id) || []), variant]);
@@ -214,6 +243,7 @@ async function assertBillingStock(items) {
   }
 
   const requested = new Map();
+  const stockLocationId = locationId === undefined ? configuredStockLocationId() : normalizeStockLocationId(locationId);
   for (const item of items) {
     const variantId = item?.product_variant_id ?? item?.billingVariantId ?? item?.billing_variant_id;
     const variantCode = item?.variant_code ?? item?.sku;
@@ -256,13 +286,18 @@ async function assertBillingStock(items) {
       error.status = 409;
       throw error;
     }
-    const availabilityValues = (variantsById.get(mappedVariantId) || [variant]).map(stockValue).filter(value => value !== null);
+    const availabilityValues = (variantsById.get(mappedVariantId) || [variant])
+      .map(row => locationStockValue(row, stockLocationId))
+      .filter(value => value !== null);
     const available = availabilityValues.length ? Math.min(...availabilityValues) : null;
     if (available === null) {
-      const error = new Error(`Billing did not return a usable stock quantity for ${label}. Payment was not started.`);
+      const locationLabel = stockLocationId === null ? 'Central Admin' : `stock location ${stockLocationId}`;
+      const error = new Error(`Billing returned aggregate product stock, but no sellable quantity for ${label} at ${locationLabel}. Payment was not started.`);
       error.status = 503;
+      error.code = 'BILLING_LOCATION_STOCK_UNAVAILABLE';
       throw error;
     }
+    item.quantityAvailable = available;
     if (available < item.quantity) {
       issues.push({ variantId: mappedVariantId, label, requested: item.quantity, available, reason: 'Insufficient stock.' });
     }
@@ -275,7 +310,7 @@ async function assertBillingStock(items) {
     throw error;
   }
 
-  const result = { checkedAt: new Date().toISOString(), variantsChecked: requested.size, stockSourcesChecked: ['product_varients'], items: [...requested.values()].map(item => ({ product_id: item.productId ?? productIdByVariant.get(String(item.variantId)) ?? null, product_variant_id: item.variantId ?? null, variant_code: item.variantCode || null, quantity_requested: item.quantity, quantity_available: stockValue(byId.get(String(item.variantId))) })) };
+  const result = { checkedAt: new Date().toISOString(), stockLocationId, variantsChecked: requested.size, stockSourcesChecked: ['product_varients'], items: [...requested.values()].map(item => ({ product_id: item.productId ?? productIdByVariant.get(String(item.variantId)) ?? null, product_variant_id: item.variantId ?? null, variant_code: item.variantCode || null, quantity_requested: item.quantity, quantity_available: item.quantityAvailable ?? null })) };
   orderFlowLog.logResponse('Billing stock preflight result', 200, result);
   return result;
 }
@@ -303,7 +338,7 @@ function requestedVariantSnapshot(payload, items) {
 async function refreshLocalStockFromBilling(billingVariantIds) {
   const ids = [...new Set((billingVariantIds || []).map(value => String(value || '').trim()).filter(Boolean))];
   if (!ids.length) return { updatedVariants: 0, updatedProducts: 0 };
-  const payload = await getProductVariants();
+  const payload = await getProductVariants({ fresh: true });
   const billingById = new Map(variantsFromResponse(payload).map(variant => [String(variant.id), variant]));
   const localVariants = await ProductVariant.findAll({ where: { billingVariantId: { [Op.in]: ids } } });
   const touchedProducts = new Set();
@@ -329,4 +364,4 @@ async function refreshLocalStockFromBilling(billingVariantIds) {
   return { updatedVariants, updatedProducts };
 }
 
-module.exports = { getProductVariants, getProducts, getVariants, getStocks, getProductDetails, productsFromResponse, variantsFromResponse, flatVariantsFromResponse, stocksFromResponse, productDetailsFromResponse, stockValue, assertBillingStock, refreshLocalStockFromBilling };
+module.exports = { getProductVariants, getProducts, getVariants, getStocks, getProductDetails, getEndpoint, productsFromResponse, variantsFromResponse, flatVariantsFromResponse, stocksFromResponse, productDetailsFromResponse, stockValue, locationStockValue, assertBillingStock, refreshLocalStockFromBilling };

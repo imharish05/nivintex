@@ -5,6 +5,7 @@ const Product = require('../models/Product');
 const ProductVariant = require('../models/ProductVariant');
 const Franchise = require('../models/Franchise');
 const SubCategory = require('../models/SubCategory');
+const { billingRequestManager } = require('./billingRequestManager');
 
 const DEFAULT_API_BASE = 'https://billing.fashionaura26.com/api';
 const timeout = Number(process.env.BILLING_API_TIMEOUT_MS) || 20000;
@@ -64,6 +65,12 @@ function apiClient() {
 
 async function fetchPayloads(productsOnly = false) {
   const client = apiClient();
+  const requestGet = (path, params = {}) => billingRequestManager.request({
+    method: 'GET',
+    key: `GET:${client.defaults.baseURL}${path}${Object.keys(params).length ? `?${Object.keys(params).sort().map(key => `${key}=${String(params[key])}`).join('&')}` : ''}`,
+    label: path,
+    execute: () => client.get(path, Object.keys(params).length ? { params } : undefined),
+  });
   const allPaths = {
     categories: '/category',
     subcategories: '/subcategory',
@@ -77,13 +84,13 @@ async function fetchPayloads(productsOnly = false) {
     ? { categories: allPaths.categories, subcategories: allPaths.subcategories, products: allPaths.products, productVariants: allPaths.productVariants, variants: allPaths.variants, stocks: allPaths.stocks }
     : allPaths;
   const fetchAllProductPages = async () => {
-    const firstResponse = await client.get(allPaths.products);
+    const firstResponse = await requestGet(allPaths.products);
     const firstPayload = firstResponse.data;
     const lastPage = Math.max(1, Number(firstPayload?.meta?.last_page ?? firstPayload?.data?.meta?.last_page ?? 1) || 1);
     if (lastPage <= 1) return firstPayload;
     const pages = [];
     for (let page = 2; page <= lastPage; page += 1) {
-      const response = await client.get(allPaths.products, { params: { page } });
+      const response = await requestGet(allPaths.products, { page });
       pages.push(response.data);
     }
     const firstProducts = collection(firstPayload, 'products');
@@ -96,7 +103,7 @@ async function fetchPayloads(productsOnly = false) {
     try {
       const response = name === 'products'
         ? { data: await fetchAllProductPages() }
-        : await client.get(path);
+        : await requestGet(path);
       if (response.data?.status && Number(response.data.status) >= 400) {
         throw Object.assign(new Error(`Billing API ${path} returned status ${response.data.status}`), { response: { status: Number(response.data.status), data: response.data } });
       }

@@ -1,20 +1,4 @@
-const axios = require('axios');
 const billingCatalog = require('../services/billingCatalogService');
-
-const getBillingRequestOptions = () => {
-  const configuredTimeout = Number(process.env.BILLING_API_TIMEOUT_MS);
-  return {
-    headers: {
-      Accept: 'application/json',
-      ...(process.env.BILLING_API_TOKEN
-        ? { Authorization: `Bearer ${process.env.BILLING_API_TOKEN}` }
-        : {}),
-    },
-    timeout: Number.isFinite(configuredTimeout) && configuredTimeout > 0
-      ? configuredTimeout
-      : 30000,
-  };
-};
 
 const logBillingFailure = (endpoint, error) => {
   const reason = error.code === 'ECONNABORTED'
@@ -25,11 +9,33 @@ const logBillingFailure = (endpoint, error) => {
   console.error(`Billing ${endpoint} proxy failed: ${reason}`);
 };
 
+const upstreamStatus = error => Number(error.response?.status || error.status) || null;
+const retryAfterSeconds = error => {
+  if (error.retryAfterMs != null) return Math.ceil(error.retryAfterMs / 1000);
+  const header = error.response?.headers?.['retry-after'];
+  if (header == null) return null;
+  const numeric = Number(header);
+  if (Number.isFinite(numeric)) return Math.max(0, numeric);
+  const date = Date.parse(header);
+  return Number.isFinite(date) ? Math.max(0, Math.ceil((date - Date.now()) / 1000)) : null;
+};
+
+const sendReadError = (res, error, message) => {
+  const status = upstreamStatus(error);
+  const retry = retryAfterSeconds(error);
+  if (retry) res.set('Retry-After', String(retry));
+  return res.status(status === 404 ? 404 : status === 429 ? 503 : 502).json({
+    success: false,
+    code: status === 429 ? 'BILLING_RATE_LIMITED' : 'BILLING_READ_FAILED',
+    message,
+    ...(retry ? { retryAfterSeconds: retry } : {}),
+  });
+};
+
 exports.getCategories = async (_req, res) => {
-  const baseUrl = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
   try {
-    const response = await axios.get(`${baseUrl}/category`, getBillingRequestOptions());
-    const data = response.data;
+    const data = await billingCatalog.getEndpoint('/category');
+    const baseUrl = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
     const assetBase = (process.env.BILLING_ASSET_BASE_URL || baseUrl.replace(/\/api$/i, '')).replace(/\/+$/, '');
     if (Array.isArray(data?.category)) {
       data.category = data.category.map(cat => {
@@ -39,31 +45,23 @@ exports.getCategories = async (_req, res) => {
         return cat;
       });
     }
-    return res.status(response.status).json(data);
+    return res.status(200).json(data);
   } catch (error) {
     logBillingFailure('category', error);
-    return res.status(502).json({
-      success: false,
-      message: error.code === 'ECONNABORTED'
-        ? 'The billing system did not respond in time. Check its availability and BILLING_API_BASE_URL.'
-        : 'Could not load categories from the billing system.',
-    });
+    return sendReadError(res, error, error.code === 'ECONNABORTED'
+      ? 'The billing system did not respond in time. Try again shortly.'
+      : 'Could not load categories from the billing system.');
   }
 };
 
 exports.getSubcategories = async (_req, res) => {
-  const baseUrl = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
   try {
-    const response = await axios.get(`${baseUrl}/subcategory`, getBillingRequestOptions());
-    return res.status(response.status).json(response.data);
+    return res.status(200).json(await billingCatalog.getEndpoint('/subcategory'));
   } catch (error) {
     logBillingFailure('subcategory', error);
-    return res.status(502).json({
-      success: false,
-      message: error.code === 'ECONNABORTED'
-        ? 'The billing system did not respond in time. Check its availability and BILLING_API_BASE_URL.'
-        : 'Could not load subcategories from the billing system.',
-    });
+    return sendReadError(res, error, error.code === 'ECONNABORTED'
+      ? 'The billing system did not respond in time. Try again shortly.'
+      : 'Could not load subcategories from the billing system.');
   }
 };
 
@@ -74,9 +72,9 @@ exports.getProductVariants = async (_req, res) => {
     return res.status(200).json(data);
   } catch (error) {
     logBillingFailure('product_varients', error);
-    return res.status(502).json({ success: false, message: error.response?.status
-      ? `Could not load Billing product variants (HTTP ${error.response.status}).`
-      : 'Could not reach Billing to load product variants.' });
+    return sendReadError(res, error, upstreamStatus(error)
+      ? `Could not load Billing product variants (HTTP ${upstreamStatus(error)}).`
+      : 'Could not reach Billing to load product variants.');
   }
 };
 
@@ -87,9 +85,9 @@ exports.getProducts = async (_req, res) => {
     return res.status(200).json(data);
   } catch (error) {
     logBillingFailure('products', error);
-    return res.status(error.response?.status || 502).json({ success: false, message: error.response?.status
-      ? `Could not load Billing products (HTTP ${error.response.status}).`
-      : 'Could not reach Billing to load product prices.' });
+    return sendReadError(res, error, upstreamStatus(error)
+      ? `Could not load Billing products (HTTP ${upstreamStatus(error)}).`
+      : 'Could not reach Billing to load product prices.');
   }
 };
 
@@ -100,12 +98,9 @@ exports.getStocks = async (_req, res) => {
     return res.status(200).json(data);
   } catch (error) {
     logBillingFailure('stocks', error);
-    return res.status(error.response?.status === 404 ? 404 : 502).json({
-      success: false,
-      message: error.response?.status === 404
-        ? 'Billing does not expose a stock list endpoint for this account.'
-        : 'Could not reach Billing to load stock quantities.',
-    });
+    return sendReadError(res, error, upstreamStatus(error) === 404
+      ? 'Billing does not expose a stock list endpoint for this account.'
+      : 'Could not reach Billing to load stock quantities.');
   }
 };
 
@@ -118,8 +113,8 @@ exports.getProductDetails = async (req, res) => {
     return res.status(200).json(data);
   } catch (error) {
     logBillingFailure(`product_details/${productId}`, error);
-    return res.status(error.response?.status === 404 ? 404 : 502).json({ success: false, message: error.response?.status === 404
+    return sendReadError(res, error, upstreamStatus(error) === 404
       ? 'This product is no longer available in Billing.'
-      : 'Could not reach Billing to load this product.' });
+      : 'Could not reach Billing to load this product.');
   }
 };

@@ -8,6 +8,8 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
 const billingCatalog = require('../services/billingCatalogService');
+const { billingRequestManager } = require('../services/billingRequestManager');
+const { makeBillingCreatePayload, configuredStockLocationId } = require('../services/billingInvoicePayload');
 const billingSyncService = require('../services/billingSyncService');
 const orderFlowLog = require('../utils/orderFlowLogger');
 
@@ -203,7 +205,7 @@ const createOrder = async (req, res) => {
         const checkoutTax = Number(tax) || 0;
         const billingPayload = {
             bill_number: '',
-            franchise_location_id: '',
+            franchise_location_id: configuredStockLocationId(),
             price_type: 'MRP',
             payment_mode: 'Online',
             has_gst: false,
@@ -297,7 +299,7 @@ const createOrder = async (req, res) => {
                 total:           parseFloat(total)           || 0,
                 coupon_code,
                 billing_bill_number: null,
-                billing_stock_location_id: null,
+                billing_stock_location_id: billingPayload.franchise_location_id,
                 billing_price_type: billingPayload.price_type,
                 billing_payment_mode: billingPayload.payment_mode,
                 billing_has_gst: Boolean(billingPayload.has_gst),
@@ -399,10 +401,13 @@ const createOrder = async (req, res) => {
                     const billingBase = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
                     const billingUrl = `${billingBase}/billings`;
                     orderFlowLog.logRequest(`${flowId} Billing invoice`, 'POST', billingUrl, billingRequestPayload);
-                    const response = await axios.post(billingUrl, billingRequestPayload, {
-                        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-                        timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
-                        maxRedirects: 0,
+                    const response = await billingRequestManager.request({
+                        method: 'POST', label: '/billings',
+                        execute: () => axios.post(billingUrl, billingRequestPayload, {
+                            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                            timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
+                            maxRedirects: 0,
+                        }),
                     });
                     billingResponse = response.data;
                     orderFlowLog.logResponse(`${flowId} Billing invoice`, response.status, response.data);
@@ -451,7 +456,7 @@ const createOrder = async (req, res) => {
                         && /insufficient stock/i.test(String(billingError.response?.data?.message || billingError.message || ''))
                         && billingRequestPayload?.items?.length) {
                         try {
-                            await billingCatalog.assertBillingStock(billingRequestPayload.items);
+                            await billingCatalog.assertBillingStock(billingRequestPayload.items, { locationId: billingRequestPayload.franchise_location_id });
                             billingSyncError += ' Immediate Billing GET recheck still reported enough stock; Billing /billings and its GET stock snapshot disagree, or the invoice checks a different stock location.';
                         } catch (stockCheckError) {
                             if (Array.isArray(stockCheckError.stockIssues) && stockCheckError.stockIssues.length) {
@@ -622,7 +627,7 @@ const buildBillingPayload = async order => {
     return {
         ...savedPayload,
         bill_number: savedPayload.bill_number || '',
-        franchise_location_id: '',
+        franchise_location_id: savedPayload.franchise_location_id ?? order.billing_stock_location_id ?? configuredStockLocationId(),
         price_type: savedPriceType || (allowedPriceTypes.includes(order.billing_price_type) ? order.billing_price_type : 'MRP'),
         payment_mode: savedPayload.payment_mode || order.billing_payment_mode || 'Online',
         has_gst: savedPayload.has_gst ?? (order.billing_has_gst ? 1 : 0),
@@ -642,36 +647,6 @@ const buildBillingPayload = async order => {
         submission_action: 'complete',
     };
 };
-
-function makeBillingCreatePayload(snapshot) {
-    const items = (Array.isArray(snapshot.items) ? snapshot.items : []).map(item => {
-        const variantId = item.product_variant_id;
-        if (variantId === undefined || variantId === null || String(variantId).trim() === '') {
-            throw new Error('A purchased item has no Billing variant ID. Map every order variant to Billing before invoice creation.');
-        }
-        const value = String(variantId).trim();
-        return {
-            product_variant_id: /^\d+$/.test(value) ? Number(value) : value,
-            quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
-            discount_amount: Number(item.discount_amount) || 0,
-        };
-    });
-    if (!items.length) throw new Error('Billing invoice needs at least one purchased variant.');
-
-    return {
-        customer_name: String(snapshot.customer_name || ''),
-        customer_phone: String(snapshot.customer_phone || ''),
-        customer_email: String(snapshot.customer_email || ''),
-        source: 'Website',
-        entry_mode: 'Manual',
-        price_type: 'MRP',
-        payment_mode: 'Online',
-        has_gst: false,
-        bill_discount_amount: Number(snapshot.bill_discount_amount) || 0,
-        paid_amount: Number(snapshot.paid_amount) || 0,
-        items,
-    };
-}
 
 const getBillingPayload = async (req, res) => {
     try {
@@ -704,7 +679,7 @@ const updateBillingPayload = async (req, res) => {
             if (!['MRP', 'Retail', 'Wholesale'].includes(String(submitted.price_type))) return res.status(400).json({ success: false, message: 'Unsupported Billing price_type.' });
             next.price_type = String(submitted.price_type);
         }
-        next.franchise_location_id = '';
+        next.franchise_location_id = current.franchise_location_id ?? configuredStockLocationId();
         const submittedItems = (current.items || []).map(item => ({ ...item }));
         if (submitted.has_gst !== undefined) {
             next.has_gst = submitted.has_gst ? 1 : 0;
@@ -723,7 +698,7 @@ const updateBillingPayload = async (req, res) => {
         next.balance = Number(order.billing_balance) || 0;
         next.submission_action = 'complete';
         await order.update({
-            billing_stock_location_id: null,
+            billing_stock_location_id: next.franchise_location_id,
             billing_price_type: next.price_type || order.billing_price_type,
             billing_has_gst: Boolean(next.has_gst),
             billing_payload: next,
@@ -750,15 +725,18 @@ const retryBillingInvoice = async (req, res) => {
         const savedRequest = parseJson(order.billing_request_payload);
         if (!savedRequest) throw new Error('The original Billing request was not saved.');
         billingRequestPayload = makeBillingCreatePayload(savedRequest);
-        const stockCheck = await billingCatalog.assertBillingStock(billingRequestPayload.items);
+        const stockCheck = await billingCatalog.assertBillingStock(billingRequestPayload.items, { locationId: billingRequestPayload.franchise_location_id });
         await order.update({ billing_sync_status: 'pending', billing_sync_error: null });
         const billingBase = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
         const billingUrl = `${billingBase}/billings`;
         orderFlowLog.logRequest(`order-${order.id} Billing invoice retry`, 'POST', billingUrl, billingRequestPayload);
-        const response = await axios.post(billingUrl, billingRequestPayload, {
-            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-            timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
-            maxRedirects: 0,
+        const response = await billingRequestManager.request({
+            method: 'POST', label: '/billings',
+            execute: () => axios.post(billingUrl, billingRequestPayload, {
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
+                maxRedirects: 0,
+            }),
         });
         billingResponse = response.data;
         orderFlowLog.logResponse(`order-${order.id} Billing invoice retry`, response.status, response.data);

@@ -89,6 +89,8 @@ const getLogoConfig = () => {
           filename: 'logo.png',
           path: logoPath,
           cid: 'brandlogo',
+          contentType: 'image/png',
+          contentDisposition: 'inline',
         },
       ],
     };
@@ -426,7 +428,7 @@ const buildBrandHeader = (heading, message, pillsHtml = '', logoSrc) => {
         <tr>
           <td align="center" style="vertical-align:middle;text-align:center;">
             <a href="${frontendBase}" style="text-decoration:none;display:inline-block;">
-              <img src="${resolvedLogo}" alt="Fashion Aura" style="max-height:44px;max-width:220px;height:auto;display:block;margin:0 auto;border:0;outline:none;" />
+              <img src="${resolvedLogo}" alt="Fashion Aura" width="180" height="40" style="display:block;margin:0 auto;width:180px;max-width:180px;height:auto;border:0;outline:none;" />
             </a>
             <div style="font-size:10px;font-weight:600;color:${B.gold};letter-spacing:2px;text-transform:uppercase;margin-top:6px;">Elegance &amp; Couture</div>
           </td>
@@ -466,7 +468,7 @@ const buildBrandFooter = (logoSrc) => {
         <tr>
           <td align="center" style="vertical-align:middle;text-align:center;">
             <a href="${frontendBase}" style="text-decoration:none;display:inline-block;">
-              <img src="${resolvedLogo}" alt="Fashion Aura" style="max-height:26px;max-width:140px;height:auto;display:block;margin:0 auto;border:0;outline:none;opacity:0.9;" />
+              <img src="${resolvedLogo}" alt="Fashion Aura" width="120" height="27" style="display:block;margin:0 auto;width:120px;max-width:120px;height:auto;border:0;outline:none;opacity:0.9;" />
             </a>
           </td>
         </tr>
@@ -488,19 +490,18 @@ const buildEmailHTML = (order, template, extra = {}, logoSrc) => {
   const itemsTable = buildItemsTable(items);
   const summary   = buildPriceSummary(order, extra);
   const currentLogo = logoSrc || getLogoConfig().src;
-  const trackUrl = getTrackOrderUrl(order);
 
   const pills = template.hidePills ? '' : `
     <table cellpadding="0" cellspacing="0" style="margin:18px auto 0;">
       <tr>
         <td style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.3);
                    border-radius:50px;padding:5px 14px;font-size:11px;font-weight:700;color:${B.white};">
-          ✅ Verified Order
+          Order Verified
         </td>
         <td style="width:10px;"></td>
         <td style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.3);
                    border-radius:50px;padding:5px 14px;font-size:11px;font-weight:700;color:${B.white};">
-          ✨ Express Fulfillment
+          Express Fulfillment
         </td>
       </tr>
     </table>`;
@@ -564,18 +565,6 @@ const buildEmailHTML = (order, template, extra = {}, logoSrc) => {
         </td>
       </tr>
 
-      <!-- CTA Button -->
-      <tr>
-        <td style="padding:0 24px 28px;text-align:center;">
-          <a href="${trackUrl}"
-             style="display:inline-block;background:linear-gradient(45deg, ${B.navy}, ${B.gold});color:${B.white};
-                    font-size:14px;font-weight:700;padding:13px 32px;border-radius:50px;
-                    text-decoration:none;letter-spacing:0.3px;box-shadow:0 4px 12px rgba(26,16,64,0.25);">
-            Track Order Details →
-          </a>
-        </td>
-      </tr>
-
       <!-- Footer -->
       ${buildBrandFooter(currentLogo)}
 
@@ -591,7 +580,6 @@ const buildConfirmationHTML = ({ email, name, paymentId, orderId, items = [], su
   const orderDate = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
   const firstName = (name || '').split(' ')[0] || 'Customer';
   const currentLogo = logoSrc || getLogoConfig().src;
-  const trackUrl = getTrackOrderUrl({ id: orderId });
   const itemsTable = buildItemsTable(items);
 
   const billingBlock = billingAddress ? (() => {
@@ -740,18 +728,6 @@ const buildConfirmationHTML = ({ email, name, paymentId, orderId, items = [], su
     <!-- Billing Address -->
     ${billingBlock}
 
-    <!-- CTA Button -->
-    <tr>
-      <td style="padding:0 24px 28px;text-align:center;">
-        <a href="${trackUrl}"
-           style="display:inline-block;background:linear-gradient(45deg, ${B.navy}, ${B.gold});color:${B.white};
-                  font-size:14px;font-weight:700;padding:13px 32px;border-radius:50px;
-                  text-decoration:none;letter-spacing:0.3px;box-shadow:0 4px 12px rgba(26,16,64,0.25);">
-          Track Order Details →
-        </a>
-      </td>
-    </tr>
-
     <!-- Footer -->
     ${buildBrandFooter(currentLogo)}
 
@@ -863,7 +839,7 @@ exports.sendOtpEmail = async (email, otp) => {
                     <tr>
                       <td align="center" style="vertical-align:middle;text-align:center;">
                         <a href="${frontendBase}" style="text-decoration:none;display:inline-block;">
-                          <img src="${logoConfig.src}" alt="Fashion Aura" style="max-height:40px;max-width:200px;height:auto;display:block;margin:0 auto;border:0;outline:none;" />
+                          <img src="${logoConfig.src}" alt="Fashion Aura" width="180" height="40" style="display:block;margin:0 auto;width:180px;max-width:180px;height:auto;border:0;outline:none;" />
                         </a>
                       </td>
                     </tr>

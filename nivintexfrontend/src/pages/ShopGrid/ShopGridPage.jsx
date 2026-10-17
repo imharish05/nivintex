@@ -446,11 +446,11 @@ export default function ShopGridPage({ saleOnly = false }) {
     window.scrollTo(0, 0);
 
     Promise.all([
-      productApi.getAll(),
+      productApi.getAllFast(),
       categoryApi.getAll(),
       subCategoryApi.getAll(),
     ])
-      .then(async ([prods, cats, subs]) => {
+      .then(([prods, cats, subs]) => {
         const arr = Array.isArray(prods) ? prods : [];
         const processed = arr.map(p => {
           const productFinal = [p.franchise_price_final, p.salesPrice, p.mrp]
@@ -462,27 +462,12 @@ export default function ShopGridPage({ saleOnly = false }) {
           const mrp = salesPrice;
           return { ...p, franchise_price_final: salesPrice, mrp, salesPrice };
         });
-        let inventorySyncedProducts;
-        try {
-          const [billingProducts, stockByVariant] = await Promise.all([
-            billingCatalogApi.getProductVariants(),
-            billingCatalogApi.getStocksByVariant(),
-          ]);
-          inventorySyncedProducts = syncProductsWithBillingStock(processed, billingProducts, stockByVariant);
-        } catch (billingError) {
-          console.warn('[ShopGrid] Could not verify live Billing stock:', billingError.message);
-          inventorySyncedProducts = processed.map(product => ({
-            ...product,
-            stock: 0,
-            billingStockVerified: false,
-            Variants: (product.Variants || []).map(variant => ({ ...variant, stock: 0, billingStockVerified: false })),
-          }));
-        }
-        setProducts(inventorySyncedProducts);
+        // Render the local catalog immediately; live Billing lookups can be slow.
+        setProducts(processed);
         setCategories(Array.isArray(cats) ? cats : []);
         setSubcategories(Array.isArray(subs) ? subs : []);
-        if (inventorySyncedProducts.length) {
-          const max = Math.max(...inventorySyncedProducts.map(p => Number(p.salesPrice || p.mrp || 0)));
+        if (processed.length) {
+          const max = Math.max(...processed.map(p => Number(p.salesPrice || p.mrp || 0)));
           if (max > 0) setPriceMax(Math.ceil(max / 100) * 100);
         }
 
@@ -544,6 +529,28 @@ export default function ShopGridPage({ saleOnly = false }) {
           })
           .catch(err => console.error('Failed to load combos:', err))
           .finally(() => setCombosLoading(false));
+
+        // Update live prices and stock after cards are already visible.
+        Promise.all([
+          productApi.enrichWithBillingPrices(processed),
+          billingCatalogApi.getProductVariants(),
+          billingCatalogApi.getStocksByVariant(),
+        ]).then(([pricedProducts, billingProducts, stockByVariant]) => {
+          const priced = Array.isArray(pricedProducts) ? pricedProducts : processed;
+          setProducts(syncProductsWithBillingStock(priced, billingProducts, stockByVariant));
+          if (priced.length) {
+            const max = Math.max(...priced.map(p => Number(p.salesPrice || p.mrp || 0)));
+            if (max > 0) setPriceMax(current => Math.max(current, Math.ceil(max / 100) * 100));
+          }
+        }).catch(billingError => {
+          console.warn('[ShopGrid] Could not verify live Billing prices/stock:', billingError.message);
+          setProducts(current => current.map(product => ({
+            ...product,
+            stock: 0,
+            billingStockVerified: false,
+            Variants: (product.Variants || []).map(variant => ({ ...variant, stock: 0, billingStockVerified: false })),
+          })));
+        });
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
@@ -554,7 +561,10 @@ export default function ShopGridPage({ saleOnly = false }) {
   useEffect(() => {
     if (!products.length) return undefined;
     let active = true;
+    let stockRefreshInProgress = false;
     const refreshStock = async () => {
+      if (stockRefreshInProgress) return;
+      stockRefreshInProgress = true;
       try {
         const [billingProducts, stockByVariant] = await Promise.all([
           billingCatalogApi.getProductVariants(),
@@ -569,6 +579,8 @@ export default function ShopGridPage({ saleOnly = false }) {
           billingStockVerified: false,
           Variants: (product.Variants || []).map(variant => ({ ...variant, stock: 0, billingStockVerified: false })),
         })));
+      } finally {
+        stockRefreshInProgress = false;
       }
     };
     const interval = window.setInterval(refreshStock, 60000);

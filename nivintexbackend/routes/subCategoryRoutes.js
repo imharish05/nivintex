@@ -3,6 +3,7 @@ const router = express.Router();
 const SubCategory = require('../models/SubCategory');
 const Category = require('../models/Category');
 const multer = require('multer');
+const billingCatalog = require('../services/billingCatalogService');
 
 const mapSubcategory = (subcategory) => {
     const row = subcategory.toJSON();
@@ -25,24 +26,17 @@ async function resolveLocalCategoryId(categoryId, categoryName) {
 }
 
 async function getBillingSubcategories() {
-    const axios = require('axios');
-    const baseUrl = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
-    const headers = { Accept: 'application/json' };
-    if (process.env.BILLING_API_TOKEN) headers.Authorization = `Bearer ${process.env.BILLING_API_TOKEN}`;
-    const options = { headers, timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000 };
-    const [subcategoryResult, categoryResult] = await Promise.allSettled([
-        axios.get(`${baseUrl}/subcategory`, options),
-        axios.get(`${baseUrl}/category`, options),
-    ]);
-    if (subcategoryResult.status === 'rejected') throw subcategoryResult.reason;
+    const subcategoryPayload = await billingCatalog.getEndpoint('/subcategory');
+    let categoryPayload = null;
+    try { categoryPayload = await billingCatalog.getEndpoint('/category'); } catch { /* category names can be absent if that endpoint is unavailable */ }
     const rowsFor = (payload, key) => {
         const candidates = [payload?.[key], payload?.data?.[key], payload?.data?.data?.[key], payload?.data, payload?.result?.[key], payload];
         const value = candidates.find(item => Array.isArray(item)) || candidates.find(item => item && typeof item === 'object' && (item.id != null || item.category_id != null || item.subcategory_id != null));
         return Array.isArray(value) ? value : value ? [value] : [];
     };
-    const categories = categoryResult.status === 'fulfilled' ? rowsFor(categoryResult.value.data, 'category') : [];
+    const categories = categoryPayload ? rowsFor(categoryPayload, 'category') : [];
     const categoriesById = new Map(categories.map(category => [String(category.id ?? category.category_id ?? category.categoryId), category]));
-    return rowsFor(subcategoryResult.value.data, 'subcategory').map(row => {
+    return rowsFor(subcategoryPayload, 'subcategory').map(row => {
         const rawCategory = row.category_id ?? row.categoryId ?? row.cat_id ?? row.category ?? row.Category;
         const categoryId = typeof rawCategory === 'object' && rawCategory !== null
             ? (rawCategory.id ?? rawCategory.category_id ?? rawCategory.value)

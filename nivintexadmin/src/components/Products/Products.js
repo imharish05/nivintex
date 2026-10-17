@@ -727,7 +727,10 @@ export default function Products({ showToast }) {
       ) : (
         <DataTable
           columns={['ID', 'Image', 'Product Info', 'Status', 'Attributes', 'Stock', 'Category', 'Price', 'Actions']}
-          initialRows={rows}
+          // Removed Billing products stay archived in the database so existing
+          // orders keep their image snapshots, but they are not catalog entries
+          // that should appear in this Admin product list.
+          initialRows={rows.filter(product => String(product.status || 'Active').toLowerCase() === 'active')}
           renderRow={product => {
             const variants = product.Variants || product.variants || [];
             const stock = Number(product.stock || 0);

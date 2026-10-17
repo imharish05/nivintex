@@ -522,6 +522,7 @@ exports.searchProducts = async (req, res) => {
 
         const products = await Product.findAll({
             where: {
+                status: 'Active',
                 [Op.or]: orConditions,
             },
             include: PRODUCT_INCLUDE,
@@ -627,7 +628,7 @@ exports.updateBillingVariantImage = async (req, res) => {
 exports.getNewArrivals = async (req, res) => {
     try {
         const products = await Product.findAll({
-            where: { isNewArrival: true },
+            where: { isNewArrival: true, status: 'Active' },
             include: PRODUCT_INCLUDE,
             limit: 8,
             order: [['created_at', 'DESC']],
@@ -644,7 +645,7 @@ exports.getNewArrivals = async (req, res) => {
 exports.getBestSellers = async (req, res) => {
     try {
         const products = await Product.findAll({
-            where: { isBestSeller: true },
+            where: { isBestSeller: true, status: 'Active' },
             include: PRODUCT_INCLUDE,
             order: [['created_at', 'DESC']],
         });
@@ -741,7 +742,7 @@ exports.getProductBySlug = async (req, res) => {
         const match = slug.match(/-(\d+)$/);
         if (!match) return res.status(404).json({ success: false, message: 'Product not found.' });
         const product = await Product.findByPk(match[1], { include: PRODUCT_INCLUDE });
-        if (!product || productSlug(product.productName, product.id) !== slug) {
+        if (!product || product.status !== 'Active' || productSlug(product.productName, product.id) !== slug) {
             return res.status(404).json({ success: false, message: 'Product not found.' });
         }
         const mappedProduct = {
@@ -804,6 +805,7 @@ exports.updateSaleStatus = async (req, res) => {
 exports.getAllProductVariants = async (req, res) => {
     try {
         const products = await Product.findAll({
+            where: { status: 'Active' },
             include: PRODUCT_INCLUDE,
             order: [['id', 'DESC']],
         });

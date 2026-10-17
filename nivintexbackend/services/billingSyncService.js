@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { Op } = require('sequelize');
 const sequelize = require('../config/db');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
@@ -24,6 +25,12 @@ function collection(payload, key) {
   if (payload?.result?.[key] && typeof payload.result[key] === 'object') return [payload.result[key]];
   if (Array.isArray(payload?.data)) return payload.data;
   return Array.isArray(payload) ? payload : [];
+}
+
+function hasCollection(payload, key) {
+  const values = [payload?.[key], payload?.data?.[key], payload?.data?.data?.[key], payload?.result?.[key]];
+  return values.some(value => Array.isArray(value) || (value && typeof value === 'object'))
+    || Array.isArray(payload?.data) || Array.isArray(payload);
 }
 
 function billingReferenceId(value) {
@@ -195,8 +202,11 @@ async function syncAll(productsOnly = false) {
     const categories = collection(payloads.categories, 'category');
     const subcategories = collection(payloads.subcategories, 'subcategory');
     const products = buildProducts(payloads);
+    if (!hasCollection(payloads.products, 'products') || !hasCollection(payloads.productVariants, 'product_varients')) {
+      throw new Error('Billing sync did not receive valid product and product variant collections; local catalog was left unchanged.');
+    }
     const franchises = productsOnly ? [] : collection(payloads.franchises, 'franchises');
-    const result = { categories: 0, subcategories: 0, products: 0, variants: 0, franchises: 0 };
+    const result = { categories: 0, subcategories: 0, products: 0, variants: 0, productsDeactivated: 0, variantsDeactivated: 0, franchises: 0 };
     const stockWarning = payloads.stocks?.__warning;
     if (stockWarning) result.warnings = [stockWarning];
 
@@ -342,6 +352,39 @@ async function syncAll(productsOnly = false) {
           else variant = await ProductVariant.create(variantValues, { transaction, hooks: false });
           result.variants += 1;
         }
+      }
+
+      // Billing is authoritative for imported catalog presence. Keep local rows
+      // and uploaded photos for Admin, but hide products/variants removed there.
+      const billingProductIds = new Set(products.map(product => idOf(product.id)).filter(Boolean));
+      const localProducts = await Product.findAll({
+        where: { billingProductId: { [Op.ne]: null } },
+        attributes: ['id', 'billingProductId'],
+        transaction,
+      });
+      const removedProducts = localProducts.filter(product => !billingProductIds.has(idOf(product.billingProductId)));
+      const removedProductIds = removedProducts.map(product => product.id);
+      if (removedProductIds.length) {
+        const [deactivated] = await Product.update({
+          status: 'Inactive', stock: 0, isNewArrival: false, isBestSeller: false, isBuyOneGetOne: false,
+        }, { where: { id: { [Op.in]: removedProductIds } }, transaction });
+        result.productsDeactivated = deactivated;
+      }
+
+      const billingVariantIds = new Set(products.flatMap(product => product.variants || [])
+        .map(variant => idOf(variant.id)).filter(Boolean));
+      const localVariants = await ProductVariant.findAll({
+        where: { billingVariantId: { [Op.ne]: null } },
+        attributes: ['id', 'billingVariantId'],
+        transaction,
+      });
+      const removedVariantIds = localVariants.filter(variant => !billingVariantIds.has(idOf(variant.billingVariantId)))
+        .map(variant => variant.id);
+      if (removedVariantIds.length) {
+        const [deactivated] = await ProductVariant.update({ status: 'Inactive', stock: 0 }, {
+          where: { id: { [Op.in]: removedVariantIds } }, transaction, hooks: false, individualHooks: false,
+        });
+        result.variantsDeactivated = deactivated;
       }
 
       for (const source of franchises) {

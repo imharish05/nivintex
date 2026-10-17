@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { cartApi, wishlistApi, authApi, orderApi, productApi, billingCatalogApi, getImageUrl } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config/api';
 
-const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const BASE = API_BASE_URL;
 
 const ShopContext = createContext();
 export const useShop = () => useContext(ShopContext);

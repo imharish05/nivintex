@@ -36,7 +36,8 @@ const B = {
 };
 
 const getFrontendBaseUrl = () => {
-  const url = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const url = process.env.FRONTEND_URL;
+  if (!url) throw new Error('FRONTEND_URL must be configured.');
   return url.replace(/\/+$/, '').trim();
 };
 
@@ -68,8 +69,8 @@ const getTrackOrderUrl = (order = {}) => {
 
 const getCourierTrackingUrl = (awb_code) => {
   if (!awb_code) return null;
-  const courierBase = (process.env.COURIER_TRACKING_URL || 'https://shiprocket.co/tracking').replace(/\/+$/, '').trim();
-  return `${courierBase}/${encodeURIComponent(awb_code)}`;
+  const courierBase = (process.env.COURIER_TRACKING_URL || '').replace(/\/+$/, '').trim();
+  return courierBase ? `${courierBase}/${encodeURIComponent(awb_code)}` : null;
 };
 
 const getLogoConfig = () => {
@@ -805,19 +806,37 @@ exports.sendOrderStatusEmail = async (order, status, extra = {}) => {
 };
 
 // ── Send OTP Email (Password Reset) ──
-exports.sendOtpEmail = async (email, otp) => {
+exports.sendOtpEmail = async (email, otp, userName) => {
   try {
     console.log(`📧 Sending password reset OTP → ${email}`);
-    const firstName = email.split('@')[0].replace(/[0-9]/g, '');
-    const capitalizedName = firstName ? (firstName.charAt(0).toUpperCase() + firstName.slice(1)) : 'Customer';
-    const formattedOtp = otp.toString().split('').join(' ');
+    const cleanEmail = (email || '').trim();
+    const displayName = userName || cleanEmail.split('@')[0].replace(/[0-9_.]/g, '');
+    const capitalizedName = displayName ? (displayName.charAt(0).toUpperCase() + displayName.slice(1)) : 'Customer';
+    const rawOtp = otp.toString().padStart(6, '0');
+    const otpDigits = rawOtp.split('');
     const logoConfig = getLogoConfig();
     const frontendBase = getFrontendBaseUrl();
 
+    // Fashion Aura luxury green & gold palette
+    const FA_BRAND = '#0f5447';
+    const FA_DARK  = '#09332b';
+    const FA_GOLD  = '#C9933A';
+    const FA_BG    = '#F8F6F2';
+    const FA_CARD  = '#FFFFFF';
+    const FA_BORDER= '#EAE4D6';
+
+    const pinBoxesHtml = otpDigits.map(digit => `
+      <td style="padding: 0 4px;" align="center">
+        <div style="width: 44px; height: 54px; line-height: 54px; background: #FFFFFF; border: 2px solid ${FA_BRAND}; border-radius: 8px; font-size: 28px; font-weight: 700; color: ${FA_BRAND}; font-family: 'Courier New', Courier, monospace; text-align: center; box-shadow: 0 4px 10px rgba(15,84,71,0.08);">
+          ${digit}
+        </div>
+      </td>
+    `).join('');
+
     await transporter.sendMail({
       from:        `"Fashion Aura" <${process.env.EMAIL_USER}>`,
-      to:          email,
-      subject:     'Password Reset OTP – Fashion Aura',
+      to:          cleanEmail,
+      subject:     `${rawOtp} is your Fashion Aura password reset PIN`,
       attachments: logoConfig.attachments,
       html: `
         <!DOCTYPE html>
@@ -825,16 +844,21 @@ exports.sendOtpEmail = async (email, otp) => {
         <head>
           <meta charset="UTF-8"/>
           <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-          <title>Password Reset OTP – Fashion Aura</title>
+          <title>Reset Your Password – Fashion Aura</title>
         </head>
-        <body style="margin:0;padding:0;background:${B.ivory};font-family:'Segoe UI',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:${B.ivory};padding:32px 16px;">
+        <body style="margin:0;padding:0;background:${FA_BG};font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+          <!-- Preheader Text -->
+          <div style="display:none;font-size:1px;color:${FA_BG};line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+            Your 6-digit confirmation PIN is ${rawOtp}. Valid for 15 minutes.
+          </div>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:${FA_BG};padding:36px 16px;">
             <tr><td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:${B.white};border-radius:16px;overflow:hidden;border:1px solid ${B.border};box-shadow:0 6px 20px rgba(0,0,0,0.06);">
+            <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:${FA_CARD};border-radius:18px;overflow:hidden;border:1px solid ${FA_BORDER};box-shadow:0 8px 30px rgba(15,84,71,0.07);">
               
               <!-- Brand Header -->
               <tr>
-                <td style="background:linear-gradient(135deg, ${B.navy} 0%, ${B.navyDark} 100%);padding:28px 24px;text-align:center;">
+                <td style="background:linear-gradient(135deg, ${FA_BRAND} 0%, ${FA_DARK} 100%);padding:32px 24px;text-align:center;">
                   <table cellpadding="0" cellspacing="0" style="margin:0 auto 12px;">
                     <tr>
                       <td align="center" style="vertical-align:middle;text-align:center;">
@@ -844,48 +868,63 @@ exports.sendOtpEmail = async (email, otp) => {
                       </td>
                     </tr>
                   </table>
-                  <div style="font-size:11px;font-weight:600;color:${B.gold};letter-spacing:2px;text-transform:uppercase;">Account Security</div>
+                  <div style="font-size:11px;font-weight:600;color:${FA_GOLD};letter-spacing:3px;text-transform:uppercase;">Elegance &amp; Couture</div>
+                  <div style="margin-top:14px;display:inline-block;padding:4px 14px;background:rgba(201,147,58,0.2);border:1px solid rgba(201,147,58,0.4);border-radius:20px;color:#FFFFFF;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;">
+                    Password Reset Verification
+                  </div>
                 </td>
               </tr>
               
               <!-- Main Body -->
               <tr>
-                <td style="padding:36px 32px 28px;text-align:center;">
-                  <div style="font-size:36px;margin-bottom:12px;">🔐</div>
-                  <h2 style="margin:0 0 12px;font-size:20px;font-weight:700;color:${B.navy};">Hi ${capitalizedName},</h2>
-                  <p style="margin:0 0 28px;font-size:14px;color:${B.text};line-height:1.6;">
-                    We received a request to reset your Fashion Aura account password.<br/>
-                    Please use the one-time verification code below to proceed.
+                <td style="padding:36px 36px 24px;text-align:center;">
+                  <div style="width:56px;height:56px;margin:0 auto 18px;background:rgba(15,84,71,0.06);border-radius:50%;line-height:56px;text-align:center;font-size:26px;">
+                    🔐
+                  </div>
+                  <h2 style="margin:0 0 10px;font-size:22px;font-weight:700;color:#1A1A1A;">Hello, ${capitalizedName}</h2>
+                  <p style="margin:0 0 24px;font-size:14px;color:#555555;line-height:1.6;max-width:460px;margin-left:auto;margin-right:auto;">
+                    We received a request to reset the password for your Fashion Aura account. Use the 6-digit confirmation code below to verify your identity:
                   </p>
                   
-                  <!-- OTP Display Box -->
-                  <table cellpadding="0" cellspacing="0" width="100%" style="max-width:320px;margin:0 auto;border:2px dashed ${B.gold};border-radius:12px;background:${B.ivory};">
-                    <tr>
-                      <td style="padding:22px 20px 18px;text-align:center;">
-                        <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:${B.gold};letter-spacing:1px;text-transform:uppercase;">Your OTP Verification Code</p>
-                        <p style="margin:0 0 10px;font-size:34px;font-weight:800;color:${B.navy};letter-spacing:8px;font-family:monospace;">${formattedOtp}</p>
-                        <p style="margin:0;font-size:12px;font-weight:600;color:${B.red};">⏱ Valid for 15 minutes</p>
-                      </td>
-                    </tr>
-                  </table>
+                  <!-- 6 Digits PIN Table -->
+                  <div style="background:${FA_BG};border:1px solid ${FA_BORDER};border-radius:14px;padding:22px 16px 20px;max-width:380px;margin:0 auto 20px;">
+                    <div style="font-size:10px;font-weight:700;color:${FA_GOLD};letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;">
+                      Your 6-Digit PIN
+                    </div>
+
+                    <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                      <tr>
+                        ${pinBoxesHtml}
+                      </tr>
+                    </table>
+
+                    <div style="margin-top:16px;">
+                      <span style="display:inline-block;background:#FCEBEB;border:1px solid #F7C5C5;border-radius:16px;padding:4px 12px;font-size:12px;font-weight:600;color:#A32D2D;">
+                        ⏱ Expires in 15 minutes
+                      </span>
+                    </div>
+                  </div>
                 </td>
               </tr>
 
-              <!-- Instruction cards -->
+              <!-- Instructions Box -->
               <tr>
-                <td style="padding:0 32px 28px;">
-                  <div style="background:${B.ivory};border:1px solid ${B.border};border-radius:8px;padding:16px 20px;margin-bottom:14px;text-align:left;">
-                    <div style="font-size:13px;font-weight:700;color:${B.navy};margin-bottom:6px;">Reset Instructions:</div>
-                    <div style="font-size:12px;color:${B.text};line-height:1.6;">
-                      1. Enter the code above on the password reset screen.<br/>
-                      2. Choose a new, secure password.<br/>
-                      3. Sign in to your Fashion Aura account.
+                <td style="padding:0 36px 28px;">
+                  <div style="background:${FA_BG};border:1px solid ${FA_BORDER};border-radius:10px;padding:16px 20px;margin-bottom:16px;text-align:left;">
+                    <div style="font-size:12px;font-weight:700;color:${FA_BRAND};letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">
+                      Next Steps
                     </div>
+                    <ol style="margin:0;padding-left:18px;font-size:13px;color:#555555;line-height:1.7;">
+                      <li>Return to the password reset screen on Fashion Aura.</li>
+                      <li>Enter the 6-digit PIN shown above.</li>
+                      <li>Choose a new, secure password (minimum 8 characters).</li>
+                    </ol>
                   </div>
                   
-                  <div style="background:${B.redLight};border-left:4px solid ${B.red};border-radius:4px;padding:12px 16px;text-align:left;">
-                    <p style="margin:0;font-size:12px;line-height:1.5;color:${B.red};">
-                      <strong>Security Notice:</strong> If you did not request this code, you can safely disregard this email. Never share this OTP with anyone — Fashion Aura representatives will never ask for your code.
+                  <!-- Security Notice -->
+                  <div style="background:#FFF9F0;border-left:4px solid ${FA_GOLD};border-radius:4px;padding:12px 16px;text-align:left;">
+                    <p style="margin:0;font-size:12px;line-height:1.6;color:#7A5E28;">
+                      <strong>Security Tip:</strong> If you did not initiate this request, your account is still secure. You can disregard this email. Fashion Aura will never ask you to reveal this PIN over the phone or email.
                     </p>
                   </div>
                 </td>

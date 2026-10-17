@@ -6,8 +6,8 @@ const ProductVariant = require('../models/ProductVariant');
 const Franchise = require('../models/Franchise');
 const SubCategory = require('../models/SubCategory');
 const { billingRequestManager } = require('./billingRequestManager');
+const { billingApiBaseUrl, billingAssetBaseUrl } = require('../config/serviceUrls');
 
-const DEFAULT_API_BASE = 'https://billing.fashionaura26.com/api';
 const timeout = Number(process.env.BILLING_API_TIMEOUT_MS) || 20000;
 let activeSyncPromise = null;
 let activeSyncMode = null;
@@ -53,11 +53,11 @@ function localUploadPath(value) {
 function imageUrl(value) {
   if (!value) return null;
   if (/^https?:\/\//i.test(value)) return value;
-  return `${process.env.BILLING_ASSET_BASE_URL || 'https://billing.fashionaura26.com'}/${String(value).replace(/^\/+/, '')}`;
+  return `${billingAssetBaseUrl()}/${String(value).replace(/^\/+/, '')}`;
 }
 
 function apiClient() {
-  const baseURL = (process.env.BILLING_API_BASE_URL || DEFAULT_API_BASE).replace(/\/+$/, '');
+  const baseURL = billingApiBaseUrl();
   const headers = { Accept: 'application/json' };
   if (process.env.BILLING_API_TOKEN) headers.Authorization = `Bearer ${process.env.BILLING_API_TOKEN}`;
   return axios.create({ baseURL, timeout, headers, maxContentLength: 20 * 1024 * 1024 });

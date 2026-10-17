@@ -1,8 +1,9 @@
 require('dotenv').config();
 
 const axios = require('axios');
+const { billingApiBaseUrl } = require('../config/serviceUrls');
 
-const baseUrl = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
+const baseUrl = billingApiBaseUrl();
 const configuredTimeout = Number(process.env.BILLING_API_TIMEOUT_MS);
 const timeout = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : 10000;
 const headers = { Accept: 'application/json' };

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useShop } from "../context/ShopContext";
 import { getImageUrl, getLocalImageUrl, slugifyProductName, productApi } from "../utils/api";
+import { API_BASE_URL } from "../config/api";
 import logo from "../assets/img/logo2.png";
 import { ProductCardSkeleton } from "./Skeleton";
 
-const BASE = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const BASE = API_BASE_URL;
 
 
 
@@ -353,8 +354,15 @@ export default function NewArrivalsSection() {
   const [addedToCart, setAddedToCart] = useState(new Set());
 
   useEffect(() => {
-    productApi.getAll()
-      .then((data) => setProducts(Array.isArray(data) ? data.filter(product => product.isNewArrival) : []))
+    productApi.getAllFast()
+      .then((data) => {
+        const arrivals = Array.isArray(data) ? data.filter(product => product.isNewArrival) : [];
+        setProducts(arrivals);
+        setLoading(false);
+        productApi.enrichWithBillingPrices(arrivals)
+          .then(priced => setProducts(Array.isArray(priced) ? priced : arrivals))
+          .catch(() => {});
+      })
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
 

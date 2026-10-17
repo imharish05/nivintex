@@ -1,6 +1,7 @@
 const Stock = require('../models/Stock');
 const Product = require('../models/Product');
 const { billingRequestManager } = require('../services/billingRequestManager');
+const { billingApiBaseUrl } = require('../config/serviceUrls');
 
 // 1. Add Stock
 exports.createStock = async (req, res) => {
@@ -214,7 +215,7 @@ exports.decrementBillingStock = async (req, res) => {
     if (variantId === undefined || variantId === null || String(variantId).trim() === '' || !Number.isInteger(quantity) || quantity < 1) {
       return res.status(400).json({ success: false, message: 'product_variant_id and a positive integer quantity are required.' });
     }
-    const baseUrl = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
+    const baseUrl = billingApiBaseUrl();
     const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
     if (process.env.BILLING_API_TOKEN) headers.Authorization = `Bearer ${process.env.BILLING_API_TOKEN}`;
     const response = await billingRequestManager.request({

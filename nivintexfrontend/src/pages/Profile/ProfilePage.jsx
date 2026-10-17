@@ -218,20 +218,54 @@ const styles = {
 };
 
 const Field = ({ label, value, onChange, type = 'text', placeholder = '', full = false }) => {
-
   const [focused, setFocused] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const isPassword = type === 'password';
+
   return (
     <div style={full ? styles.fieldWrapFull : styles.fieldWrap}>
       <label style={styles.label}>{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={styles.input(focused)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-      />
+      <div style={{ position: 'relative', width: '100%' }}>
+        <input
+          type={isPassword ? (showPw ? 'text' : 'password') : type}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{
+            ...styles.input(focused),
+            paddingRight: isPassword ? '32px' : '2px',
+          }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            className="profile-pw-toggle"
+            onClick={() => setShowPw(prev => !prev)}
+            aria-label={showPw ? `Hide ${label}` : `Show ${label}`}
+            style={{
+              position: 'absolute',
+              right: '2px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'transparent',
+              border: 'none',
+              padding: '6px 4px',
+              cursor: 'pointer',
+              color: showPw ? C.brand : C.muted,
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              outline: 'none',
+              transition: 'color 0.2s',
+            }}
+          >
+            <i className={`fa-regular ${showPw ? 'fa-eye-slash' : 'fa-eye'}`} />
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -333,6 +367,9 @@ const ProfilePage = () => {
           .profile-card { padding: 20px 16px !important; }
           .profile-layout { flex-direction: column !important; }
           .profile-inner input { font-size: 16px !important; }
+        }
+        .profile-pw-toggle:hover {
+          color: ${C.brand} !important;
         }
       `}</style>
       <Header />

@@ -1,7 +1,6 @@
 const axios = require('axios');
 const orderFlowLog = require('../utils/orderFlowLogger');
-
-const API_BASE = 'https://apiv2.shiprocket.in/v1/external';
+const { shiprocketApiBaseUrl } = require('../config/serviceUrls');
 let cachedToken = null;
 let tokenExpiresAt = 0;
 let authenticationBlocked = false;
@@ -31,7 +30,7 @@ async function getToken() {
 
   let data;
   try {
-    const url = `${API_BASE}/auth/login`;
+  const url = `${shiprocketApiBaseUrl()}/auth/login`;
     const requestBody = { email, password };
     orderFlowLog.logRequest('Shiprocket authentication', 'POST', url, requestBody);
     const response = await axios.post(url, requestBody, {
@@ -65,7 +64,7 @@ async function getAvailableCouriers({ deliveryPostcode, weightKg = 0.5 }) {
     ? requestedWeight
     : configuredFallbackWeight;
   const token = await getToken();
-  const url = `${API_BASE}/courier/serviceability/`;
+  const url = `${shiprocketApiBaseUrl()}/courier/serviceability/`;
   const params = {
     pickup_postcode: pickupPostcode,
     delivery_postcode: deliveryPostcode,
@@ -170,7 +169,7 @@ async function bookShipment({ order, courierId }) {
     sub_total: Number(order.total) || 0,
     length: packageLength, breadth: packageWidth, height: packageHeight, weight: totalWeight,
   };
-  const createUrl = `${API_BASE}/orders/create/adhoc`;
+  const createUrl = `${shiprocketApiBaseUrl()}/orders/create/adhoc`;
   orderFlowLog.logRequest(`Shiprocket create shipment order-${order.id}`, 'POST', createUrl, payload);
   let createResponse;
   try {
@@ -186,7 +185,7 @@ async function bookShipment({ order, courierId }) {
   orderFlowLog.logResponse(`Shiprocket create shipment order-${order.id}`, createResponse.status, created);
   const shipmentId = created?.shipment_id;
   if (!shipmentId) throw new Error('Shiprocket did not return a shipment ID.');
-  const awbUrl = `${API_BASE}/courier/assign/awb`;
+  const awbUrl = `${shiprocketApiBaseUrl()}/courier/assign/awb`;
   const awbPayload = {
     shipment_id: shipmentId,
     courier_id: courierId,

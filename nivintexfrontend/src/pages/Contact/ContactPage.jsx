@@ -56,7 +56,11 @@ const Contact = () => {
           min-height: 100vh;
         }
 
-        .cp-top-gap { height: 70px; }
+        .cp-top-gap { height: 16px; }
+        @media (max-width: 600px) {
+          .cp-top-gap { height: 8px; }
+          .cp-body { padding: 0 14px 50px !important; }
+        }
 
         .cp-body {
           max-width: 1200px;

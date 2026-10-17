@@ -445,12 +445,15 @@ export default function ShopGridPage({ saleOnly = false }) {
   useEffect(() => {
     window.scrollTo(0, 0);
 
-    Promise.all([
-      productApi.getAllFast(),
-      categoryApi.getAll(),
-      subCategoryApi.getAll(),
-    ])
-      .then(([prods, cats, subs]) => {
+    categoryApi.getAll()
+      .then(cats => setCategories(Array.isArray(cats) ? cats : []))
+      .catch(err => console.warn('[ShopGrid] Could not load categories:', err.message));
+    subCategoryApi.getAll()
+      .then(subs => setSubcategories(Array.isArray(subs) ? subs : []))
+      .catch(err => console.warn('[ShopGrid] Could not load subcategories:', err.message));
+
+    productApi.getAllFast()
+      .then(prods => {
         const arr = Array.isArray(prods) ? prods : [];
         const processed = arr.map(p => {
           const productFinal = [p.franchise_price_final, p.salesPrice, p.mrp]
@@ -464,8 +467,6 @@ export default function ShopGridPage({ saleOnly = false }) {
         });
         // Render the local catalog immediately; live Billing lookups can be slow.
         setProducts(processed);
-        setCategories(Array.isArray(cats) ? cats : []);
-        setSubcategories(Array.isArray(subs) ? subs : []);
         if (processed.length) {
           const max = Math.max(...processed.map(p => Number(p.salesPrice || p.mrp || 0)));
           if (max > 0) setPriceMax(Math.ceil(max / 100) * 100);

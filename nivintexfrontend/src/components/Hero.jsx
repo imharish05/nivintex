@@ -5,8 +5,9 @@ import banner1 from "../assets/img/img31.png";
 import banner2 from "../assets/img/img32.png";
 import banner3 from "../assets/img/img33.png";
 import { HeroBannerSkeleton } from "./Skeleton";
+import { API_BASE_URL } from "../config/api";
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API = API_BASE_URL;
 
 // ── Physical Slides (Local High-Resolution Assets) ─────────────────────────────
 const PHYSICAL_SLIDES = [

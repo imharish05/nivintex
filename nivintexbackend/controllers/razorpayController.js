@@ -108,7 +108,7 @@ exports.createOrder = async (req, res) => {
             notes: { courier_id: String(selectedCourierId) },
         };
 
-        orderFlowLog.logRequest(`${flowId} Razorpay order`, 'POST', 'https://api.razorpay.com/v1/orders', options);
+        orderFlowLog.logRequest(`${flowId} Razorpay order`, 'POST', 'Razorpay SDK orders.create', options);
         const order = await razorpay.orders.create(options);
         orderFlowLog.logResponse(`${flowId} Razorpay order`, 200, {
             id: order.id,

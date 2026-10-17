@@ -1,146 +1,302 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config/api';
 
-const BRAND = '#0f5447';
-const BRAND_SOFT = 'rgba(15,84,71,0.05)';
 const F = {
   main: "'Josefin Sans', 'Century Gothic', sans-serif",
   sub:  "'Raleway', 'Josefin Sans', sans-serif",
 };
 
-const inputStyle = {
-  width: '100%',
-  padding: '14px 44px',
-  border: '1px solid #EAE4D6',
-  borderRadius: '8px',
-  fontSize: '14px',
-  fontFamily: F.sub,
-  outline: 'none',
-  color: '#1A1A1A',
-  background: '#fff',
-  transition: 'border-color 0.2s',
-  boxSizing: 'border-box'
+const C = {
+  brand:   '#0f5447',
+  accent:  '#C9933A',
+  border:  '#EAE4D6',
+  surface: '#FFFFFF',
+  muted:   '#6B6B8A',
+  bg:      '#EAF0E2',
 };
 
-const onFocus = e => { e.target.style.borderColor = BRAND; };
-const onBlur  = e => { e.target.style.borderColor = '#EAE4D6'; };
+const getStrength = (pw) => {
+  if (!pw) return 0;
+  let s = 0;
+  if (pw.length >= 8)           s++;
+  if (/[A-Z]/.test(pw))        s++;
+  if (/[0-9]/.test(pw))        s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
+  return s;
+};
+const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+const strengthColor = ['', '#E05252', '#C9933A', '#2E9E6B', '#0f5447'];
+
+const styles = {
+  page: {
+    minHeight: '100vh', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', background: '#EAF0E2', padding: 'clamp(14px, 3vw, 24px)',
+    fontFamily: F.main,
+  },
+  card: {
+    background: C.surface, border: `1px solid ${C.border}`,
+    borderTop: `3px solid ${C.brand}`,
+    padding: 'clamp(28px, 6vw, 48px) clamp(18px, 6vw, 52px)', width: '100%', maxWidth: '520px',
+    boxShadow: '0 8px 40px rgba(31,92,68,0.09)',
+  },
+  backLink: {
+    display: 'flex', alignItems: 'center', gap: '6px',
+    fontSize: '11px', fontWeight: 300, letterSpacing: '2px',
+    textTransform: 'uppercase', color: C.muted,
+    cursor: 'pointer', marginBottom: '32px',
+    fontFamily: F.main,
+  },
+  logoWrap: {
+    textAlign: 'center', marginBottom: '6px',
+    fontFamily: F.main, fontWeight: 300,
+    fontSize: '28px', color: C.brand,
+    letterSpacing: '6px', textTransform: 'uppercase',
+    display: 'block', cursor: 'pointer',
+  },
+  logoAccent: { color: C.accent },
+  dividerLine: {
+    width: '28px', height: '1px', background: C.accent,
+    margin: '14px auto 10px', opacity: 0.8,
+  },
+  subtitle: {
+    textAlign: 'center', fontSize: '11px', fontWeight: 300,
+    color: C.muted, marginBottom: '20px',
+    letterSpacing: '2px', fontFamily: F.sub,
+    textTransform: 'uppercase',
+  },
+  emailBadge: {
+    background: '#F8F6F2', border: `1px solid ${C.border}`,
+    borderRadius: '8px', padding: '10px 14px',
+    textAlign: 'center', marginBottom: '28px',
+    fontSize: '12px', color: '#4A4A4A', fontFamily: F.sub,
+  },
+  label: {
+    display: 'block', fontSize: '10px', fontWeight: 400,
+    color: C.accent, letterSpacing: '2.5px',
+    textTransform: 'uppercase', marginBottom: '8px',
+    fontFamily: F.main,
+  },
+  fieldWrap: { marginBottom: '20px', position: 'relative' },
+  input: (focused) => ({
+    width: '100%', boxSizing: 'border-box',
+    padding: '11px 36px 11px 2px', fontSize: '16px',
+    color: C.brand, background: 'transparent',
+    border: 'none',
+    borderBottom: `1px solid ${focused ? C.brand : C.border}`,
+    borderRadius: 0, outline: 'none',
+    transition: 'border-color 0.25s',
+    fontFamily: F.sub, fontWeight: 300, letterSpacing: '0.5px',
+  }),
+  fieldIcon: {
+    position: 'absolute', right: '2px', bottom: '12px',
+    fontSize: '14px', color: C.muted, cursor: 'pointer',
+  },
+  strengthBar: {
+    display: 'flex', gap: '4px', marginTop: '8px',
+  },
+  strengthSegment: (filled, color) => ({
+    flex: 1, height: '2px',
+    background: filled ? color : C.border,
+    transition: 'background 0.3s',
+  }),
+  strengthText: (color) => ({
+    fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase',
+    color: color || C.muted, fontFamily: F.main, fontWeight: 300,
+    marginTop: '6px',
+  }),
+  submitBtn: (loading) => ({
+    width: '100%', height: '46px',
+    background: loading ? '#9B8060' : C.brand,
+    color: '#fff', border: 'none', borderRadius: 8,
+    fontSize: '11px', fontWeight: 300,
+    letterSpacing: '4px', textTransform: 'uppercase',
+    cursor: loading ? 'not-allowed' : 'pointer',
+    marginBottom: '24px', fontFamily: F.main,
+    transition: 'opacity 0.2s',
+  }),
+  switchText: {
+    textAlign: 'center', fontSize: '11px', fontWeight: 300,
+    letterSpacing: '1.5px', color: C.muted, fontFamily: F.sub,
+  },
+  switchLink: {
+    color: C.accent, fontWeight: 400, cursor: 'pointer', letterSpacing: '1.5px',
+  },
+  errorBox: {
+    border: `1px solid #FECACA`, borderLeft: `3px solid #E05252`,
+    padding: '11px 14px', fontSize: '11px', fontWeight: 300,
+    letterSpacing: '1.5px', color: '#B91C1C',
+    marginBottom: '20px', display: 'flex', alignItems: 'center',
+    gap: '10px', fontFamily: F.sub,
+  },
+  successBox: {
+    border: `1px solid #BBF7D0`, borderLeft: `3px solid #2E9E6B`,
+    padding: '11px 14px', fontSize: '11px', fontWeight: 300,
+    letterSpacing: '1.5px', color: '#15803D',
+    marginBottom: '20px', display: 'flex', alignItems: 'center',
+    gap: '10px', fontFamily: F.sub,
+  },
+};
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
-
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showP1, setShowP1] = useState(false);
   const [showP2, setShowP2] = useState(false);
+  const [focusP1, setFocusP1] = useState(false);
+  const [focusP2, setFocusP2] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
-  const email = sessionStorage.getItem('resetEmail') || '';
-  const otp = sessionStorage.getItem('resetOtp') || '';
+  const [success, setSuccess] = useState('');
+
+  const email = (sessionStorage.getItem('resetEmail') || '').trim().toLowerCase();
+  const otp = (sessionStorage.getItem('resetOtp') || '').trim();
 
   useEffect(() => {
     if (!email || !otp) {
       navigate('/forgot-password');
     }
-  }, [email, otp]);
+  }, [email, otp, navigate]);
+
+  const strength = getStrength(password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (password.length < 8) return setError('Password must be at least 8 characters');
-    if (password !== confirmPassword) return setError('Passwords do not match');
-    
-    setLoading(true);
     setError('');
-    
+    setSuccess('');
+
+    if (password.length < 8) {
+      return setError('Password must be at least 8 characters long.');
+    }
+    if (password !== confirmPassword) {
+      return setError('Passwords do not match. Please re-enter.');
+    }
+
+    setLoading(true);
+
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/password-reset/reset-password`, {
+      const apiUrl = API_BASE_URL;
+      const res = await fetch(`${apiUrl}/password-reset/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp, newPassword: password })
       });
       const data = await res.json();
-      
+
       if (!res.ok) {
-        throw new Error(data.message || 'Failed to reset password');
+        throw new Error(data.message || 'Failed to reset password.');
       }
-      
+
       sessionStorage.removeItem('resetEmail');
       sessionStorage.removeItem('resetOtp');
-      
-      alert(data.message);
-      navigate('/login');
+
+      setSuccess('Password updated successfully! Redirecting to sign in…');
+      setTimeout(() => {
+        navigate('/login');
+      }, 1500);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ minHeight: 'calc(100vh - 80px)', background: '#FDFDFD', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '55vh', background: BRAND_SOFT, zIndex: 0 }}></div>
-      
-      <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', marginTop: '40px', marginBottom: '40px', padding: '0 20px' }}>
-        <h4 style={{ fontFamily: F.main, fontSize: 13, fontWeight: 700, color: '#1A1A1A', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Fashion Aura</h4>
-        <h1 style={{ fontFamily: F.main, fontSize: 32, fontWeight: 800, color: '#1A1040', marginBottom: 16 }}>Reset Password</h1>
-        <p style={{ fontFamily: F.sub, fontSize: 15, color: '#4A4A4A', maxWidth: 500, margin: '0 auto', lineHeight: 1.5 }}>
-          Create a new password for your account.
-        </p>
-      </div>
+    <div style={styles.page}>
+      <div style={styles.card}>
+        <span style={styles.backLink} onClick={() => navigate('/verify-otp')}>
+          <i className="fa-solid fa-arrow-left" style={{ fontSize: '11px' }} /> Back to Verification
+        </span>
 
-      <div style={{ position: 'relative', zIndex: 1, background: '#fff', padding: '40px 32px', borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.04)', width: '100%', maxWidth: '440px', textAlign: 'center', marginBottom: '60px' }}>
-        
-        <div style={{ width: 64, height: 64, borderRadius: '50%', background: BRAND_SOFT, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-          <i className="fa-solid fa-lock" style={{ fontSize: 24, color: BRAND }}></i>
+        <span style={styles.logoWrap} onClick={() => navigate('/home')}>
+          <span style={styles.logoAccent}>F</span>ashion aura
+        </span>
+        <div style={styles.dividerLine} />
+        <p style={styles.subtitle}>Set New Password</p>
+
+        <div style={styles.emailBadge}>
+          Updating password for account:<br />
+          <strong style={{ color: C.brand, fontSize: '13px', wordBreak: 'break-all' }}>{email}</strong>
         </div>
-        
-        <h2 style={{ fontFamily: F.main, fontSize: 22, fontWeight: 700, color: '#1A1A1A', marginBottom: 8 }}>Create New Password</h2>
-        <p style={{ fontFamily: F.sub, fontSize: 13, color: '#6B6B8A', marginBottom: 32, lineHeight: 1.5 }}>
-          For account <span style={{ color: BRAND, fontWeight: 600 }}>{email}</span>
-        </p>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ position: 'relative', marginBottom: 16, textAlign: 'left' }}>
-            <i className="fa-solid fa-lock" style={{ position: 'absolute', left: 16, top: 16, color: '#8FA88A', fontSize: 14 }}></i>
-            <input 
+        {error && (
+          <div style={styles.errorBox}>
+            <i className="fa-solid fa-circle-exclamation" /> {error}
+          </div>
+        )}
+
+        {success && (
+          <div style={styles.successBox}>
+            <i className="fa-solid fa-circle-check" /> {success}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} noValidate>
+          {/* New Password */}
+          <div style={styles.fieldWrap}>
+            <label style={styles.label}>New Password</label>
+            <input
               type={showP1 ? 'text' : 'password'}
-              placeholder="New Password" 
-              value={password} 
+              placeholder="Minimum 8 characters"
+              value={password}
               onChange={e => { setPassword(e.target.value); setError(''); }}
-              style={inputStyle}
-              onFocus={onFocus} onBlur={onBlur}
+              onFocus={() => setFocusP1(true)}
+              onBlur={() => setFocusP1(false)}
+              style={styles.input(focusP1)}
+              autoComplete="new-password"
               required
             />
-            <i className={`fa-solid ${showP1 ? 'fa-eye-slash' : 'fa-eye'}`} onClick={() => setShowP1(!showP1)} style={{ position: 'absolute', right: 16, top: 16, color: '#8FA88A', cursor: 'pointer', fontSize: 12 }}></i>
+            <span style={styles.fieldIcon} onClick={() => setShowP1(p => !p)}>
+              <i className={showP1 ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'} />
+            </span>
+
+            {password && (
+              <>
+                <div style={styles.strengthBar}>
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} style={styles.strengthSegment(strength >= i, strengthColor[strength])} />
+                  ))}
+                </div>
+                <div style={styles.strengthText(strengthColor[strength])}>
+                  {strengthLabel[strength]}
+                </div>
+              </>
+            )}
           </div>
 
-          <div style={{ position: 'relative', marginBottom: 24, textAlign: 'left' }}>
-            <i className="fa-solid fa-lock" style={{ position: 'absolute', left: 16, top: 16, color: '#8FA88A', fontSize: 14 }}></i>
-            <input 
+          {/* Confirm Password */}
+          <div style={styles.fieldWrap}>
+            <label style={styles.label}>Confirm New Password</label>
+            <input
               type={showP2 ? 'text' : 'password'}
-              placeholder="Confirm New Password" 
-              value={confirmPassword} 
+              placeholder="Re-enter your password"
+              value={confirmPassword}
               onChange={e => { setConfirmPassword(e.target.value); setError(''); }}
-              style={inputStyle}
-              onFocus={onFocus} onBlur={onBlur}
+              onFocus={() => setFocusP2(true)}
+              onBlur={() => setFocusP2(false)}
+              style={styles.input(focusP2)}
+              autoComplete="new-password"
               required
             />
-            <i className={`fa-solid ${showP2 ? 'fa-eye-slash' : 'fa-eye'}`} onClick={() => setShowP2(!showP2)} style={{ position: 'absolute', right: 16, top: 16, color: '#8FA88A', cursor: 'pointer', fontSize: 12 }}></i>
+            <span style={styles.fieldIcon} onClick={() => setShowP2(p => !p)}>
+              <i className={showP2 ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'} />
+            </span>
           </div>
-          
-          {error && <p style={{ color: '#e74c3c', fontSize: 13, fontFamily: F.sub, margin: '-12px 0 16px', textAlign: 'left' }}>{error}</p>}
-          
-          <button type="submit" disabled={loading} style={{ width: '100%', padding: '14px', background: BRAND, color: '#fff', border: 'none', borderRadius: '8px', fontSize: 15, fontWeight: 600, fontFamily: F.main, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'opacity 0.2s', opacity: loading ? 0.7 : 1 }}>
-            {loading ? 'Resetting...' : 'Reset Password'}
-            {!loading && <i className="fa-regular fa-circle-check"></i>}
+
+          <button 
+            type="submit" 
+            style={styles.submitBtn(loading)} 
+            disabled={loading}
+          >
+            {loading ? 'Updating Password…' : 'Update Password'}
           </button>
         </form>
-        
-        <div style={{ marginTop: 24 }}>
-          <a href="#login" style={{ color: BRAND, fontSize: 14, fontFamily: F.main, fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <i className="fa-solid fa-arrow-left" style={{ fontSize: 12 }}></i> Back to Sign In
-          </a>
-        </div>
+
+        <p style={styles.switchText}>
+          Remember your password?{' '}
+          <span style={styles.switchLink} onClick={() => navigate('/login')}>Sign in</span>
+        </p>
       </div>
     </div>
   );

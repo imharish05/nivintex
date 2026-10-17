@@ -55,12 +55,12 @@ const stepIndex = (status) => {
 
 const styles = {
   page:  { background: C.bg, minHeight: '100vh', fontFamily: F.main },
-  inner: { maxWidth: '960px', margin: '0 auto', padding: '36px 20px 80px' },
+  inner: { maxWidth: '960px', margin: '0 auto', padding: '20px 20px 60px' },
 
   // ── Top heading ──
   topRow: {
     display: 'flex', alignItems: 'center', gap: '14px',
-    marginBottom: '28px', paddingBottom: '18px',
+    marginBottom: '20px', paddingBottom: '14px',
     borderBottom: `1px solid ${C.border}`,
   },
   headingLine: { width: '32px', height: '1px', background: C.gold },
@@ -262,6 +262,8 @@ const OrdersPage = () => {
     <div style={styles.page}>
       <style>{`
         @media (max-width: 600px) {
+          .orders-page-inner { padding: 12px 14px 50px !important; }
+          .orders-top-row { margin-bottom: 14px !important; padding-bottom: 12px !important; }
           .orders-header-bar { padding: 10px 14px !important; }
           .orders-header-left { gap: 14px !important; }
           .orders-tracker-wrap { padding: 16px 10px 18px !important; }
@@ -271,10 +273,10 @@ const OrdersPage = () => {
         }
       `}</style>
       <Header />
-      <div style={styles.inner}>
+      <div className="orders-page-inner" style={styles.inner}>
 
         {/* ── Page Heading ── */}
-        <div style={styles.topRow}>
+        <div className="orders-top-row" style={styles.topRow}>
           <span style={styles.headingLine} />
           <div>
             <h1 style={styles.heading}>My Orders</h1>

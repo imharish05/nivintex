@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import DataTable from '../DataTable/DataTable';
+import { API_BASE_URL } from '../../config/api';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API = API_BASE_URL;
 const pillClass = { Active: 'pill-active', Inactive: 'pill-inactive' };
 
 const mediaUrl = (filePath) => {

@@ -5,8 +5,9 @@ const ProductVariant = require('../models/ProductVariant');
 const orderFlowLog = require('../utils/orderFlowLogger');
 const { billingRequestManager } = require('./billingRequestManager');
 const { configuredStockLocationId, normalizeStockLocationId } = require('./billingInvoicePayload');
+const { billingApiBaseUrl } = require('../config/serviceUrls');
 
-const getBaseUrl = () => (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
+const getBaseUrl = billingApiBaseUrl;
 const getOptions = () => ({
   headers: {
     Accept: 'application/json',

@@ -1,4 +1,5 @@
 const billingCatalog = require('../services/billingCatalogService');
+const { billingAssetBaseUrl } = require('../config/serviceUrls');
 
 const logBillingFailure = (endpoint, error) => {
   const reason = error.code === 'ECONNABORTED'
@@ -35,8 +36,7 @@ const sendReadError = (res, error, message) => {
 exports.getCategories = async (_req, res) => {
   try {
     const data = await billingCatalog.getEndpoint('/category');
-    const baseUrl = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
-    const assetBase = (process.env.BILLING_ASSET_BASE_URL || baseUrl.replace(/\/api$/i, '')).replace(/\/+$/, '');
+    const assetBase = billingAssetBaseUrl();
     if (Array.isArray(data?.category)) {
       data.category = data.category.map(cat => {
         if (cat.image && !/^https?:\/\//i.test(cat.image)) {

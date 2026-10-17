@@ -104,9 +104,9 @@ function AppContent() {
         <Route path="/wishlist" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/forgot-password" element={withHeader(ForgotPasswordPage)} />
-        <Route path="/verify-otp" element={withHeader(VerifyOTPPage)} />
-        <Route path="/reset-password" element={withHeader(ResetPasswordPage)} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/verify-otp" element={<VerifyOTPPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/privacy-policy" element={withHeader(PrivacyPolicyPage)} />
         <Route path="/terms-of-service" element={withHeader(TermsOfServicePage)} />
         <Route path="/shipping-policy" element={withHeader(ShippingPolicyPage)} />

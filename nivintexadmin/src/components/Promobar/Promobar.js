@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
 import CharWordCounter from '../common/CharWordCounter';
 import { validateFields, isOverLimit } from '../../utils/textValidation';
+import { API_BASE_URL } from '../../config/api';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API = API_BASE_URL;
 const pillClass = { true: 'pill-active', false: 'pill-inactive' };
 
 const DEFAULT_GRADIENT = 'linear-gradient(45deg, #2C2F33 0%, #A2C579 100%)';

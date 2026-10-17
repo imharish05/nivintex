@@ -247,7 +247,14 @@ const LoginPage = () => {
                 style={{ accentColor: C.accent }} />
               Remember me
             </label>
-            <span style={styles.forgotLink}>Forgot password?</span>
+            <span
+              style={styles.forgotLink}
+              onClick={() => navigate('/forgot-password')}
+              role="button"
+              tabIndex={0}
+            >
+              Forgot password?
+            </span>
           </div>
 
           <button type="submit" style={styles.submitBtn(loading)} disabled={loading}>

@@ -6,10 +6,11 @@ import { categoryApi, subCategoryApi, productApi, getImageUrl, slugifyProductNam
 import logo from '../assets/img/logo2.png';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Skeleton, { CategoryCircleSkeleton } from './Skeleton';
+import { API_BASE_URL } from '../config/api';
 
 // Fonts are loaded via index.html
 
-const BASE_API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const BASE_API = API_BASE_URL;
 
 const F = {
   main: "'Josefin Sans', 'Raleway', 'Century Gothic', sans-serif",
@@ -595,7 +596,7 @@ const Header = () => {
   }, []);
 
   useEffect(() => {
-    productApi.getAll()
+    productApi.getAllFast()
       .then((data) => {
         const hasSale = Array.isArray(data) && data.some(p => p.isBuyOneGetOne);
         setHasSaleProducts(hasSale);

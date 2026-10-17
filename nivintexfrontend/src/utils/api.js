@@ -3,10 +3,10 @@
  * Place at: src/utils/api.js
  */
 import defaultLogo from '../assets/img/logo2.png';
+import { API_BASE_URL, BILLING_API_BASE_URL, BILLING_ASSET_BASE_URL } from '../config/api';
 
-const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-const LOCAL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-const BILLING_ASSETS = process.env.REACT_APP_API_FROM_BILLING_URL;
+const BASE = API_BASE_URL;
+const LOCAL = API_BASE_URL;
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 async function request(method, path, body, useLocal = false) {
@@ -68,8 +68,15 @@ const lDel  = (path)       => request('DELETE', path, null, true);
 // ─── Image URL helpers ────────────────────────────────────────────────────────
 export const billingImageUrl = (path) => {
   if (!path || /^https?:\/\//i.test(path)) return path || null;
-  const assetBase = (BILLING_ASSETS || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '').replace(/\/api$/i, '');
-  return assetBase ? `${assetBase}/${String(path).replace(/^\/+/, '')}` : path;
+  return BILLING_ASSET_BASE_URL ? `${BILLING_ASSET_BASE_URL}/${String(path).replace(/^\/+/, '')}` : path;
+};
+
+const isConfiguredBillingUrl = path => {
+  try {
+    return Boolean(BILLING_API_BASE_URL) && new URL(path).origin === new URL(BILLING_API_BASE_URL).origin;
+  } catch (_) {
+    return false;
+  }
 };
 
 export const getImageUrl = (imagePath) => {
@@ -78,11 +85,11 @@ export const getImageUrl = (imagePath) => {
   if (typeof imagePath !== 'string' || !imagePath.trim()) return null;
   const path = imagePath.trim().replace(/\\/g, '/');
   const apiBase = (BASE || LOCAL).replace(/\/+$/, '');
-  const billingAssetBase = (BILLING_ASSETS || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '').replace(/\/api$/i, '');
+  const billingAssetBase = BILLING_ASSET_BASE_URL;
 
   if (/^(https?:|data:|blob:)/i.test(path)) {
     // If it's a category/subcategory image or points to the billing server, preserve it as-is
-    if (/(?:categories|category|subcategories|subcategory)\//i.test(path) || /billing\.fashionaura26\.com/i.test(path)) {
+    if (/(?:categories|category|subcategories|subcategory)\//i.test(path) || isConfiguredBillingUrl(path)) {
       return path;
     }
     // Product records can contain the old billing host even though the files
@@ -117,7 +124,7 @@ export const getImageUrl = (imagePath) => {
 export const getLocalImageUrl = (imagePath) => {
   if (!imagePath) return null;
   if (imagePath.startsWith('http')) return imagePath;
-  const billingAssetBase = (BILLING_ASSETS || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '').replace(/\/api$/i, '');
+  const billingAssetBase = BILLING_ASSET_BASE_URL;
   if (/(?:categories|category|subcategories|subcategory)\//i.test(imagePath)) {
     return `${billingAssetBase}/${imagePath.replace(/^\/+/, '')}`;
   }

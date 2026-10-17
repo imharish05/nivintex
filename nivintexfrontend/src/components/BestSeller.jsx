@@ -1,10 +1,11 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useShop } from "../context/ShopContext";
 import { getImageUrl, getLocalImageUrl, slugifyProductName, productApi } from "../utils/api";
+import { API_BASE_URL } from "../config/api";
 import logo from "../assets/img/logo2.png";
 import { ProductCardSkeleton } from "./Skeleton";
 
-const BASE = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const BASE = API_BASE_URL;
 
 const CARD_WIDTH = 240;
 const CARD_GAP   = 16;
@@ -569,8 +570,15 @@ export default function BestSellersSection() {
   const [addedToCart, setAddedToCart] = useState(new Set());
 
   useEffect(() => {
-    productApi.getAll()
-      .then((data) => setProducts(Array.isArray(data) ? data.filter(product => product.isBestSeller) : []))
+    productApi.getAllFast()
+      .then((data) => {
+        const bestSellers = Array.isArray(data) ? data.filter(product => product.isBestSeller) : [];
+        setProducts(bestSellers);
+        setLoading(false);
+        productApi.enrichWithBillingPrices(bestSellers)
+          .then(priced => setProducts(Array.isArray(priced) ? priced : bestSellers))
+          .catch(() => {});
+      })
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
 

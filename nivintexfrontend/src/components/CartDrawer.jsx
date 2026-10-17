@@ -191,12 +191,12 @@ const CartDrawer = ({ open, onClose }) => {
                   </div>
                   {item.subtitle && (
                     <p style={{
-                      margin: '3px 0 4px', fontSize: '11px', color: C.muted,
-                      fontFamily: F.sub, fontWeight: 300, letterSpacing: '0.5px',
+                      margin: '3px 0 4px', fontSize: '12px', color: '#000000',
+                      fontFamily: F.sub, fontWeight: 500, letterSpacing: '0.5px',
                     }}>{item.subtitle}</p>
                   )}
                   {(item.color || item.size || item.fabric) && (
-                    <p style={{ margin: '0 0 4px', fontSize: '11px', color: C.muted, fontFamily: F.sub }}>
+                    <p style={{ margin: '0 0 4px', fontSize: '12px', color: '#000000', fontFamily: F.sub, fontWeight: 500 }}>
                       {[item.color && `Colour: ${item.color}`, item.size && `Size: ${item.size}`, item.fabric && `Fabric: ${item.fabric}`].filter(Boolean).join(' · ')}
                     </p>
                   )}

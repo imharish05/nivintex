@@ -2,10 +2,11 @@
  * adminApi.js
  * Centralised fetch-based API helpers for the Admin Panel.
  */
+import { API_BASE_URL, BILLING_API_BASE_URL } from './config/api';
 
-const BASE = process.env.REACT_APP_API_URL ;
-const LIVE_API = process.env.REACT_APP_API_URL;
-const BILLING_API = process.env.REACT_APP_API_FROM_BILLING_URL;
+const BASE = API_BASE_URL;
+const LIVE_API = API_BASE_URL;
+const BILLING_API = BILLING_API_BASE_URL;
 
 function handleExpiredAdmin(response) {
     if (response.status === 401 && localStorage.getItem('adminToken')) {

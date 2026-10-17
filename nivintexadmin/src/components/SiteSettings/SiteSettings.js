@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../../config/api';
 
-const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const BASE = API_BASE_URL;
 
 const SETTING_GROUPS = [
   {

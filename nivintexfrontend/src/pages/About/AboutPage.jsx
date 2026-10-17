@@ -34,7 +34,7 @@ const styles = `
     background: ${C.bg};
   }
 
-  .nv-page-top-gap { height: 24px; }
+  .nv-page-top-gap { height: 0px; }
 
   .nv-content {
     max-width: 1200px;

@@ -12,6 +12,7 @@ const { billingRequestManager } = require('../services/billingRequestManager');
 const { makeBillingCreatePayload, configuredStockLocationId } = require('../services/billingInvoicePayload');
 const billingSyncService = require('../services/billingSyncService');
 const orderFlowLog = require('../utils/orderFlowLogger');
+const { billingApiBaseUrl } = require('../config/serviceUrls');
 
 // A successful Billing invoice is the inventory source of truth. Refresh the
 // complete local Billing product catalog immediately so product prices and
@@ -398,7 +399,7 @@ const createOrder = async (req, res) => {
                         billing_request_payload: billingRequestPayload,
                         billing_sync_error: null,
                     });
-                    const billingBase = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
+                    const billingBase = billingApiBaseUrl();
                     const billingUrl = `${billingBase}/billings`;
                     orderFlowLog.logRequest(`${flowId} Billing invoice`, 'POST', billingUrl, billingRequestPayload);
                     const response = await billingRequestManager.request({
@@ -727,7 +728,7 @@ const retryBillingInvoice = async (req, res) => {
         billingRequestPayload = makeBillingCreatePayload(savedRequest);
         const stockCheck = await billingCatalog.assertBillingStock(billingRequestPayload.items, { locationId: billingRequestPayload.franchise_location_id });
         await order.update({ billing_sync_status: 'pending', billing_sync_error: null });
-        const billingBase = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
+        const billingBase = billingApiBaseUrl();
         const billingUrl = `${billingBase}/billings`;
         orderFlowLog.logRequest(`order-${order.id} Billing invoice retry`, 'POST', billingUrl, billingRequestPayload);
         const response = await billingRequestManager.request({

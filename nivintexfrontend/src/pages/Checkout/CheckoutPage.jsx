@@ -5,8 +5,8 @@ import defaultLogo from '../../assets/img/logo2.png';
 import { useShop, calculateCartTotals } from '../../context/ShopContext';
 import { productApi, razorpayApi } from '../../utils/api';
 import CourierSelectModal from '../../components/CourierSelectModal';
+import { API_BASE_URL } from '../../config/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 const ORDER_SAVE_URL = `${API_BASE_URL}/orders/save`;
 const SHIPPING_QUOTE_URL = `${API_BASE_URL}/shipping/quote`;
 
@@ -892,8 +892,8 @@ const CheckoutPage = () => {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0;
         }
         .ck-item-variant {
-          font-family: ${F.sub}; font-size: 11px; color: #8FA88A;
-          font-weight: 200; margin: 3px 0 0; letter-spacing: 0.3px;
+          font-family: ${F.sub}; font-size: 11px; color: #000000;
+          font-weight: 500; margin: 3px 0 0; letter-spacing: 0.3px;
         }
         .ck-item-price {
           font-family: ${F.main}; font-size: 13px; font-weight: 400;

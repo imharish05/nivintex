@@ -129,7 +129,6 @@ const ProductDetailsPage = () => {
             const billingProductId = data.billingProductId || data.billing_product_id;
             if (!billingProductId) throw new Error('This product is missing its Billing product ID.');
             const response = await billingCatalogApi.getProductDetails(billingProductId);
-            const stocksByVariant = await billingCatalogApi.getStocksByVariant();
             const billingProduct = Array.isArray(response) ? response[0] : response;
             const billingVariants = billingProduct?.variants || billingProduct?.product_variants || billingProduct?.product_varients || [];
             if (!Array.isArray(billingVariants) || billingVariants.length === 0) throw new Error('Billing returned no variants for this product.');
@@ -149,11 +148,7 @@ const ProductDetailsPage = () => {
             };
             const getSyncedStock = variant => {
               const detailQuantity = getAvailable(variant);
-              const variantId = String(variant?.id ?? variant?.product_variant_id ?? variant?.variant_id ?? '');
-              const hasStockRow = stocksByVariant?.has(variantId);
-              const stockQuantity = stocksByVariant === null ? null : hasStockRow ? stocksByVariant.get(variantId) : 0;
-              const verified = detailQuantity !== null && (stocksByVariant === null || (hasStockRow ? stockQuantity !== null : true));
-              return { quantity: verified ? Math.min(detailQuantity, stockQuantity ?? detailQuantity) : 0, verified };
+              return { quantity: detailQuantity ?? 0, verified: detailQuantity !== null };
             };
 
             data.Variants = localVariants.length

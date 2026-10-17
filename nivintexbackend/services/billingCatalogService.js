@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const Product = require('../models/Product');
 const ProductVariant = require('../models/ProductVariant');
 const orderFlowLog = require('../utils/orderFlowLogger');
+let productVariantsRequest = null;
 
 const getBaseUrl = () => (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
 const getOptions = () => ({
@@ -12,8 +13,14 @@ const getOptions = () => ({
 });
 
 async function getProductVariants() {
-  const response = await axios.get(`${getBaseUrl()}/product_varients`, getOptions());
-  return response.data;
+  if (!productVariantsRequest) {
+    productVariantsRequest = axios.get(`${getBaseUrl()}/product_varients`, getOptions()).then(response => response.data);
+  }
+  try {
+    return await productVariantsRequest;
+  } finally {
+    productVariantsRequest = null;
+  }
 }
 
 async function getProducts() {
@@ -21,9 +28,11 @@ async function getProducts() {
   const firstPayload = firstResponse.data;
   const lastPage = Math.max(1, Number(firstPayload?.meta?.last_page ?? firstPayload?.data?.meta?.last_page ?? 1) || 1);
   if (lastPage <= 1) return firstPayload;
-  const pages = await Promise.all(Array.from({ length: lastPage - 1 }, (_, index) =>
-    axios.get(`${getBaseUrl()}/products`, { ...getOptions(), params: { page: index + 2 } }).then(response => response.data)
-  ));
+  const pages = [];
+  for (let page = 2; page <= lastPage; page += 1) {
+    const response = await axios.get(`${getBaseUrl()}/products`, { ...getOptions(), params: { page } });
+    pages.push(response.data);
+  }
   return {
     ...firstPayload,
     products: [...productsFromResponse(firstPayload), ...pages.flatMap(productsFromResponse)],
@@ -122,6 +131,11 @@ function assertResponseStatus(payload, endpoint) {
   }
 }
 
+function variantIdOf(variant) {
+  const id = variant?.id ?? variant?.product_variant_id ?? variant?.product_varient_id ?? variant?.variant_id;
+  return id === undefined || id === null || String(id).trim() === '' ? null : String(id).trim();
+}
+
 async function assertBillingStock(items) {
   if (!Array.isArray(items) || items.length === 0) {
     const error = new Error('Add at least one product variant before starting payment.');
@@ -129,104 +143,55 @@ async function assertBillingStock(items) {
     throw error;
   }
 
+  const stockUrl = `${getBaseUrl()}/product_varients`;
+  orderFlowLog.logRequest('Billing stock preflight', 'GET', stockUrl, {});
   let payload;
   try {
     payload = await getProductVariants();
-    orderFlowLog.logRequest('Billing stock preflight', 'GET', `${getBaseUrl()}/product_varients`, {
-      requested_items: items.map(item => ({ product_id: item.product_id ?? item.billingProductId ?? item.billing_product_id ?? null, product_variant_id: item.product_variant_id ?? item.billingVariantId ?? item.billing_variant_id ?? null, quantity: Number(item.quantity) })),
-    });
-    orderFlowLog.logResponse('Billing stock preflight /product_varients', 200, requestedVariantSnapshot(payload, items));
+    assertResponseStatus(payload, '/product_varients');
+    orderFlowLog.logResponse('Billing stock preflight /product_varients', Number(payload?.status) || 200, requestedVariantSnapshot(payload, items));
   } catch (cause) {
-    orderFlowLog.logRequest('Billing stock preflight', 'GET', `${getBaseUrl()}/product_varients`, {
-      requested_items: items.map(item => ({ product_id: item.product_id ?? item.billingProductId ?? item.billing_product_id ?? null, product_variant_id: item.product_variant_id ?? item.billingVariantId ?? item.billing_variant_id ?? null, quantity: Number(item.quantity) })),
-    });
     orderFlowLog.logFailure('Billing stock preflight /product_varients', cause);
-    const error = new Error(cause.response?.status
-      ? `Billing stock check failed (HTTP ${cause.response.status}). Please try again.`
+    const upstreamStatus = cause.response?.status || cause.status;
+    const error = new Error(upstreamStatus
+      ? Number(upstreamStatus) === 429
+        ? 'Billing is receiving too many stock requests. Please wait a few seconds and try again.'
+        : `Billing stock check failed (HTTP ${upstreamStatus}). Please try again.`
       : 'Could not reach Billing to verify live stock. Please try again before payment.');
     error.status = 503;
+    error.billingHttpStatus = upstreamStatus || null;
+    error.retryAfter = cause.response?.headers?.['retry-after'] || null;
     error.cause = cause;
     throw error;
   }
 
-  const variants = variantsFromResponse(payload);
+  const nestedVariants = variantsFromResponse(payload);
+  const flatVariants = flatVariantsFromResponse(payload);
+  const variants = nestedVariants.length ? nestedVariants : flatVariants;
   if (!variants.length) {
     const error = new Error('Billing returned no product variants, so stock could not be verified. Payment was not started.');
     error.status = 503;
     throw error;
   }
 
-  // Read the other inventory-bearing Billing GETs as well. `/stocks` is known
-  // to return 404 for some Billing setups, so only that endpoint may be absent;
-  // other failures make the pre-payment stock check fail closed.
-  let productsPayload;
-  let flatVariantsPayload;
-  let stocksPayload = null;
-  orderFlowLog.logRequest('Billing stock cross-check', 'GET', `${getBaseUrl()}/products`, { requested_product_ids: items.map(item => item.product_id ?? item.billingProductId ?? item.billing_product_id ?? null) });
-  orderFlowLog.logRequest('Billing stock cross-check', 'GET', `${getBaseUrl()}/varients`, { requested_variant_ids: items.map(item => item.product_variant_id ?? item.billingVariantId ?? item.billing_variant_id ?? null) });
-  try {
-    [productsPayload, flatVariantsPayload] = await Promise.all([getProducts(), getVariants()]);
-    orderFlowLog.logResponse('Billing stock cross-check /products', 200, requestedVariantSnapshot(productsPayload, items));
-    orderFlowLog.logResponse('Billing stock cross-check /varients', 200, requestedVariantSnapshot(flatVariantsPayload, items));
-    assertResponseStatus(productsPayload, '/products');
-    assertResponseStatus(flatVariantsPayload, '/varients');
-  } catch (cause) {
-    orderFlowLog.logFailure('Billing stock cross-check /products', cause);
-    orderFlowLog.logFailure('Billing stock cross-check /varients', cause);
-    const error = new Error(cause.response?.status
-      ? `Billing inventory cross-check failed (HTTP ${cause.response.status}). Please try again.`
-      : 'Could not reach Billing to cross-check product and variant stock. Please try again before payment.');
-    error.status = 503;
-    error.cause = cause;
-    throw error;
-  }
-  try {
-    stocksPayload = await getStocks();
-    orderFlowLog.logRequest('Billing stock cross-check', 'GET', `${getBaseUrl()}/stocks`, { requested_variant_ids: items.map(item => item.product_variant_id ?? item.billingVariantId ?? item.billing_variant_id ?? null) });
-    orderFlowLog.logResponse('Billing stock cross-check /stocks', 200, requestedVariantSnapshot(stocksPayload, items));
-    assertResponseStatus(stocksPayload, '/stocks');
-  } catch (cause) {
-    orderFlowLog.logRequest('Billing stock cross-check', 'GET', `${getBaseUrl()}/stocks`, { requested_variant_ids: items.map(item => item.product_variant_id ?? item.billingVariantId ?? item.billing_variant_id ?? null) });
-    orderFlowLog.logFailure('Billing stock cross-check /stocks', cause);
-    if (cause.response?.status !== 404 && cause.status !== 404) {
-      const error = new Error(cause.response?.status
-        ? `Billing stock endpoint check failed (HTTP ${cause.response.status}). Please try again.`
-        : 'Could not reach Billing stock endpoint. Please try again before payment.');
-      error.status = 503;
-      error.cause = cause;
-      throw error;
-    }
-    stocksPayload = null;
-  }
-
-  const allProducts = [...productsFromResponse(payload), ...productsFromResponse(productsPayload)];
-  const auxiliaryVariants = [...variantsFromResponse(productsPayload), ...flatVariantsFromResponse(flatVariantsPayload)];
+  // Use one live variant-list request at checkout. The previous fan-out to
+  // /products, /varients, /stocks and one /product_details request per product
+  // triggered Billing's HTTP 429 limit and did not reserve inventory.
+  const allProducts = productsFromResponse(payload);
+  const auxiliaryVariants = flatVariants;
   const variantsById = new Map();
   for (const variant of [...variants, ...auxiliaryVariants]) {
-    if (variant?.id !== undefined && variant?.id !== null) {
-      const id = String(variant.id);
+    const id = variantIdOf(variant);
+    if (id) {
       variantsById.set(id, [...(variantsById.get(id) || []), variant]);
     }
   }
-  const stockRowsByVariant = new Map();
-  const stockRows = stocksFromResponse(stocksPayload);
-  if (stocksPayload !== null && !stockRows.length) {
-    const error = new Error('Billing GET /stocks returned no stock rows, so variant availability could not be confirmed. Payment was not started.');
-    error.status = 503;
-    throw error;
-  }
-  for (const row of stockRows) {
-    const id = row?.product_variant_id ?? row?.product_varient_id ?? row?.variant_id ?? row?.productVariantId ?? row?.id;
-    if (id === undefined || id === null) continue;
-    const key = String(id);
-    stockRowsByVariant.set(key, [...(stockRowsByVariant.get(key) || []), row]);
-  }
-
   const byId = new Map();
   const byCode = new Map();
   const productIdByVariant = new Map();
   for (const variant of variants) {
-    if (variant?.id !== undefined && variant?.id !== null) byId.set(String(variant.id), variant);
+    const variantId = variantIdOf(variant);
+    if (variantId) byId.set(variantId, variant);
     for (const code of [variant?.variant_code, variant?.sku, variant?.barcode]) {
       if (code) byCode.set(String(code).trim().toLowerCase(), variant);
     }
@@ -234,13 +199,14 @@ async function assertBillingStock(items) {
   for (const product of allProducts) {
     const parentProductId = product?.id ?? product?.product_id;
     for (const variant of product?.variants || product?.product_variants || product?.product_varients || []) {
-      if (variant?.id !== undefined && variant?.id !== null && parentProductId !== undefined && parentProductId !== null) {
-        productIdByVariant.set(String(variant.id), String(parentProductId));
+      const variantId = variantIdOf(variant);
+      if (variantId && parentProductId !== undefined && parentProductId !== null) {
+        productIdByVariant.set(variantId, String(parentProductId));
       }
     }
   }
-  for (const variant of flatVariantsFromResponse(flatVariantsPayload)) {
-    const variantId = variant?.id ?? variant?.product_variant_id ?? variant?.variant_id;
+  for (const variant of flatVariants) {
+    const variantId = variantIdOf(variant);
     const productId = variant?.product_id ?? variant?.productId;
     if (variantId !== undefined && variantId !== null && productId !== undefined && productId !== null) {
       productIdByVariant.set(String(variantId), String(productId));
@@ -283,28 +249,14 @@ async function assertBillingStock(items) {
       issues.push({ variantId: item.variantId ?? null, label, requested: item.quantity, available: 0, reason: 'Variant is no longer listed by Billing.' });
       continue;
     }
-    if (item.productId !== undefined && item.productId !== null && String(item.productId) !== String(productIdByVariant.get(String(variant.id)))) {
+    const mappedVariantId = variantIdOf(variant);
+    const mappedProductId = productIdByVariant.get(mappedVariantId);
+    if (item.productId !== undefined && item.productId !== null && mappedProductId !== undefined && String(item.productId) !== mappedProductId) {
       const error = new Error(`${label} does not belong to the selected Billing product. Refresh your cart before payment.`);
       error.status = 409;
       throw error;
     }
-    const availabilityValues = (variantsById.get(String(variant.id)) || [variant])
-      .map(stockValue)
-      .filter(value => value !== null);
-    const dedicatedStockRows = stockRowsByVariant.get(String(variant.id)) || [];
-    if (stocksPayload !== null && !dedicatedStockRows.length) {
-      issues.push({ variantId: variant.id, label, requested: item.quantity, available: 0, reason: 'Variant is missing from Billing /stocks.' });
-      continue;
-    }
-    for (const stockRow of dedicatedStockRows) {
-      const stock = stockValue(stockRow);
-      if (stock === null) {
-        const error = new Error(`Billing /stocks returned an unusable stock quantity for ${label}. Payment was not started.`);
-        error.status = 503;
-        throw error;
-      }
-      availabilityValues.push(stock);
-    }
+    const availabilityValues = (variantsById.get(mappedVariantId) || [variant]).map(stockValue).filter(value => value !== null);
     const available = availabilityValues.length ? Math.min(...availabilityValues) : null;
     if (available === null) {
       const error = new Error(`Billing did not return a usable stock quantity for ${label}. Payment was not started.`);
@@ -312,7 +264,7 @@ async function assertBillingStock(items) {
       throw error;
     }
     if (available < item.quantity) {
-      issues.push({ variantId: variant.id, label, requested: item.quantity, available, reason: 'Insufficient stock.' });
+      issues.push({ variantId: mappedVariantId, label, requested: item.quantity, available, reason: 'Insufficient stock.' });
     }
   }
 
@@ -323,71 +275,7 @@ async function assertBillingStock(items) {
     throw error;
   }
 
-  // Recheck each cart product through Billing's single-product endpoint too.
-  // The list response can lag or expose a different stock snapshot; checkout
-  // proceeds only when both Billing reads show enough units for the same IDs.
-  const detailedProducts = new Map();
-  for (const item of requested.values()) {
-    if (item.productId === undefined || item.productId === null || String(item.productId).trim() === '') {
-      const error = new Error(`Billing could not map variant ${item.variantId} to its product, so detailed stock could not be verified. Payment was not started.`);
-      error.status = 503;
-      throw error;
-    }
-    const productId = String(item.productId).trim();
-    if (detailedProducts.has(productId)) continue;
-    let detailPayload;
-    try {
-      detailPayload = await getProductDetails(productId);
-      orderFlowLog.logRequest('Billing product stock detail', 'GET', `${getBaseUrl()}/product_details/${encodeURIComponent(productId)}`, { requested_variant_ids: [...requested.values()].filter(item => String(item.productId) === productId).map(item => item.variantId) });
-      orderFlowLog.logResponse(`Billing product stock detail /product_details/${productId}`, 200, requestedVariantSnapshot(detailPayload, [...requested.values()].filter(item => String(item.productId) === productId)));
-    } catch (cause) {
-      orderFlowLog.logRequest('Billing product stock detail', 'GET', `${getBaseUrl()}/product_details/${encodeURIComponent(productId)}`, { requested_variant_ids: [...requested.values()].filter(item => String(item.productId) === productId).map(item => item.variantId) });
-      orderFlowLog.logFailure(`Billing product stock detail /product_details/${productId}`, cause);
-      const error = new Error(cause.response?.status
-        ? `Billing product detail check failed for product ${productId} (HTTP ${cause.response.status}). Please try again.`
-        : `Could not reach Billing to verify product ${productId} stock. Please try again before payment.`);
-      error.status = 503;
-      error.cause = cause;
-      throw error;
-    }
-    const detailedProduct = productDetailsFromResponse(detailPayload);
-    const detailVariants = detailedProduct?.variants || detailedProduct?.product_variants || detailedProduct?.product_varients || [];
-    if (!Array.isArray(detailVariants) || detailVariants.length === 0) {
-      const error = new Error(`Billing returned no variants for product ${productId}; stock could not be verified. Payment was not started.`);
-      error.status = 503;
-      throw error;
-    }
-    detailedProducts.set(productId, new Map(detailVariants.map(variant => [String(variant.id), variant])));
-  }
-
-  for (const item of requested.values()) {
-    const detailedVariant = detailedProducts.get(String(item.productId).trim())?.get(String(item.variantId));
-    const listVariant = byId.get(String(item.variantId));
-    const label = listVariant?.variant_code || listVariant?.sku || `variant ${item.variantId}`;
-    if (!detailedVariant) {
-      const error = new Error(`${label} is not listed under Billing product ${item.productId}. Refresh the cart before payment.`);
-      error.status = 409;
-      throw error;
-    }
-    const detailedStock = stockValue(detailedVariant);
-    if (detailedStock === null) {
-      const error = new Error(`Billing product details did not return a usable stock quantity for ${label}. Payment was not started.`);
-      error.status = 503;
-      throw error;
-    }
-    if (detailedStock < item.quantity) {
-      issues.push({ variantId: item.variantId, label, requested: item.quantity, available: detailedStock, reason: 'Insufficient stock in Billing product details.' });
-    }
-  }
-
-  if (issues.length) {
-    const error = new Error(issues.map(issue => `${issue.label}: ${issue.available} available, ${issue.requested} requested.`).join(' '));
-    error.status = 409;
-    error.stockIssues = issues;
-    throw error;
-  }
-
-  const result = { checkedAt: new Date().toISOString(), variantsChecked: requested.size, stockSourcesChecked: ['product_varients', 'products', 'varients', ...(stocksPayload ? ['stocks'] : [])], items: [...requested.values()].map(item => ({ product_id: item.productId ?? null, product_variant_id: item.variantId ?? null, variant_code: item.variantCode || null, quantity_requested: item.quantity, quantity_available: stockValue(byId.get(String(item.variantId))) })) };
+  const result = { checkedAt: new Date().toISOString(), variantsChecked: requested.size, stockSourcesChecked: ['product_varients'], items: [...requested.values()].map(item => ({ product_id: item.productId ?? productIdByVariant.get(String(item.variantId)) ?? null, product_variant_id: item.variantId ?? null, variant_code: item.variantCode || null, quantity_requested: item.quantity, quantity_available: stockValue(byId.get(String(item.variantId))) })) };
   orderFlowLog.logResponse('Billing stock preflight result', 200, result);
   return result;
 }
@@ -402,13 +290,14 @@ function requestedVariantSnapshot(payload, items) {
   ];
   const rows = candidateRows.flatMap(record => {
     const children = record?.variants || record?.product_variants || record?.product_varients;
-    return Array.isArray(children) ? [...children.map(child => ({ ...child, product_id: child.product_id ?? record.id ?? record.product_id })), record] : [record];
+    return Array.isArray(children) ? children.map(child => ({ ...child, product_id: child.product_id ?? record.id ?? record.product_id })) : [record];
   });
-  const matched = rows.filter(row => {
+  const matchedById = new Map();
+  for (const row of rows) {
     const id = row?.product_variant_id ?? row?.product_varient_id ?? row?.variant_id ?? row?.id;
-    return id !== undefined && requestedIds.has(String(id));
-  });
-  return { status: payload?.status ?? null, message: payload?.message ?? null, requested_variant_ids: [...requestedIds], matched_variants: matched };
+    if (id !== undefined && requestedIds.has(String(id)) && !matchedById.has(String(id))) matchedById.set(String(id), row);
+  }
+  return { status: payload?.status ?? null, message: payload?.message ?? null, requested_variant_ids: [...requestedIds], matched_variants: [...matchedById.values()] };
 }
 
 async function refreshLocalStockFromBilling(billingVariantIds) {

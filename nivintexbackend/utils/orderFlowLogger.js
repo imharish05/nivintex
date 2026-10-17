@@ -34,7 +34,7 @@ function logResponse(step, status, responseBody) {
 }
 
 function logFailure(step, error) {
-  logResponse(step, error.response?.status || 'NO_RESPONSE', error.response?.data || { message: error.message, code: error.code || null });
+  logResponse(step, error.response?.status || error.status || 'NO_RESPONSE', error.response?.data || error.data || { message: error.message, code: error.code || null });
 }
 
 function attachOrderApiResponseLogger(req, res, flowId) {

@@ -81,15 +81,18 @@ async function fetchPayloads(productsOnly = false) {
     const firstPayload = firstResponse.data;
     const lastPage = Math.max(1, Number(firstPayload?.meta?.last_page ?? firstPayload?.data?.meta?.last_page ?? 1) || 1);
     if (lastPage <= 1) return firstPayload;
-    const pages = await Promise.all(Array.from({ length: lastPage - 1 }, (_, index) =>
-      client.get(allPaths.products, { params: { page: index + 2 } }).then(response => response.data)
-    ));
+    const pages = [];
+    for (let page = 2; page <= lastPage; page += 1) {
+      const response = await client.get(allPaths.products, { params: { page } });
+      pages.push(response.data);
+    }
     const firstProducts = collection(firstPayload, 'products');
     const allProducts = [...firstProducts, ...pages.flatMap(payload => collection(payload, 'products'))];
     return { ...firstPayload, products: allProducts, meta: { ...firstPayload.meta, total_pages_fetched: lastPage } };
   };
 
-  const entries = await Promise.all(Object.entries(paths).map(async ([name, path]) => {
+  const entries = [];
+  for (const [name, path] of Object.entries(paths)) {
     try {
       const response = name === 'products'
         ? { data: await fetchAllProductPages() }
@@ -97,17 +100,18 @@ async function fetchPayloads(productsOnly = false) {
       if (response.data?.status && Number(response.data.status) >= 400) {
         throw Object.assign(new Error(`Billing API ${path} returned status ${response.data.status}`), { response: { status: Number(response.data.status), data: response.data } });
       }
-      return [name, response.data];
+      entries.push([name, response.data]);
     } catch (error) {
       // Stock is useful when exposed, but the billing account may not publish
       // the GET route. Product/variant endpoints remain the source for prices;
       // use their quantity/stock values if present and surface this as a warning.
       if (name === 'stocks' && error.response?.status === 404) {
-        return [name, { __unavailable: true, __warning: 'Billing GET /stocks returned 404; stock quantities were read from product/variant responses where available.' }];
+        entries.push([name, { __unavailable: true, __warning: 'Billing GET /stocks returned 404; stock quantities were read from product/variant responses where available.' }]);
+        continue;
       }
       throw new Error(`Billing sync failed at ${path} (HTTP ${error.response?.status || 'network error'}). ${error.response?.data?.message || error.message || 'Check API access and response format.'}`);
     }
-  }));
+  }
   return Object.fromEntries(entries);
 }
 

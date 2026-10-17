@@ -448,6 +448,14 @@ body {
 
 .km-textarea { min-height: 90px; resize: vertical; }
 
+.km-input-error,
+.km-input.km-input-error,
+.km-textarea.km-input-error {
+  border-color: #EF4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18) !important;
+  background: #FFFBFB;
+}
+
 /* ══════════════════════════════════════════════════
    FILE UPLOAD ZONE
 ══════════════════════════════════════════════════ */
@@ -491,6 +499,120 @@ body {
 
 .km-file-label  { font-size: 13px; color: var(--km-muted); font-weight: 500; }
 .km-file-selected { font-size: 12px; color: var(--km-green-mid); font-weight: 600; }
+
+/* ══════════════════════════════════════════════════
+   IMAGE UPLOAD PREVIEW
+══════════════════════════════════════════════════ */
+.km-preview-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #ffffff;
+  border: 1.5px solid var(--km-border);
+  border-radius: var(--km-radius-sm);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(15, 84, 71, 0.05);
+  position: relative;
+  transition: border-color var(--t-base);
+}
+
+.km-preview-container:hover {
+  border-color: #B5D5CB;
+}
+
+.km-preview-img-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--km-border);
+  background: #f8fafc;
+  flex-shrink: 0;
+  min-width: 80px;
+  min-height: 80px;
+  padding: 4px;
+}
+
+.km-preview-img {
+  display: block;
+  max-height: 140px;
+  max-width: 240px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.km-preview-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.km-preview-badge.new {
+  background: var(--km-green);
+  color: #fff;
+}
+
+.km-preview-badge.saved {
+  background: #475569;
+  color: #fff;
+}
+
+.km-preview-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.km-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--km-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.km-preview-meta {
+  font-size: 11px;
+  color: var(--km-muted);
+}
+
+.km-preview-remove-btn {
+  align-self: flex-start;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t-base);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.km-preview-remove-btn:hover {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
 
 /* ══════════════════════════════════════════════════
    BUTTONS
@@ -970,6 +1092,7 @@ body {
   transition: all var(--t-fast);
 }
 
+.km-status-pending          { background: #FFFBEB; color: #B45309; border-color: #FDE68A; }
 .km-status-processing       { background: #FFF7ED; color: #C2410C; border-color: #FED7AA; }
 .km-status-confirmed        { background: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE; }
 .km-status-shipped          { background: #FAF5FF; color: #7C3AED; border-color: #DDD6FE; }

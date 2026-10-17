@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useShop } from "../context/ShopContext";
-import { getImageUrl, getLocalImageUrl } from "../utils/api";
+import { getImageUrl, getLocalImageUrl, slugifyProductName, productApi } from "../utils/api";
 import logo from "../assets/img/logo2.png";
 import { ProductCardSkeleton } from "./Skeleton";
 
@@ -25,18 +25,27 @@ const styles = `
     min-width: 0;
   }
 
+  .na-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 20px 0;
+  }
+
   .na-heading {
     font-family: 'Cormorant Garamond', 'Playfair Display', serif;
     font-size: clamp(20px, 2.5vw, 32px);
     color: #0f5447;
     text-align: left;
-    margin: 0 0 20px 0;
+    margin: 0;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     position: relative;
     padding-bottom: 8px;
     display: inline-block;
+    line-height: 1.15;
   }
 
   .na-heading::after {
@@ -47,6 +56,46 @@ const styles = `
     width: 60px;
     height: 2px;
     background: #C9A84C;
+  }
+
+  .na-viewall {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0f5447;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: #ffffff;
+    border: 1px solid rgba(15, 84, 71, 0.3);
+    border-radius: 8px !important;
+    padding: 6px 14px;
+    transition: all 0.22s ease;
+    cursor: pointer;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(15, 84, 71, 0.06);
+    flex-shrink: 0;
+  }
+
+  .na-viewall:hover {
+    background: #0f5447;
+    color: #ffffff;
+    border-color: #0f5447;
+    box-shadow: 0 3px 10px rgba(15, 84, 71, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .na-viewall svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    transition: transform 0.2s ease;
+  }
+
+  .na-viewall:hover svg {
+    transform: translateX(2px);
   }
 
   .na-grid {
@@ -193,41 +242,67 @@ const styles = `
   .na-banner-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
+    background: linear-gradient(
+      to top,
+      rgba(11, 46, 38, 0.94) 0%,
+      rgba(11, 46, 38, 0.6) 45%,
+      rgba(11, 46, 38, 0.15) 75%,
+      transparent 100%
+    );
   }
 
   .na-banner-content {
     position: absolute;
-    bottom: clamp(20px, 4vw, 48px);
-    left: clamp(16px, 3.5vw, 40px);
-    right: clamp(16px, 3.5vw, 40px);
+    bottom: clamp(20px, 4vw, 36px);
+    left: clamp(16px, 3.5vw, 36px);
+    right: clamp(16px, 3.5vw, 36px);
+    z-index: 2;
   }
 
   .na-banner-title {
     font-family: 'Josefin Sans', 'Raleway', sans-serif;
-    font-size: clamp(24px, 4vw, 48px);
+    font-size: clamp(26px, 3.2vw, 42px);
     font-weight: 700;
-    color: #fff;
-    margin: 0 0 clamp(8px, 2vw, 16px);
-    text-shadow: 0 2px 12px rgba(0,0,0,0.3);
-    line-height: 1.1;
+    color: #ffffff;
+    margin: 0 0 8px 0;
+    line-height: 1.15;
+    letter-spacing: 0.02em;
+    text-shadow: none;
+  }
+
+  .na-banner-sub {
+    font-size: 13px;
+    color: #E2D9C5;
+    margin: 0 0 16px 0;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+    text-shadow: none;
   }
 
   .na-banner-btn {
-    background: #2C2F33;
-    color: #fff;
+    background: #C9A84C;
+    color: #0f5447;
     border: none;
-    padding: clamp(10px, 2vw, 14px) clamp(24px, 3vw, 36px);
-    font-size: 13px;
-    font-weight: 600;
+    border-radius: 3px;
+    padding: 10px 24px;
+    font-size: 11px;
+    font-weight: 700;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.2s;
     font-family: 'Raleway', 'Josefin Sans', sans-serif;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .na-banner-btn:hover { background: #1E2022; }
+  .na-banner-btn:hover {
+    background: #dbb758;
+    color: #0b3a31;
+    transform: translateY(-2px);
+  }
 
   .na-loading, .na-empty {
     padding: 40px 0;
@@ -245,6 +320,10 @@ const styles = `
   }
 
   @media (max-width: 640px) {
+    .na-header { margin-bottom: 16px; }
+    .na-heading { font-size: clamp(20px, 5.2vw, 24px); }
+    .na-viewall { font-size: 11px; padding: 5px 11px; gap: 4px; }
+    .na-viewall svg { width: 10px; height: 10px; }
     .na-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .na-right { min-height: 260px; aspect-ratio: 4/3; max-height: 360px; padding: 12px; }
     .na-loading, .na-empty { grid-column: span 2; }
@@ -258,12 +337,12 @@ export default function NewArrivalsSection() {
   const [products,  setProducts]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [bannerData, setBannerData] = useState(null);
+  const [bannerLoading, setBannerLoading] = useState(true);
 
   const goToShop = () => { navigate("/shop"); };
 
   const goToProduct = (product) => {
-    sessionStorage.setItem('selectedProduct', JSON.stringify({ id: product.id }));
-    navigate('/product-details');
+    navigate(`/product/${product.slug || slugifyProductName(product.productName || product.name, product.id)}`);
     window.scrollTo(0, 0);
   };
 
@@ -274,9 +353,8 @@ export default function NewArrivalsSection() {
   const [addedToCart, setAddedToCart] = useState(new Set());
 
   useEffect(() => {
-    fetch(`${BASE}/products/new-arrivals`)
-      .then((r) => r.json())
-      .then((data) => setProducts(Array.isArray(data) ? data : []))
+    productApi.getAll()
+      .then((data) => setProducts(Array.isArray(data) ? data.filter(product => product.isNewArrival) : []))
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
 
@@ -286,7 +364,8 @@ export default function NewArrivalsSection() {
         const list = Array.isArray(data) ? data : [];
         if (list.length > 0) setBannerData(list[0]);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setBannerLoading(false));
   }, []);
 
   // ✅ Check if product is in cart (local set OR context cartItems)
@@ -344,7 +423,15 @@ export default function NewArrivalsSection() {
       <div className="na-wrapper">
 
         <div className="na-left">
-          <h2 className="na-heading">New Arrivals</h2>
+          <div className="na-header">
+            <h2 className="na-heading">New Arrivals</h2>
+            <button className="na-viewall" onClick={goToShop}>
+              <span>View all</span>
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
           <div className="na-grid">
             {loading && (
               <>
@@ -413,36 +500,50 @@ export default function NewArrivalsSection() {
 
         <div className="na-right">
           <div className="na-right-inner">
-            {bannerData?.image
-              ? <img src={getLocalImageUrl(bannerData.image)} alt="New Arrivals" loading="lazy" decoding="async" />
-              : <div className="na-banner-fallback" />
-            }
+            {bannerLoading ? (
+              <div className="fa-skeleton-dark" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+            ) : bannerData?.image ? (
+              <img src={getLocalImageUrl(bannerData.image)} alt="New Arrivals" loading="lazy" decoding="async" />
+            ) : (
+              <div className="na-banner-fallback" />
+            )}
             <div className="na-banner-overlay" />
             <div className="na-banner-content">
-              <h2 className="na-banner-title">{bannerData?.title || "New Arrivals"}</h2>
-              {bannerData?.subtitle && (
-                <p className="na-banner-sub" style={{ fontSize: '15px', color: '#fff', margin: '-10px 0 20px', opacity: 0.95, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '500', textShadow: '0 1px 6px rgba(0,0,0,0.3)' }}>
-                  {bannerData.subtitle}
-                </p>
+              {bannerLoading ? (
+                <>
+                  <div className="fa-skeleton" style={{ width: '65%', height: 24, borderRadius: 4, marginBottom: 10 }} />
+                  <div className="fa-skeleton" style={{ width: '80%', height: 14, borderRadius: 4, marginBottom: 16 }} />
+                  <div className="fa-skeleton" style={{ width: 110, height: 38, borderRadius: 4 }} />
+                </>
+              ) : (
+                <>
+                  <h2 className="na-banner-title">{bannerData?.title || "New Arrivals"}</h2>
+                  {bannerData?.subtitle && (
+                    <p className="na-banner-sub">
+                      {bannerData.subtitle}
+                    </p>
+                  )}
+                  <button 
+                    className="na-banner-btn" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (bannerData?.link) {
+                        const link = bannerData.link;
+                        if (link.startsWith("http://") || link.startsWith("https://")) {
+                          window.open(link, "_blank", "noopener,noreferrer");
+                        } else {
+                          const cleanPath = link.replace(/^#/, "");
+                          navigate(cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`);
+                        }
+                      } else {
+                        goToShop();
+                      }
+                    }}
+                  >
+                    {bannerData?.btnText || "Shop Now"}
+                  </button>
+                </>
               )}
-              <button 
-                className="na-banner-btn" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (bannerData?.link) {
-                    const link = bannerData.link;
-                    if (link.startsWith("http://") || link.startsWith("https://")) {
-                      window.open(link, "_blank", "noopener,noreferrer");
-                    } else {
-                      navigate(link.replace(/^#/, "/").startsWith("/") ? link.replace(/^#/, "/") : `/${link.replace(/^#/, "/")}`);
-                    }
-                  } else {
-                    goToShop();
-                  }
-                }}
-              >
-                Shop Now
-              </button>
             </div>
           </div>
         </div>

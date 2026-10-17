@@ -3,12 +3,61 @@ import { useState, useEffect } from 'react';
 import defaultLogo from '../../assets/img/logo2.png';
 import Footer from '../../components/Footer';
 import { useShop } from '../../context/ShopContext';
-import { productApi, categoryApi, subCategoryApi, getImageUrl, comboApi } from '../../utils/api';
+import { productApi, categoryApi, subCategoryApi, billingCatalogApi, getImageUrl, comboApi, slugifyProductName } from '../../utils/api';
 import Skeleton, { ProductCardSkeleton, SidebarItemSkeleton, ComboCardSkeleton } from '../../components/Skeleton';
 
 const BRAND   = '#2C2F33';
 const ACCENT  = '#0f5447';
 const PER_PAGE = 12;
+
+const billingAvailableStock = variant => {
+  if (!variant || variant.in_stock === false || variant.in_stock === 0
+    || ['false', '0', 'no', 'out of stock'].includes(String(variant.in_stock ?? '').trim().toLowerCase())) return 0;
+  const fields = ['available_stock', 'available_quantity', 'available_qty', 'quantity_available', 'qty_available', 'current_stock', 'stock_qty', 'stock_quantity', 'qty', 'on_hand', 'balance_quantity', 'quantity', 'stock', 'total_stock'];
+  for (const field of fields) {
+    const raw = variant[field];
+    if (raw === null || raw === undefined || raw === '') continue;
+    const value = Number(raw);
+    if (Number.isFinite(value) && value >= 0) return Math.floor(value);
+  }
+  return null;
+};
+
+const syncProductsWithBillingStock = (products, billingProducts, stockByVariant = null) => {
+  const productRows = Array.isArray(billingProducts) ? billingProducts : [];
+  const billingVariants = productRows.flatMap(row => row?.variants || row?.product_variants || row?.product_varients || []);
+  const variantsById = new Map(billingVariants.map(variant => [String(variant.id ?? variant.product_variant_id ?? variant.variant_id), variant]));
+  const billingProductsById = new Map(productRows.map(row => [String(row.id ?? row.product_id), row]));
+
+  return products.map(product => {
+    const productBillingId = product.billingProductId || product.billing_product_id;
+    const billingProduct = productBillingId ? billingProductsById.get(String(productBillingId)) : null;
+    const localVariants = product.Variants || product.variants || [];
+    const sourceVariants = localVariants.length ? localVariants : (billingProduct?.variants || billingProduct?.product_variants || billingProduct?.product_varients || []);
+    const mappedVariants = sourceVariants.map(local => {
+      const billingId = local.billingVariantId || local.billing_variant_id || local.id;
+      const live = variantsById.get(String(billingId));
+      const listQuantity = billingAvailableStock(live);
+      const hasStockRow = stockByVariant?.has(String(billingId));
+      const dedicatedQuantity = stockByVariant === null ? null : hasStockRow ? stockByVariant.get(String(billingId)) : 0;
+      const quantities = [listQuantity, dedicatedQuantity].filter(value => value !== null && value !== undefined);
+      const quantity = quantities.length ? Math.min(...quantities) : null;
+      const stockVerified = listQuantity !== null && (stockByVariant === null || (stockByVariant instanceof Map && (hasStockRow ? dedicatedQuantity !== null : true)));
+      return { ...local, billingVariantId: local.billingVariantId || local.billing_variant_id || live?.id || null, stock: stockVerified ? quantity : 0, billingStockVerified: stockVerified };
+    });
+    const verified = mappedVariants.length > 0 && mappedVariants.every(variant => variant.billingStockVerified);
+    const stock = verified ? mappedVariants.reduce((total, variant) => total + variant.stock, 0) : 0;
+    const productStock = billingProduct ? billingAvailableStock(billingProduct) : null;
+    const resolvedStock = mappedVariants.length ? stock : productStock;
+
+    return {
+      ...product,
+      Variants: mappedVariants,
+      stock: resolvedStock ?? 0,
+      billingStockVerified: mappedVariants.length ? verified : productStock !== null,
+    };
+  });
+};
 
 const F = {
   main: "'Josefin Sans', 'Raleway', 'Century Gothic', sans-serif",
@@ -277,8 +326,7 @@ export default function ShopGridPage({ saleOnly = false }) {
   }, [location.search]);
 
   const goToProduct = (product) => {
-    sessionStorage.setItem('selectedProduct', JSON.stringify({ id: product.id }));
-    navigate('/product-details');
+    navigate(`/product/${product.slug || slugifyProductName(product.productName || product.name, product.id)}`);
     window.scrollTo(0, 0);
   };
 
@@ -402,7 +450,7 @@ export default function ShopGridPage({ saleOnly = false }) {
       categoryApi.getAll(),
       subCategoryApi.getAll(),
     ])
-      .then(([prods, cats, subs]) => {
+      .then(async ([prods, cats, subs]) => {
         const arr = Array.isArray(prods) ? prods : [];
         const processed = arr.map(p => {
           const productFinal = [p.franchise_price_final, p.salesPrice, p.mrp]
@@ -414,11 +462,27 @@ export default function ShopGridPage({ saleOnly = false }) {
           const mrp = salesPrice;
           return { ...p, franchise_price_final: salesPrice, mrp, salesPrice };
         });
-        setProducts(processed);
+        let inventorySyncedProducts;
+        try {
+          const [billingProducts, stockByVariant] = await Promise.all([
+            billingCatalogApi.getProductVariants(),
+            billingCatalogApi.getStocksByVariant(),
+          ]);
+          inventorySyncedProducts = syncProductsWithBillingStock(processed, billingProducts, stockByVariant);
+        } catch (billingError) {
+          console.warn('[ShopGrid] Could not verify live Billing stock:', billingError.message);
+          inventorySyncedProducts = processed.map(product => ({
+            ...product,
+            stock: 0,
+            billingStockVerified: false,
+            Variants: (product.Variants || []).map(variant => ({ ...variant, stock: 0, billingStockVerified: false })),
+          }));
+        }
+        setProducts(inventorySyncedProducts);
         setCategories(Array.isArray(cats) ? cats : []);
         setSubcategories(Array.isArray(subs) ? subs : []);
-        if (processed.length) {
-          const max = Math.max(...processed.map(p => Number(p.salesPrice || p.mrp || 0)));
+        if (inventorySyncedProducts.length) {
+          const max = Math.max(...inventorySyncedProducts.map(p => Number(p.salesPrice || p.mrp || 0)));
           if (max > 0) setPriceMax(Math.ceil(max / 100) * 100);
         }
 
@@ -484,6 +548,37 @@ export default function ShopGridPage({ saleOnly = false }) {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Keep listing availability current while the shop is left open. Billing
+  // stock may change in another channel without a local database refresh.
+  useEffect(() => {
+    if (!products.length) return undefined;
+    let active = true;
+    const refreshStock = async () => {
+      try {
+        const [billingProducts, stockByVariant] = await Promise.all([
+          billingCatalogApi.getProductVariants(),
+          billingCatalogApi.getStocksByVariant(),
+        ]);
+        if (active) setProducts(current => syncProductsWithBillingStock(current, billingProducts, stockByVariant));
+      } catch (stockError) {
+        console.warn('[ShopGrid] Live stock refresh failed:', stockError.message);
+        if (active) setProducts(current => current.map(product => ({
+          ...product,
+          stock: 0,
+          billingStockVerified: false,
+          Variants: (product.Variants || []).map(variant => ({ ...variant, stock: 0, billingStockVerified: false })),
+        })));
+      }
+    };
+    const interval = window.setInterval(refreshStock, 60000);
+    window.addEventListener('focus', refreshStock);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshStock);
+    };
+  }, [products.length]);
 
   useEffect(() => {
     const handleSaleClicked = () => {
@@ -963,7 +1058,6 @@ export default function ShopGridPage({ saleOnly = false }) {
 
   return (
     <>
-      <button id="back-top" className="back-to-top"><i className="fa-regular fa-arrow-up" /></button>
       <div className="mouse-cursor cursor-outer" />
       <div className="mouse-cursor cursor-inner" />
 
@@ -1061,12 +1155,13 @@ export default function ShopGridPage({ saleOnly = false }) {
                     style={{
                       background: 'none',
                       border: 'none',
+                      borderRadius: 0,
                       color: saleViewMode === 'single' ? BRAND : '#888',
                       fontSize: 14,
                       fontWeight: 600,
                       cursor: 'pointer',
                       padding: '8px 16px',
-                      borderBottom: saleViewMode === 'single' ? `2px solid ${BRAND}` : 'none',
+                      borderBottom: saleViewMode === 'single' ? `2px solid ${BRAND}` : '2px solid transparent',
                       fontFamily: F.main,
                       letterSpacing: '2px',
                       textTransform: 'uppercase',
@@ -1080,12 +1175,13 @@ export default function ShopGridPage({ saleOnly = false }) {
                     style={{
                       background: 'none',
                       border: 'none',
+                      borderRadius: 0,
                       color: saleViewMode === 'combos' ? BRAND : '#888',
                       fontSize: 14,
                       fontWeight: 600,
                       cursor: 'pointer',
                       padding: '8px 16px',
-                      borderBottom: saleViewMode === 'combos' ? `2px solid ${BRAND}` : 'none',
+                      borderBottom: saleViewMode === 'combos' ? `2px solid ${BRAND}` : '2px solid transparent',
                       fontFamily: F.main,
                       letterSpacing: '2px',
                       textTransform: 'uppercase',
@@ -1390,6 +1486,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                         id:       p.id,
                         name:     p.productName,
                         price:    Number(p.franchise_price_final ?? p.salesPrice ?? p.mrp ?? 0),
+                        billingProductId: p.billingProductId || p.billing_product_id || null,
                         subtitle: catName,
                         image:    imgSrc,
                         isBuyOneGetOne: !!p.isBuyOneGetOne,
@@ -1430,6 +1527,11 @@ export default function ShopGridPage({ saleOnly = false }) {
 
                               {/* Badges */}
                               <div className="product-badge">
+                                {!p.billingStockVerified ? (
+                                  <span style={{ background: '#9A6B24' }}>Stock Unavailable</span>
+                                ) : p.stock <= 0 ? (
+                                  <span style={{ background: '#A83232' }}>Out of Stock</span>
+                                ) : null}
                                 {p.isBuyOneGetOne && (
                                   <span className="badge-bogo">
                                     <i className="fa-solid fa-gift" style={{ fontSize: 9 }} /> Buy 1 Get 1
@@ -1451,7 +1553,11 @@ export default function ShopGridPage({ saleOnly = false }) {
                                 </button>
                                 <button
                                   className="product-action-btn"
-                                  onClick={(e) => { e.stopPropagation(); addToCart({ ...cartItem, qty: 1 }); }}
+                                  onClick={(e) => { e.stopPropagation(); if (p.billingStockVerified && p.stock > 0) addToCart({ ...cartItem, qty: 1 }); }}
+                                  disabled={!p.billingStockVerified || p.stock <= 0}
+                                  aria-label={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
+                                  title={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
+                                  style={{ opacity: !p.billingStockVerified || p.stock <= 0 ? 0.45 : 1, cursor: !p.billingStockVerified || p.stock <= 0 ? 'not-allowed' : 'pointer' }}
                                   onMouseEnter={e => { e.currentTarget.style.background = BRAND; e.currentTarget.style.color = '#fff'; }}
                                   onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#333'; }}
                                 >
@@ -1561,9 +1667,14 @@ export default function ShopGridPage({ saleOnly = false }) {
                                 <i className={wished ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{ fontSize: 14 }} />
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); addToCart({ ...cartItem, qty: 1 }); }}
+                                onClick={(e) => { e.stopPropagation(); if (p.billingStockVerified && p.stock > 0) addToCart({ ...cartItem, qty: 1 }); }}
+                                disabled={!p.billingStockVerified || p.stock <= 0}
+                                aria-label={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
+                                title={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
                                 style={{
                                   width: 32, height: 32, borderRadius: '50%', background: '#F4F8F0', color: BRAND, border: 'none',
+                                  opacity: !p.billingStockVerified || p.stock <= 0 ? 0.45 : 1,
+                                  cursor: !p.billingStockVerified || p.stock <= 0 ? 'not-allowed' : 'pointer',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s',
                                 }}
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.background = '#EAF0E2'; }}
@@ -1621,10 +1732,10 @@ export default function ShopGridPage({ saleOnly = false }) {
               {renderSidebarFilters()}
             </div>
             <div style={{ padding: '12px 20px', borderTop: '1px solid #E0E8D8', display: 'flex', gap: 10, background: '#fff' }}>
-              <button onClick={resetFilters} style={{ flex: 1, padding: '10px', background: '#F4F8F0', border: '1px solid #E0E8D8', borderRadius: 6, color: BRAND, fontFamily: F.main, fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={resetFilters} style={{ flex: 1, padding: '10px', background: '#F4F8F0', border: '1px solid #E0E8D8', borderRadius: 8, color: BRAND, fontFamily: F.main, fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600 }}>
                 Reset
               </button>
-              <button onClick={() => setMobileFiltersOpen(false)} style={{ flex: 1, padding: '10px', background: BRAND, border: 'none', borderRadius: 6, color: '#fff', fontFamily: F.main, fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600 }}>
+              <button onClick={() => setMobileFiltersOpen(false)} style={{ flex: 1, padding: '10px', background: BRAND, border: 'none', borderRadius: 8, color: '#fff', fontFamily: F.main, fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600 }}>
                 Apply
               </button>
             </div>
@@ -1665,6 +1776,8 @@ export default function ShopGridPage({ saleOnly = false }) {
           (!qvColor || v.color === qvColor) && 
           (!qvFabric || v.fabric === qvFabric)
         );
+        const selectedVariantStock = selectedVariant ? Number(selectedVariant.stock) : Number(p.stock);
+        const selectedVariantStockVerified = selectedVariant ? selectedVariant.billingStockVerified : p.billingStockVerified;
         
         const currentQvImg = (selectedVariant?.image)
           ? getImageUrl(selectedVariant.image)
@@ -1683,6 +1796,7 @@ export default function ShopGridPage({ saleOnly = false }) {
           price: salePrice,
           variantId: selectedVariant?.id || null,
           billingVariantId: selectedVariant?.billingVariantId || null,
+          billingProductId: p.billingProductId || p.billing_product_id || null,
           subtitle: catName,
           image: p.image ? getImageUrl(p.image) : null,
           size: qvSize,
@@ -1774,9 +1888,9 @@ export default function ShopGridPage({ saleOnly = false }) {
                     </div>
                     
                     {/* Stock Status */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, fontSize: 13, fontFamily: F.sub, color: p.stock > 0 ? '#4a5a44' : '#c00' }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.stock > 0 ? ACCENT : '#c00' }} />
-                      {p.stock > 0 ? 'In Stock' : 'Out of Stock'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, fontSize: 13, fontFamily: F.sub, color: !selectedVariantStockVerified ? '#9a6b24' : selectedVariantStock > 0 ? '#4a5a44' : '#c00' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: !selectedVariantStockVerified ? '#c9933a' : selectedVariantStock > 0 ? ACCENT : '#c00' }} />
+                      {!selectedVariantStockVerified ? 'Stock unavailable' : selectedVariantStock > 0 ? `In Stock (${selectedVariantStock} units)` : 'Out of Stock'}
                     </div>
 
                     {/* Description */}
@@ -1834,17 +1948,17 @@ export default function ShopGridPage({ saleOnly = false }) {
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                       <button
                         onClick={() => { addToCart(cartItem); setQuickViewProduct(null); }}
-                        disabled={p.stock <= 0}
-                        onMouseEnter={e => { if (p.stock > 0) e.currentTarget.style.background = '#0b3a31'; }}
-                        onMouseLeave={e => { if (p.stock > 0) e.currentTarget.style.background = ACCENT; }}
+                        disabled={!selectedVariantStockVerified || selectedVariantStock <= 0}
+                        onMouseEnter={e => { if (selectedVariantStockVerified && selectedVariantStock > 0) e.currentTarget.style.background = '#0b3a31'; }}
+                        onMouseLeave={e => { if (selectedVariantStockVerified && selectedVariantStock > 0) e.currentTarget.style.background = ACCENT; }}
                         style={{
                           flex: 1,
                           padding: '12px 24px',
-                          background: p.stock > 0 ? ACCENT : '#ccc',
+                          background: selectedVariantStockVerified && selectedVariantStock > 0 ? ACCENT : '#ccc',
                           color: '#fff',
                           border: 'none',
                           borderRadius: 8,
-                          cursor: p.stock > 0 ? 'pointer' : 'default',
+                          cursor: selectedVariantStockVerified && selectedVariantStock > 0 ? 'pointer' : 'not-allowed',
                           fontSize: 13,
                           fontWeight: 600,
                           fontFamily: F.main,
@@ -1853,7 +1967,8 @@ export default function ShopGridPage({ saleOnly = false }) {
                           transition: 'background 0.2s'
                         }}
                       >
-                        <i className="fa-solid fa-cart-shopping" style={{ marginRight: 8 }} /> Add to Cart
+                        <i className="fa-solid fa-cart-shopping" style={{ marginRight: 8 }} />
+                        {!selectedVariantStockVerified ? 'Stock Unavailable' : selectedVariantStock > 0 ? 'Add to Cart' : 'Out of Stock'}
                       </button>
                       
                       <button

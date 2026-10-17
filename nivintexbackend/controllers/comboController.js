@@ -6,6 +6,7 @@ const Brand = require('../models/Brand');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { validateFields } = require('../utils/textValidation');
 
 // ── Multer Storage Setup ──────────────────────────────────────────
 const storage = multer.diskStorage({
@@ -114,8 +115,12 @@ const getStorefrontCombos = async (req, res) => {
 const addRootCombo = async (req, res) => {
   try {
     const { name, status } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: 'Combo name is required' });
+    const validationError = validateFields([
+      { value: name, fieldName: 'Combo Name', required: true, maxChars: 60, maxWords: 8 },
+    ]);
+    if (validationError) {
+      if (req.file) deleteFile(req.file.path);
+      return res.status(400).json({ error: validationError });
     }
 
     const imagePath = formatPath(req.file);
@@ -138,10 +143,21 @@ const updateRootCombo = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, status } = req.body;
-    
+
     const root = await RootCombo.findByPk(id);
     if (!root) {
+      if (req.file) deleteFile(req.file.path);
       return res.status(404).json({ error: 'Root Combo not found' });
+    }
+
+    if (name !== undefined) {
+      const validationError = validateFields([
+        { value: name, fieldName: 'Combo Name', required: true, maxChars: 60, maxWords: 8 },
+      ]);
+      if (validationError) {
+        if (req.file) deleteFile(req.file.path);
+        return res.status(400).json({ error: validationError });
+      }
     }
 
     let imagePath = root.image;
@@ -233,7 +249,18 @@ const addChildCombo = async (req, res) => {
     } = req.body;
 
     if (!rootComboId || !name || !originalPrice || !comboPrice) {
+      if (req.file) deleteFile(req.file.path);
       return res.status(400).json({ error: 'Required fields missing' });
+    }
+
+    const validationError = validateFields([
+      { value: name, fieldName: 'Combo Pack Name', required: true, maxChars: 80, maxWords: 12 },
+      { value: shortDescription, fieldName: 'Short Description', maxChars: 160, maxWords: 30 },
+      { value: fullDescription, fieldName: 'Detailed Description', maxChars: 1000, maxWords: 160 },
+    ]);
+    if (validationError) {
+      if (req.file) deleteFile(req.file.path);
+      return res.status(400).json({ error: validationError });
     }
 
     const imagePath = formatPath(req.file);
@@ -309,7 +336,18 @@ const updateChildCombo = async (req, res) => {
 
     const child = await ChildCombo.findByPk(id);
     if (!child) {
+      if (req.file) deleteFile(req.file.path);
       return res.status(404).json({ error: 'Child Combo not found' });
+    }
+
+    const validationError = validateFields([
+      { value: name !== undefined ? name : child.name, fieldName: 'Combo Pack Name', required: true, maxChars: 80, maxWords: 12 },
+      { value: shortDescription !== undefined ? shortDescription : child.shortDescription, fieldName: 'Short Description', maxChars: 160, maxWords: 30 },
+      { value: fullDescription !== undefined ? fullDescription : child.fullDescription, fieldName: 'Detailed Description', maxChars: 1000, maxWords: 160 },
+    ]);
+    if (validationError) {
+      if (req.file) deleteFile(req.file.path);
+      return res.status(400).json({ error: validationError });
     }
 
     let imagePath = child.image;

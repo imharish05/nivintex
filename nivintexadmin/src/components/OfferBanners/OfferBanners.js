@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
+import ImageUploadPreview from '../common/ImageUploadPreview';
+import CharWordCounter from '../common/CharWordCounter';
+import { validateFields, isOverLimit } from '../../utils/textValidation';
+import { getImageUrl } from '../../api';
 
 const API = process.env.REACT_APP_API_URL;
 
@@ -21,6 +25,7 @@ export default function OfferBanners({ showToast }) {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData]   = useState(EMPTY_FORM);
   const [imageFile, setImageFile] = useState(null);
+  const [existingImage, setExistingImage] = useState(null);
 
   useEffect(() => { fetchOfferBanners(); }, []);
 
@@ -44,6 +49,7 @@ export default function OfferBanners({ showToast }) {
     setEditingId(null);
     setFormData(EMPTY_FORM);
     setImageFile(null);
+    setExistingImage(null);
   };
 
   const handleEditClick = (offer) => {
@@ -57,6 +63,7 @@ export default function OfferBanners({ showToast }) {
       status:     offer.status     || 'Active',
     });
     setImageFile(null);
+    setExistingImage(offer.image || null);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -65,6 +72,18 @@ export default function OfferBanners({ showToast }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const validationError = validateFields([
+      { value: formData.title, fieldName: 'Title', required: true, maxChars: 60, maxWords: 10 },
+      { value: formData.subtitle, fieldName: 'Subtitle', required: true, maxChars: 80, maxWords: 15 },
+      { value: formData.offerLabel, fieldName: 'Offer Label', required: true, maxChars: 40, maxWords: 6 },
+      { value: formData.btnText, fieldName: 'Button Text', required: true, maxChars: 25, maxWords: 4 },
+      { value: formData.btnLink, fieldName: 'Button Link', required: true, maxChars: 255 },
+    ]);
+    if (validationError) {
+      showToast('Validation Error', validationError);
+      return;
+    }
 
     if (!imageFile && !editingId) {
       showToast('Validation Error', 'Banner Image is required.');
@@ -111,12 +130,6 @@ export default function OfferBanners({ showToast }) {
     }
   };
 
-  const getImageUrl = (image) => {
-    if (!image) return null;
-    const cleanImage = image.replace(/\\/g, '/');
-    return `${API}/${cleanImage}`;
-  };
-
   return (
     <div>
       <div className="section-header">
@@ -147,36 +160,64 @@ export default function OfferBanners({ showToast }) {
               <div className="km-field">
                 <label className="km-label">Title <span style={{ color: 'red' }}>*</span></label>
                 <input
-                  className="km-input" type="text" required
+                  className={`km-input ${isOverLimit(formData.title, { maxChars: 60, maxWords: 10 }) ? 'km-input-error' : ''}`}
+                  type="text" required
                   placeholder="e.g. Summer Staples"
                   value={formData.title} onChange={set('title')}
+                />
+                <CharWordCounter
+                  value={formData.title}
+                  maxChars={60}
+                  maxWords={10}
+                  hint="Promotional main title"
                 />
               </div>
 
               <div className="km-field">
                 <label className="km-label">Subtitle <span style={{ color: 'red' }}>*</span></label>
                 <input
-                  className="km-input" type="text" required
+                  className={`km-input ${isOverLimit(formData.subtitle, { maxChars: 80, maxWords: 15 }) ? 'km-input-error' : ''}`}
+                  type="text" required
                   placeholder="e.g. Wardrobe essentials refreshed"
                   value={formData.subtitle} onChange={set('subtitle')}
+                />
+                <CharWordCounter
+                  value={formData.subtitle}
+                  maxChars={80}
+                  maxWords={15}
+                  hint="Catchy subtitle or tag"
                 />
               </div>
 
               <div className="km-field">
                 <label className="km-label">Offer Label <span style={{ color: 'red' }}>*</span></label>
                 <input
-                  className="km-input" type="text" required
+                  className={`km-input ${isOverLimit(formData.offerLabel, { maxChars: 40, maxWords: 6 }) ? 'km-input-error' : ''}`}
+                  type="text" required
                   placeholder="e.g. Buy 2, Get 1 Free"
                   value={formData.offerLabel} onChange={set('offerLabel')}
+                />
+                <CharWordCounter
+                  value={formData.offerLabel}
+                  maxChars={40}
+                  maxWords={6}
+                  hint="Offer badge (e.g. Flat 50% Off)"
                 />
               </div>
 
               <div className="km-field">
                 <label className="km-label">Button Text <span style={{ color: 'red' }}>*</span></label>
                 <input
-                  className="km-input" type="text" required
+                  className={`km-input ${isOverLimit(formData.btnText, { maxChars: 25, maxWords: 4 }) ? 'km-input-error' : ''}`}
+                  type="text" required
                   placeholder="e.g. Shop now"
                   value={formData.btnText} onChange={set('btnText')}
+                />
+                <CharWordCounter
+                  value={formData.btnText}
+                  maxChars={25}
+                  maxWords={4}
+                  hint="Call to action text"
                 />
               </div>
 
@@ -184,7 +225,8 @@ export default function OfferBanners({ showToast }) {
                 <label className="km-label">Button Link <span style={{ color: 'red' }}>*</span></label>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <input
-                    className="km-input" type="text" required
+                    className={`km-input ${isOverLimit(formData.btnLink, { maxChars: 255 }) ? 'km-input-error' : ''}`}
+                    type="text" required
                     placeholder="e.g. /shop or https://..."
                     value={formData.btnLink} onChange={set('btnLink')}
                     style={{ flex: 1 }}
@@ -195,6 +237,11 @@ export default function OfferBanners({ showToast }) {
                     </a>
                   )}
                 </div>
+                <CharWordCounter
+                  value={formData.btnLink}
+                  maxChars={255}
+                  showWords={false}
+                />
               </div>
 
               <div className="km-field">
@@ -205,16 +252,16 @@ export default function OfferBanners({ showToast }) {
                 </select>
               </div>
 
-              <div className="km-field km-field-full">
-                <label className="km-label">Banner Image <span style={{ color: 'red' }}>*</span></label>
-                <div className="km-file-zone">
-                  <div className="km-file-icon">↑</div>
-                  {imageFile
-                    ? <p className="km-file-selected">✓ {imageFile.name}</p>
-                    : <p className="km-file-label">Click to upload image</p>}
-                  <input type="file" accept="image/*" onChange={e => setImageFile(e.target.files[0])} />
-                </div>
-              </div>
+              <ImageUploadPreview
+                label="Banner Image"
+                required={!editingId}
+                file={imageFile}
+                existingUrl={existingImage ? getImageUrl(existingImage) : null}
+                onChange={setImageFile}
+                onRemove={() => setImageFile(null)}
+                helpText="Recommended: 1200x500 promotional banner"
+                previewMaxHeight={160}
+              />
 
               <button type="submit" className="km-btn-submit">
                 {editingId ? 'Update Offer Banner' : 'Save Offer Banner'}

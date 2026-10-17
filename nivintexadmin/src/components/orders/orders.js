@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import DataTable from '../DataTable/DataTable';
 import { getImageUrl } from '../../api';
@@ -5,14 +6,14 @@ import { getImageUrl } from '../../api';
 const API = process.env.REACT_APP_API_URL;
 
 const STATUS_OPTIONS = [
+  'pending',
   'confirmed',
-  'accepted',
-  'packed',
   'shipped',
   'out_for_delivery',
-  'delivered',
-  'cancelled'
+  'delivered'
 ];
+
+const visibleOrderStatus = status => ({ accepted: 'confirmed', packed: 'shipped', assigned: 'pending' }[status] || status);
 
 const labelFor = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 const parseAddr = (raw) => { try { return JSON.parse(raw); } catch { return null; } };
@@ -46,7 +47,7 @@ const AddressBlock = ({ addr, phone, phone2, email }) => {
   );
 };
 
-function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetryShipment }) {
+function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetryBilling, onEditShipping, onRetryShipment }) {
   if (!order) return null;
   const billing = parseAddr(order.billing_address);
   const shipping = parseAddr(order.shipping_address) || billing;
@@ -100,8 +101,12 @@ function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetrySh
                 <div><span>Stock sync</span><strong>{labelFor(order.billing_stock_sync_status || 'not_configured')}</strong></div>
                 {order.billing_stock_synced_at && <div><span>Stock synced</span><strong>{new Date(order.billing_stock_synced_at).toLocaleString('en-IN')}</strong></div>}
               </div>
+              {order.billing_sync_error && <p className="km-order-modal-error">{order.billing_sync_error}</p>}
               {order.billing_stock_sync_error && <p className="km-order-modal-error">{order.billing_stock_sync_error}</p>}
               <button type="button" className="km-order-modal-secondary" onClick={() => onEditBilling(order)}>Edit billing details</button>
+              {order.billing_sync_status === 'failed' && /HTTP 422: Insufficient stock/i.test(order.billing_sync_error || '') && (
+                <button type="button" className="km-order-modal-primary" onClick={() => onRetryBilling(order)}>Recheck stock &amp; retry invoice</button>
+              )}
             </section>
             <section className="km-order-modal-section">
               <h3>Shipping &amp; Shiprocket</h3>
@@ -117,6 +122,7 @@ function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetrySh
                 {order.shiprocket_shipment_id && <div><span>Shipment ID</span><strong>{order.shiprocket_shipment_id}</strong></div>}
               </div>
               {order.shiprocket_booking_error && <p className="km-order-modal-error">{order.shiprocket_booking_error}</p>}
+              {!order.awb_code && <button type="button" className="km-order-modal-secondary" onClick={() => onEditShipping(order)}>Edit shipping address</button>}
               {!order.awb_code && <button type="button" className="km-order-modal-primary" onClick={() => onRetryShipment(order)}>Choose / retry courier</button>}
             </section>
           </div>
@@ -142,6 +148,9 @@ export default function Orders({ showToast, status = null }) {
   const [billingEditOrder, setBillingEditOrder] = useState(null);
   const [billingDraft, setBillingDraft] = useState(null);
   const [billingEditSaving, setBillingEditSaving] = useState(false);
+  const [shippingEditOrder, setShippingEditOrder] = useState(null);
+  const [shippingDraft, setShippingDraft] = useState(null);
+  const [shippingEditSaving, setShippingEditSaving] = useState(false);
 
   const fetchOrders = useCallback((currentStatus) => {
     setLoading(true);
@@ -149,7 +158,10 @@ export default function Orders({ showToast, status = null }) {
       .then(r => r.json())
       .then(data => {
         const all = Array.isArray(data.orders) ? data.orders : [];
-        setRows(currentStatus ? all.filter(o => o.status === currentStatus) : all);
+        const visible = all
+          .filter(order => String(order.status || '').toLowerCase() !== 'cancelled')
+          .map(order => ({ ...order, status: visibleOrderStatus(String(order.status || 'pending').toLowerCase()) }));
+        setRows(currentStatus ? visible.filter(o => o.status === currentStatus) : visible);
       })
       .catch(() => showToast('Load Failed', 'Could not load orders.'))
       .finally(() => setLoading(false));
@@ -252,6 +264,53 @@ export default function Orders({ showToast, status = null }) {
     finally { setBillingEditSaving(false); }
   };
 
+  const openShippingEditor = order => {
+    const address = parseAddr(order.shipping_address) || {};
+    setShippingDraft({
+      name: address.name || address.firstName || order.customer_name || '',
+      address: address.address || address.address1 || '',
+      address2: address.address2 || '',
+      city: address.city || '',
+      state: address.state || '',
+      zip: address.zip || address.postcode || '',
+      country: address.country || 'India',
+      phone: address.phone || order.customer_phone || '',
+    });
+    setShippingEditOrder(order);
+  };
+
+  const saveShippingEditor = async () => {
+    if (!shippingEditOrder || !shippingDraft) return;
+    setShippingEditSaving(true);
+    try {
+      const response = await fetch(`${API}/shipping/orders/${shippingEditOrder.id}/address`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('adminToken') || ''}` },
+        body: JSON.stringify({ shippingAddress: shippingDraft }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Could not save shipping address.');
+      setShippingEditOrder(null);
+      setShippingDraft(null);
+      showToast('Shipping address saved', 'Verify the PIN, then choose and retry a courier.');
+      fetchOrders(status);
+    } catch (error) { showToast('Shipping address not saved', error.message); }
+    finally { setShippingEditSaving(false); }
+  };
+
+  const retryBillingInvoice = async order => {
+    try {
+      const response = await fetch(`${API}/orders/${order.id}/retry-billing`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('adminToken') || ''}` },
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Billing invoice retry failed.');
+      showToast('Billing invoice created', `Order #${order.id} invoice and Billing stock are now synced.`);
+      fetchOrders(status);
+    } catch (error) { showToast('Invoice not created', error.message); }
+  };
+
   useEffect(() => {
     if (!previewItem) return undefined;
     const handleKeyDown = event => { if (event.key === 'Escape') setPreviewItem(null); };
@@ -268,6 +327,52 @@ export default function Orders({ showToast, status = null }) {
 
   return (
     <div>
+      <div className="km-order-tabs" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+        {[
+          { path: '/orders', key: null, label: 'All Orders' },
+          { path: '/orders_pending', key: 'pending', label: 'Pending Orders' },
+          { path: '/orders_confirmed', key: 'confirmed', label: 'Confirmed' },
+          { path: '/orders_shipped', key: 'shipped', label: 'Shipped' },
+          { path: '/orders_delivery', key: 'out_for_delivery', label: 'Out for Delivery' },
+          { path: '/orders_delivered', key: 'delivered', label: 'Delivered' },
+        ].map(t => {
+          const isActive = (status === t.key);
+          return (
+            <Link
+              key={t.path}
+              to={t.path}
+              style={{
+                textDecoration: 'none',
+                padding: '8px 16px',
+                borderRadius: 20,
+                fontSize: 13,
+                fontWeight: 600,
+                background: isActive ? '#0f5447' : '#ffffff',
+                color: isActive ? '#ffffff' : '#4b5563',
+                border: isActive ? '1px solid #0f5447' : '1px solid #e5e7eb',
+                boxShadow: isActive ? '0 2px 6px rgba(15,84,71,0.2)' : 'none',
+                transition: 'all 0.2s',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              {t.label}
+              {isActive && !loading && (
+                <span style={{
+                  background: 'rgba(255,255,255,0.25)',
+                  padding: '1px 7px',
+                  borderRadius: 10,
+                  fontSize: 11
+                }}>
+                  {filteredRows.length}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div className="section-title">
           {status ? `${labelFor(status)} Orders` : 'All Orders'}
@@ -339,6 +444,8 @@ export default function Orders({ showToast, status = null }) {
         onClose={() => setExpanded(null)}
         onPreview={setPreviewItem}
         onEditBilling={openBillingEditor}
+        onRetryBilling={retryBillingInvoice}
+        onEditShipping={openShippingEditor}
         onRetryShipment={openCourierModal}
       />
 
@@ -357,7 +464,7 @@ export default function Orders({ showToast, status = null }) {
           <section role="dialog" aria-modal="true" aria-labelledby="order-billing-edit-title" onClick={event => event.stopPropagation()} style={{ width: 'min(720px, 100%)', maxHeight: '88vh', overflow: 'auto', borderRadius: 14, background: '#fff', boxShadow: '0 24px 80px rgba(0,0,0,.28)' }}>
             <header style={{ padding: '18px 20px', borderBottom: '1px solid #e5e7eb' }}><h2 id="order-billing-edit-title" style={{ margin: 0, color: '#0f5447', fontSize: 18 }}>Edit billing details · Order #{billingEditOrder.id}</h2><p style={{ margin: '6px 0 0', color: '#64748b', fontSize: 12 }}>Changes save to the local billing snapshot. Paid amount and purchased items remain unchanged.</p></header>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, padding: 20 }}>
-              <div style={{ gridColumn: '1 / -1', padding: 11, borderRadius: 8, background: '#fff7ed', color: '#9a5700', fontSize: 12 }}>Billing’s remote create/update endpoint is not configured. This editor saves the Billing-shaped data in the ecommerce database only.</div>
+              <div style={{ gridColumn: '1 / -1', padding: 11, borderRadius: 8, background: '#fff7ed', color: '#9a5700', fontSize: 12 }}>Edits here update the website’s saved Billing details only. The Billing API provided supports invoice creation; it does not provide an update endpoint, so an invoice already created in Billing will not be changed.</div>
               <label style={{ display: 'grid', gap: 5, color: '#475569', fontSize: 11, fontWeight: 600 }}>Bill number<input readOnly value={billingDraft.bill_number || 'Generated by Billing'} style={{ padding: '9px 10px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#f8fafc' }} /></label>
               <label style={{ display: 'grid', gap: 5, color: '#475569', fontSize: 11, fontWeight: 600 }}>Payment mode<input readOnly value={billingDraft.payment_mode || 'Online'} style={{ padding: '9px 10px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#f8fafc' }} /></label>
               {[['customer_name', 'Customer name'], ['customer_phone', 'Phone'], ['customer_email', 'Email'], ['billing_address', 'Billing address'], ['shipping_address', 'Shipping address']].map(([key, label]) => (
@@ -369,6 +476,21 @@ export default function Orders({ showToast, status = null }) {
               <div style={{ gridColumn: '1 / -1', padding: 12, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}><strong style={{ display: 'block', marginBottom: 8, color: '#334155', fontSize: 12 }}>Purchased items and verified totals (read-only)</strong>{(billingDraft.items || []).map((item, index) => <div key={`${item.product_variant_id}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '5px 0', color: '#475569', fontSize: 12 }}><span>Variant {item.product_variant_id || 'Billing ID unavailable'} × {item.quantity}</span><span>GST {item.gst_percent}%</span></div>)}<div style={{ borderTop: '1px solid #e2e8f0', marginTop: 7, paddingTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 7, color: '#334155', fontSize: 11 }}><span>Subtotal ₹{Number(billingDraft.subtotal || 0).toFixed(2)}</span><span>Bill discount ₹{Number(billingDraft.bill_discount_amount || 0).toFixed(2)}</span><span>GST ₹{Number(billingDraft.gst_amount || 0).toFixed(2)}</span><span>Shipping ₹{Number(billingDraft.delivery_charge || 0).toFixed(2)}</span><span>Paid ₹{Number(billingDraft.paid_amount || 0).toFixed(2)}</span><span>Balance ₹{Number(billingDraft.balance || 0).toFixed(2)}</span></div></div>
             </div>
             <footer style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px', borderTop: '1px solid #e5e7eb' }}><button type="button" disabled={billingEditSaving} onClick={() => setBillingEditOrder(null)} style={{ padding: '9px 14px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#fff', cursor: 'pointer' }}>Cancel</button><button type="button" disabled={billingEditSaving} onClick={saveBillingEditor} style={{ padding: '9px 14px', border: 0, borderRadius: 7, background: '#0f5447', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{billingEditSaving ? 'Saving…' : 'Save billing details'}</button></footer>
+          </section>
+        </div>
+      )}
+
+      {shippingEditOrder && shippingDraft && (
+        <div role="presentation" onClick={() => !shippingEditSaving && setShippingEditOrder(null)} style={{ position: 'fixed', inset: 0, zIndex: 10003, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(15,23,42,.64)' }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="order-shipping-edit-title" onClick={event => event.stopPropagation()} style={{ width: 'min(620px, 100%)', maxHeight: '88vh', overflow: 'auto', borderRadius: 14, background: '#fff', boxShadow: '0 24px 80px rgba(0,0,0,.28)' }}>
+            <header style={{ padding: '18px 20px', borderBottom: '1px solid #e5e7eb' }}><h2 id="order-shipping-edit-title" style={{ margin: 0, color: '#0f5447', fontSize: 18 }}>Shipping address · Order #{shippingEditOrder.id}</h2><p style={{ margin: '6px 0 0', color: '#64748b', fontSize: 12 }}>Enter and verify the customer's delivery address and 6-digit PIN before booking.</p></header>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12, padding: 20 }}>
+              {[
+                ['name', 'Recipient name'], ['phone', 'Phone'], ['address', 'Street address'], ['address2', 'Apartment / landmark'],
+                ['city', 'City'], ['state', 'State'], ['zip', '6-digit PIN'], ['country', 'Country'],
+              ].map(([key, label]) => <label key={key} style={{ display: 'grid', gap: 5, color: '#475569', fontSize: 11, fontWeight: 600 }}>{label}<input value={shippingDraft[key] || ''} onChange={event => setShippingDraft(current => ({ ...current, [key]: event.target.value }))} style={{ padding: '9px 10px', border: '1px solid #cbd5e1', borderRadius: 7 }} /></label>)}
+            </div>
+            <footer style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px', borderTop: '1px solid #e5e7eb' }}><button type="button" disabled={shippingEditSaving} onClick={() => setShippingEditOrder(null)} style={{ padding: '9px 14px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#fff', cursor: 'pointer' }}>Cancel</button><button type="button" disabled={shippingEditSaving} onClick={saveShippingEditor} style={{ padding: '9px 14px', border: 0, borderRadius: 7, background: '#0f5447', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{shippingEditSaving ? 'Saving…' : 'Save shipping address'}</button></footer>
           </section>
         </div>
       )}

@@ -188,6 +188,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
                 padding: '11px 28px', fontWeight: 300, fontSize: '11px',
                 letterSpacing: '3px', textTransform: 'uppercase',
                 cursor: 'pointer', fontFamily: F.main,
+                borderRadius: '8px',
               }}>
                 Explore Dresses
               </button>
@@ -269,6 +270,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
                           cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
                           letterSpacing: '2px', textTransform: 'uppercase',
                           fontFamily: F.main, transition: 'opacity 0.2s',
+                          borderRadius: '8px',
                         }}
                         onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
                         onMouseLeave={e => e.currentTarget.style.opacity = '1'}
@@ -286,6 +288,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
                           cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
                           letterSpacing: '2px', textTransform: 'uppercase',
                           fontFamily: F.main, transition: 'all 0.2s',
+                          borderRadius: '8px',
                         }}
                         onMouseEnter={e => {
                           e.currentTarget.style.background = C.brand;
@@ -321,6 +324,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
               fontWeight: 300, fontSize: '11px', letterSpacing: '3px',
               textTransform: 'uppercase', cursor: 'pointer',
               fontFamily: F.main, transition: 'opacity 0.2s',
+              borderRadius: '8px',
             }}
               onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
               onMouseLeave={e => e.currentTarget.style.opacity = '1'}

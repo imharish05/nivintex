@@ -176,7 +176,7 @@ const styles = {
   saveBtn: {
     padding: '12px 36px',
     background: C.brand, color: '#fff',
-    border: 'none', borderRadius: 0,
+    border: 'none', borderRadius: 8,
     fontSize: '11px', fontWeight: 300,
     letterSpacing: '3px', textTransform: 'uppercase',
     cursor: 'pointer', fontFamily: F.main,
@@ -185,7 +185,7 @@ const styles = {
   saveBtnDisabled: {
     padding: '12px 36px',
     background: '#aaa', color: '#fff',
-    border: 'none', borderRadius: 0,
+    border: 'none', borderRadius: 8,
     fontSize: '11px', fontWeight: 300,
     letterSpacing: '3px', textTransform: 'uppercase',
     cursor: 'not-allowed', fontFamily: F.main,
@@ -193,7 +193,7 @@ const styles = {
   discardBtn: {
     padding: '12px 28px',
     background: 'transparent', color: C.muted,
-    border: `1px solid ${C.border}`, borderRadius: 0,
+    border: `1px solid ${C.border}`, borderRadius: 8,
     fontSize: '11px', fontWeight: 300,
     letterSpacing: '2.5px', textTransform: 'uppercase',
     cursor: 'pointer', fontFamily: F.main,
@@ -204,7 +204,7 @@ const styles = {
     background: isError ? C.danger : C.brand,
     color: '#fff',
     padding: '14px 28px',
-    borderRadius: 0,
+    borderRadius: 8,
     borderLeft: `3px solid ${isError ? '#c0392b' : C.gold}`,
     fontSize: '11px', fontWeight: 300,
     letterSpacing: '2px', textTransform: 'uppercase',

@@ -10,12 +10,20 @@ const styles = `
     background: #EAF0E2;
   }
 
+  .ig-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 clamp(16px, 4vw, 44px) 24px;
+    gap: 12px;
+  }
+
   .ig-title {
     font-family: 'Cormorant Garamond', 'Playfair Display', serif;
     font-size: clamp(20px, 2.5vw, 32px);
     color: #0f5447;
     text-align: left;
-    margin: 0 clamp(16px, 4vw, 44px) 24px;
+    margin: 0;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -32,6 +40,50 @@ const styles = `
     width: 60px;
     height: 2px;
     background: #C9A84C;
+  }
+
+  .ig-nav-arrows {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .ig-nav-arrow-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1px solid rgba(15, 84, 71, 0.3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #0f5447;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 4px rgba(15, 84, 71, 0.08);
+    padding: 0;
+    line-height: 1;
+  }
+
+  .ig-nav-arrow-btn:hover:not(:disabled) {
+    background: #0f5447;
+    color: #ffffff;
+    border-color: #0f5447;
+    box-shadow: 0 3px 10px rgba(15, 84, 71, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .ig-nav-arrow-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-color: rgba(15, 84, 71, 0.15);
+  }
+
+  .ig-nav-arrow-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
   }
 
   .ig-track-wrapper {
@@ -132,28 +184,31 @@ const styles = `
     z-index: 10;
     width: 40px;
     height: 40px;
-    border-radius: 50%;
-    border: 1px solid #ccc;
-    background: #fff;
+    border-radius: 50% !important;
+    border: 1px solid #d4ddd0;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    transition: background 0.2s, transform 0.15s;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.14);
+    transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
   }
 
   .ig-arr:hover {
     background: #0f5447;
     border-color: #0f5447;
     color: #fff;
+    transform: translateY(-50%) scale(1.06);
+    box-shadow: 0 4px 16px rgba(15, 84, 71, 0.25);
   }
   .ig-arr:hover svg {
     stroke: #fff;
   }
   .ig-arr.prev { left: 12px; }
   .ig-arr.next { right: 12px; }
-  .ig-arr svg { width: 16px; height: 16px; stroke: #2C2F33; transition: stroke 0.2s; }
+  .ig-arr svg { width: 16px; height: 16px; stroke: #0f5447; stroke-width: 2.2; transition: stroke 0.2s; }
 
   .ig-empty {
     text-align: center;
@@ -169,17 +224,31 @@ const styles = `
   }
 
   @media (max-width: 768px) {
+    .ig-header { margin: 0 16px 16px; }
     .ig-item { flex: 0 0 calc(100vw / 3); }
     .ig-item img, .ig-item video { height: 220px; }
-    .ig-arr { width: 34px; height: 34px; }
+    .ig-nav-arrow-btn { width: 28px; height: 28px; }
+    .ig-nav-arrow-btn svg { width: 12px; height: 12px; }
+    .ig-arr {
+      width: 32px;
+      height: 32px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
     .ig-arr.prev { left: 6px; }
     .ig-arr.next { right: 6px; }
+    .ig-arr svg { width: 14px; height: 14px; }
   }
 
   @media (max-width: 480px) {
     .ig-item { flex: 0 0 calc(100vw / 2.15); }
     .ig-item img, .ig-item video { height: 190px; }
-    .ig-arr { display: none; }
+    .ig-arr {
+      width: 30px;
+      height: 30px;
+    }
+    .ig-arr.prev { left: 4px; }
+    .ig-arr.next { right: 4px; }
+    .ig-arr svg { width: 13px; height: 13px; }
   }
 `;
 
@@ -245,6 +314,15 @@ export default function InstagramSection() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setCanScrollLeft(scrollLeft > 10);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+  };
 
   useEffect(() => {
     instagramApi.getAll()
@@ -259,10 +337,15 @@ export default function InstagramSection() {
       });
   }, []);
 
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener('resize', checkScroll);
+    return () => window.removeEventListener('resize', checkScroll);
+  }, [posts]);
+
   const scroll = (dir) => {
     if (!scrollRef.current) return;
-    const item = scrollRef.current.querySelector('.ig-item');
-    const scrollAmount = item ? (item.offsetWidth * 2) : 300;
+    const scrollAmount = Math.max(scrollRef.current.clientWidth * 0.75, 260);
     scrollRef.current.scrollBy({ left: dir * scrollAmount, behavior: "smooth" });
   };
 
@@ -284,18 +367,44 @@ export default function InstagramSection() {
       <style>{styles}</style>
 
       <section className="ig-section">
-        <h2 className="ig-title">Instagram Feeds</h2>
+        <div className="ig-header">
+          <h2 className="ig-title">Instagram Feeds</h2>
+          {posts.length > 1 && (
+            <div className="ig-nav-arrows">
+              <button
+                className="ig-nav-arrow-btn prev"
+                onClick={() => scroll(-1)}
+                aria-label="Previous posts"
+                disabled={!canScrollLeft}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <button
+                className="ig-nav-arrow-btn next"
+                onClick={() => scroll(1)}
+                aria-label="Next posts"
+                disabled={!canScrollRight}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
 
         <div style={{ position: "relative" }}>
-          {posts.length > 3 && (
+          {posts.length > 1 && canScrollLeft && (
             <button className="ig-arr prev" onClick={() => scroll(-1)} aria-label="Previous">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
           )}
 
-          <div className="ig-track-wrapper" ref={scrollRef}>
+          <div className="ig-track-wrapper" ref={scrollRef} onScroll={checkScroll}>
             <div className="ig-track">
               {posts.map((post) => (
                 <MediaItem key={post.id} post={post} />
@@ -303,9 +412,9 @@ export default function InstagramSection() {
             </div>
           </div>
 
-          {posts.length > 3 && (
+          {posts.length > 1 && canScrollRight && (
             <button className="ig-arr next" onClick={() => scroll(1)} aria-label="Next">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="9 18 15 12 9 6" />
               </svg>
             </button>

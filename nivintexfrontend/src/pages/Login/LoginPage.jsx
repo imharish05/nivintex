@@ -92,7 +92,7 @@ const styles = {
   submitBtn: (loading) => ({
     width: '100%', height: '46px',
     background: loading ? '#9B8060' : C.brand,
-    color: '#fff', border: 'none', borderRadius: 0,
+    color: '#fff', border: 'none', borderRadius: 8,
     fontSize: '11px', fontWeight: 300,
     letterSpacing: '4px', textTransform: 'uppercase',
     cursor: loading ? 'not-allowed' : 'pointer',
@@ -109,7 +109,7 @@ const styles = {
   },
   googleBtn: (loading) => ({
     width: '100%', height: '44px',
-    border: `1px solid ${C.border}`, borderRadius: 0,
+    border: `1px solid ${C.border}`, borderRadius: 8,
     background: loading ? '#f9f7f3' : C.surface,
     fontSize: '11px', fontWeight: 300,
     letterSpacing: '2.5px', textTransform: 'uppercase',

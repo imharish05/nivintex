@@ -25,6 +25,8 @@ const C = {
 };
 
 const STATUS_COLORS = {
+  Pending:          { bg: '#FFFBEB', color: '#B45309', border: '#FDE68A', dot: '#F59E0B' },
+  pending:          { bg: '#FFFBEB', color: '#B45309', border: '#FDE68A', dot: '#F59E0B' },
   Confirmed:        { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0', dot: '#16A34A' },
   confirmed:        { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0', dot: '#16A34A' },
   Processing:       { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA', dot: '#EA580C' },
@@ -44,6 +46,7 @@ const labelFor = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()
 const STEPS = ['Order Placed', 'Shipped', 'Out for Delivery', 'Delivered'];
 const stepIndex = (status) => {
   const map = {
+    pending: 0, Pending: 0,
     confirmed: 0, shipped: 1, out_for_delivery: 2, delivered: 3,
     Confirmed: 0, Shipped: 1, Out_for_delivery: 2, Delivered: 3, Cancelled: -1, cancelled: -1,
   };
@@ -95,7 +98,8 @@ const styles = {
   shopBtn: {
     display: 'inline-block', padding: '11px 32px',
     background: C.brand, color: '#fff',
-    border: 'none', fontSize: '11px', fontWeight: 300,
+    border: 'none', borderRadius: 8,
+    fontSize: '11px', fontWeight: 300,
     letterSpacing: '3px', textTransform: 'uppercase',
     cursor: 'pointer', fontFamily: F.main,
   },

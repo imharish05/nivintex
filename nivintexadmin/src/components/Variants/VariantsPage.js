@@ -11,10 +11,10 @@ export default function VariantsPage({ showToast }) {
   const [savingId, setSavingId] = useState(null);
   const [query, setQuery] = useState('');
 
-  const load = async () => {
+  const load = async (forceSync = false) => {
     setLoading(true);
     try {
-      const data = await variantApi.getAll();
+      const data = await variantApi.getAll(forceSync);
       setProducts(Array.isArray(data) ? data : []);
     } catch (error) {
       setProducts([]);
@@ -24,7 +24,7 @@ export default function VariantsPage({ showToast }) {
     }
   };
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(false); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveImage = async (variant, remove = false) => {
     if (!variant.billingVariantId) {
@@ -44,7 +44,7 @@ export default function VariantsPage({ showToast }) {
       await variantApi.updateImage(variant.billingVariantId, body);
       setFiles(current => { const next = { ...current }; delete next[variant.billingVariantId]; return next; });
       showToast('Saved', 'The variant image is stored in this app.');
-      await load();
+      await load(false);
     } catch (error) {
       showToast('Image update failed', error.message);
     } finally {
@@ -70,7 +70,7 @@ export default function VariantsPage({ showToast }) {
           <div className="section-title">Product Variants</div>
           <div className="variants-subtitle">Variant details and stock refresh from Billing. Price fields are managed in Billing.</div>
         </div>
-        <button className="action-btn btn-edit" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh Billing Data'}</button>
+        <button className="action-btn btn-edit" onClick={() => load(true)} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh Billing Data'}</button>
       </div>
 
       <div className="variants-toolbar">
@@ -102,15 +102,53 @@ export default function VariantsPage({ showToast }) {
                     <td><span className={`status-pill ${String(variant.status).toLowerCase() === 'active' ? 'pill-active' : 'pill-inactive'}`}>{variant.status || 'Unknown'}</span></td>
                     <td className="variant-stock">{stock}</td>
                     <td><span className="variant-price-na">Managed in Billing</span></td>
-                    <td>{image ? <img className="variant-image-preview" src={getImageUrl(image)} alt={`${variant.billingProductName || 'Product'} variant`} /> : <span className="variant-no-image">{file ? 'Image selected' : 'No image'}</span>}</td>
+                    <td>
+                      {file ? (
+                        <div style={{ position: 'relative', display: 'inline-block' }}>
+                          <img
+                            className="variant-image-preview"
+                            src={URL.createObjectURL(file)}
+                            alt="New variant preview"
+                            style={{ border: '2px solid #10b981', boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.2)' }}
+                          />
+                          <span style={{
+                            position: 'absolute', top: -4, right: -4,
+                            background: '#10b981', color: '#fff',
+                            fontSize: 9, fontWeight: 700, padding: '1px 4px',
+                            borderRadius: 3, letterSpacing: 0.5
+                          }}>NEW</span>
+                        </div>
+                      ) : image ? (
+                        <img className="variant-image-preview" src={getImageUrl(image)} alt={`${variant.billingProductName || 'Product'} variant`} />
+                      ) : (
+                        <span className="variant-no-image">No image</span>
+                      )}
+                    </td>
                     <td className="variant-image-actions">
-                      <label className="variant-file-label">Choose image<input type="file" accept="image/*" onChange={event => {
-                        const selected = event.target.files?.[0];
-                        if (selected && variant.billingVariantId) setFiles(current => ({ ...current, [variant.billingVariantId]: selected }));
-                      }} /></label>
+                      <label className="variant-file-label">
+                        {file ? 'Change image' : 'Choose image'}
+                        <input type="file" accept="image/*" onChange={event => {
+                          const selected = event.target.files?.[0];
+                          if (selected && variant.billingVariantId) setFiles(current => ({ ...current, [variant.billingVariantId]: selected }));
+                        }} />
+                      </label>
                       <div className="variant-image-button-row">
                         <button className="action-btn btn-edit" disabled={saving || !file} onClick={() => saveImage(variant)}>{saving ? 'Saving…' : 'Save'}</button>
-                        {image && <button className="action-btn variant-remove-button" disabled={saving} onClick={() => saveImage(variant, true)}>Remove</button>}
+                        {file && (
+                          <button
+                            type="button"
+                            className="action-btn variant-remove-button"
+                            disabled={saving}
+                            onClick={() => setFiles(current => {
+                              const next = { ...current };
+                              delete next[variant.billingVariantId];
+                              return next;
+                            })}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {!file && image && <button className="action-btn variant-remove-button" disabled={saving} onClick={() => saveImage(variant, true)}>Remove</button>}
                       </div>
                     </td>
                   </tr>

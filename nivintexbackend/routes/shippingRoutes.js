@@ -46,6 +46,42 @@ router.get('/quote', async (req, res) => {
   }
 });
 
+router.put('/orders/:orderId/address', requireAdmin, async (req, res) => {
+  try {
+    const order = await Order.findByPk(req.params.orderId);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
+    if (order.payment_status !== 'paid') return res.status(400).json({ success: false, message: 'Only paid orders can be prepared for shipment.' });
+    if (order.awb_code) return res.status(409).json({ success: false, message: 'Shipping address cannot be changed after an AWB has been assigned.' });
+
+    const address = req.body?.shippingAddress;
+    if (!address || typeof address !== 'object' || Array.isArray(address)) {
+      return res.status(400).json({ success: false, message: 'shippingAddress must be an object.' });
+    }
+    const normalized = {
+      name: String(address.name || address.firstName || order.customer_name || '').trim(),
+      address: String(address.address || address.address1 || '').trim(),
+      address2: String(address.address2 || '').trim(),
+      city: String(address.city || '').trim(),
+      state: String(address.state || '').trim(),
+      zip: String(address.zip || address.postcode || '').trim(),
+      country: String(address.country || 'India').trim(),
+      phone: String(address.phone || order.customer_phone || '').trim(),
+    };
+    if (!normalized.name || !normalized.address || !normalized.city || !normalized.state || !/^\d{6}$/.test(normalized.zip)) {
+      return res.status(400).json({ success: false, message: 'Name, street address, city, state, and a valid 6-digit PIN code are required.' });
+    }
+    await order.update({
+      shipping_address: JSON.stringify(normalized),
+      shiprocket_booking_error: null,
+      shiprocket_booking_status: 'pending',
+    });
+    return res.json({ success: true, message: 'Shipping address saved.', shippingAddress: normalized });
+  } catch (error) {
+    console.error('Save order shipping address failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Could not save the shipping address.' });
+  }
+});
+
 router.get('/orders/:orderId/couriers', requireAdmin, async (req, res) => {
   try {
     const order = await Order.findByPk(req.params.orderId, {
@@ -53,6 +89,7 @@ router.get('/orders/:orderId/couriers', requireAdmin, async (req, res) => {
     });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
     if (order.awb_code) return res.status(409).json({ success: false, message: 'This order already has a shipment AWB.' });
+    if (order.payment_status === 'paid' && order.billing_sync_status !== 'synced') return res.status(409).json({ success: false, message: 'Resolve the Billing invoice and stock sync before booking this shipment.' });
     const address = parseAddress(order.shipping_address) || parseAddress(order.billing_address) || {};
     const pincode = String(address.zip || address.postcode || '').trim();
     if (!/^\d{6}$/.test(pincode)) return res.status(400).json({ success: false, message: 'Order must have a valid 6-digit shipping PIN code.' });
@@ -76,6 +113,7 @@ router.post('/orders/:orderId/book', requireAdmin, async (req, res) => {
     });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
     if (order.awb_code) return res.status(409).json({ success: false, message: 'This order already has a shipment AWB.' });
+    if (order.billing_sync_status !== 'synced') return res.status(409).json({ success: false, message: 'Resolve the Billing invoice and stock sync before booking this shipment.' });
     const address = parseAddress(order.shipping_address) || parseAddress(order.billing_address) || {};
     const pincode = String(address.zip || address.postcode || '').trim();
     if (!/^\d{6}$/.test(pincode)) return res.status(400).json({ success: false, message: 'Order must have a valid 6-digit shipping PIN code.' });
@@ -87,6 +125,7 @@ router.post('/orders/:orderId/book', requireAdmin, async (req, res) => {
     const courier = available.couriers.find(item => item.courierId === courierId);
     if (!courier) return res.status(400).json({ success: false, message: 'That courier is no longer available for this order.' });
     const { bookShipment } = require('../services/shiprocketService');
+    const { sendOrderStatusEmail } = require('../services/emailService');
     const booked = await bookShipment({ order, courierId });
     await order.update({
       awb_code: booked.awbCode,
@@ -95,6 +134,11 @@ router.post('/orders/:orderId/book', requireAdmin, async (req, res) => {
       shiprocket_booking_error: null,
       status: 'shipped',
     });
+    try {
+      await sendOrderStatusEmail(order, 'shipped');
+    } catch (mailErr) {
+      console.error('⚠️ Shiprocket shipment email failed:', mailErr.message);
+    }
     return res.json({ success: true, shipmentId: booked.shipmentId, awbCode: booked.awbCode, courierName: booked.courierName || courier.courierName });
   } catch (error) {
     console.error('Shiprocket shipment booking failed:', error.response?.data || error.message);

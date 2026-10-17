@@ -1,22 +1,70 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { getLocalImageUrl } from "../utils/api";
+import banner1 from "../assets/img/img31.png";
+import banner2 from "../assets/img/img32.png";
+import banner3 from "../assets/img/img33.png";
+import { HeroBannerSkeleton } from "./Skeleton";
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+// ── Physical Slides (Local High-Resolution Assets) ─────────────────────────────
+const PHYSICAL_SLIDES = [
+  {
+    id: 1,
+    image: banner1,
+    tag: "Spring / Summer 2026",
+    title: "Everyday Elegance",
+    subtitle: "The Fashion Aura Edit",
+    content: "Discover your next favourite look",
+    link: "/shop",
+    btnText: "Shop Collection",
+    secondaryBtnText: "Explore Looks",
+    secondaryLink: "/shop",
+    layout: "left",
+  },
+  {
+    id: 2,
+    image: banner2,
+    tag: "Signature Styles",
+    title: "Keep It Effortless",
+    subtitle: "Style for your everyday",
+    content: "Curated designs tailored for effortless grace",
+    link: "/shop",
+    btnText: "Shop Now",
+    secondaryBtnText: null,
+    secondaryLink: null,
+    layout: "center",
+  },
+  {
+    id: 3,
+    image: banner3,
+    tag: "New Arrivals",
+    title: "Dress Your Way",
+    subtitle: "Make it your own",
+    content: "Find inspiration for every occasion",
+    link: "/shop",
+    btnText: "Explore Collection",
+    secondaryBtnText: null,
+    secondaryLink: null,
+    layout: "left",
+  },
+];
 
 const heroStyles = `
   .nalli-hero {
     position: relative;
     width: 100%;
-    height: 50vh;
-    min-height: 340px;
+    height: clamp(380px, calc(100vh - 68px - 215px), 540px);
     overflow: hidden;
+    background: #FAF7F2;
   }
 
   .nalli-slide {
     position: absolute;
     inset: 0;
     opacity: 0;
-    transition: opacity 0.9s ease;
+    transition: opacity 0.85s ease-in-out;
     pointer-events: none;
   }
   .nalli-slide.active {
@@ -27,7 +75,8 @@ const heroStyles = `
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center;
+    object-position: center top;
+    display: block;
   }
 
   .nalli-hero-overlay {
@@ -35,461 +84,501 @@ const heroStyles = `
     inset: 0;
     background: linear-gradient(
       to right,
-      rgba(255,255,255,0.08) 0%,
-      rgba(0,0,0,0.18) 50%,
-      rgba(0,0,0,0.08) 100%
+      rgba(250, 247, 242, 0.88) 0%,
+      rgba(250, 247, 242, 0.65) 32%,
+      rgba(250, 247, 242, 0.2) 58%,
+      transparent 85%
     );
     pointer-events: none;
     z-index: 1;
   }
 
   @keyframes heroTextIn {
-    from { opacity: 0; transform: translateY(28px); }
+    from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: translateY(0); }
   }
 
-  /* ── STYLE 1: Center / Title-Script layout ── */
-  .nalli-hero-text {
+  /* ── Slide Text Containers ── */
+  .hero-slide-wrapper {
     position: absolute;
     inset: 0;
     z-index: 2;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 0 24px;
+    padding: 0 clamp(20px, 5.5vw, 64px);
     pointer-events: none;
-    animation: heroTextIn 1.2s cubic-bezier(0.22,1,0.36,1) both;
-  }
-  .hero-word-top {
-    font-family: 'Playfair Display', serif;
-    font-weight: 900;
-    font-size: clamp(38px, 6vw, 72px);
-    color: #0f5447;
-    letter-spacing: 0.04em;
-    line-height: 1;
-    text-shadow: 0 2px 24px rgba(255,255,255,0.3);
-  }
-  .hero-word-script {
-    font-family: 'Great Vibes', cursive;
-    font-size: clamp(40px, 7vw, 80px);
-    color: #C9A84C;
-    line-height: 1.05;
-    margin-top: -6px;
-    text-shadow: 0 2px 16px rgba(255,255,255,0.25);
-  }
-  .hero-word-sub {
-    font-family: 'Cormorant Garamond', serif;
-    font-weight: 400;
-    font-size: clamp(14px, 1.8vw, 22px);
-    letter-spacing: 0.35em;
-    color: #0f5447;
-    text-transform: uppercase;
-    margin-top: 2px;
-  }
-  /* ── STYLE 2: Center / Big-word layout ── */
-  .nalli-hero-text-2 {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 0 24px;
-    pointer-events: none;
-    animation: heroTextIn 1.2s cubic-bezier(0.22,1,0.36,1) both;
-  }
-  .s2-hero-word {
-    font-family: 'Playfair Display', serif;
-    font-weight: 900;
-    font-size: clamp(42px, 7vw, 78px);
-    color: #0b3a31;
-    letter-spacing: 0.03em;
-    line-height: 1;
-    text-shadow: 0 2px 28px rgba(180,130,140,0.22);
-  }
-  .s2-subtitle {
-    font-family: 'Great Vibes', cursive;
-    font-weight: 400;
-    font-size: clamp(18px, 2.5vw, 32px);
-    letter-spacing: 0.05em;
-    color: #8aab90;
-    margin-top: 20px;
-  }
-  .s2-cta-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-top: 40px;
-    pointer-events: auto;
-  }
-  .s2-shop-btn {
-    font-family: 'Cormorant Garamond', serif;
-    font-weight: 400;
-    font-size: clamp(10px, 1.3vw, 14px);
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: #F0F7F4;
-    background: linear-gradient(135deg, #0f5447 0%, #0b3a31 100%);
-    padding: 12px 34px;
-    border-radius: 2px;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 18px rgba(176,112,128,0.32);
-    transition: box-shadow 0.2s, transform 0.15s, background 0.2s;
-  }
-  .s2-shop-btn:hover {
-    background: linear-gradient(135deg, #C9A84C 0%, #a88830 100%);
-    box-shadow: 0 6px 24px rgba(176,112,128,0.48);
-    transform: translateY(-1px);
+    animation: heroTextIn 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* ── STYLE 3: Left-aligned / New Collection layout ── */
-  .nalli-hero-text-3 {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
+  .hero-slide-wrapper.layout-center {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .hero-slide-wrapper.layout-left {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .hero-content-card {
     display: flex;
     flex-direction: column;
+    max-width: 560px;
+    pointer-events: auto;
+  }
+
+  .layout-center .hero-content-card {
+    align-items: center;
+  }
+  .layout-left .hero-content-card {
     align-items: flex-start;
-    justify-content: center;
-    text-align: left;
-    padding: 0 6vw;
-    pointer-events: none;
-    animation: heroTextIn 1.2s cubic-bezier(0.22,1,0.36,1) both;
   }
-  .s3-label {
+
+  /* ── Typography & Crisp Brand Colors ── */
+  .hero-tag {
     font-family: 'Cormorant Garamond', serif;
-    font-weight: 400;
-    font-size: clamp(11px, 1.3vw, 14px);
-    letter-spacing: 0.4em;
+    font-weight: 700;
+    font-size: clamp(11px, 1.1vw, 13px);
+    letter-spacing: 0.28em;
     text-transform: uppercase;
-    color: #7a9e6e;
-    margin-bottom: 10px;
+    color: #0F4E42;
+    margin-bottom: 8px;
+    text-shadow: none;
   }
-  .s3-headline {
+
+  .hero-title {
     font-family: 'Playfair Display', serif;
-    font-weight: 900;
-    font-size: clamp(34px, 5.5vw, 68px);
-    color: #3a5a6e;
-    letter-spacing: 0.02em;
-    line-height: 1;
-    text-shadow: 0 3px 24px rgba(255,255,255,0.35);
+    font-weight: 800;
+    font-size: clamp(32px, 4.2vw, 54px);
+    color: #0A332B;
+    letter-spacing: 0.01em;
+    line-height: 1.12;
+    margin: 0 0 4px 0;
+    text-shadow: none;
   }
-  .s3-headline-script {
+
+  .hero-subtitle {
     font-family: 'Great Vibes', cursive;
-    font-size: clamp(38px, 6.2vw, 76px);
-    color: #c8a04a;
-    line-height: 1.05;
-    margin-top: -4px;
-    text-shadow: 0 2px 16px rgba(255,255,255,0.3);
+    font-size: clamp(32px, 4.4vw, 54px);
+    color: #8C5F18;
+    line-height: 1.18;
+    margin: 4px 0 6px 0;
+    text-shadow: none;
   }
-  .s3-rule {
+
+  .hero-rule {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 14px 0 12px;
-    width: min(280px, 55vw);
+    margin: 12px 0 14px;
+    width: 140px;
   }
-  .s3-rule-line {
+  .layout-center .hero-rule {
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .hero-rule-line {
     flex: 1;
     height: 1px;
-    background: rgba(122,158,110,0.45);
+    background: rgba(15, 78, 66, 0.35);
   }
-  .s3-rule-diamond {
+  .hero-rule-diamond {
     width: 6px;
     height: 6px;
-    background: #7a9e6e;
+    background: #8C5F18;
     transform: rotate(45deg);
     flex-shrink: 0;
   }
-  .s3-desc {
+
+  .hero-desc {
     font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(13px, 1.6vw, 18px);
-    font-style: italic;
-    color: #5a6e50;
-    letter-spacing: 0.06em;
-    margin-bottom: 32px;
-  }
-  .s3-cta-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    pointer-events: auto;
-  }
-  .s3-shop-btn-primary {
-    font-family: 'Cormorant Garamond', serif;
-    font-weight: 400;
-    font-size: clamp(10px, 1.3vw, 14px);
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: #ffffff;
-    background: linear-gradient(135deg, #8bbfd4 0%, #5a9ab8 100%);
-    padding: 13px 34px;
-    border-radius: 2px;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 18px rgba(90,154,184,0.35);
-    transition: box-shadow 0.2s, transform 0.15s;
-  }
-  .s3-shop-btn-primary:hover {
-    box-shadow: 0 6px 26px rgba(90,154,184,0.52);
-    transform: translateY(-1px);
-  }
-  .s3-shop-btn-ghost {
-    font-family: 'Cormorant Garamond', serif;
-    font-weight: 400;
-    font-size: clamp(10px, 1.3vw, 14px);
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: #4a7a5e;
-    background: transparent;
-    padding: 12px 30px;
-    border-radius: 2px;
-    border: 1px solid rgba(122,158,110,0.7);
-    cursor: pointer;
-    transition: background 0.2s, border-color 0.2s, color 0.2s;
-  }
-  .s3-shop-btn-ghost:hover {
-    background: rgba(122,158,110,0.12);
-    border-color: #7a9e6e;
-    color: #3a6a4e;
+    font-size: clamp(14px, 1.3vw, 17px);
+    font-weight: 500;
+    font-style: normal;
+    color: #2D3A30;
+    letter-spacing: 0.02em;
+    line-height: 1.5;
+    margin: 0 0 22px 0;
+    text-shadow: none;
   }
 
-  /* ── Dot nav ── */
+  /* ── Buttons ── */
+  .hero-cta-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    pointer-events: auto;
+  }
+
+  .hero-btn-primary {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 700;
+    font-size: clamp(11px, 1.1vw, 13px);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #ffffff !important;
+    background: #0F4E42;
+    padding: 12px 32px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(15, 78, 66, 0.25);
+    transition: background 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hero-btn-primary:hover {
+    background: #0B3A31;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(15, 78, 66, 0.35);
+  }
+
+  .hero-btn-ghost {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 700;
+    font-size: clamp(11px, 1.1vw, 13px);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #0F4E42 !important;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(4px);
+    padding: 11px 26px;
+    border-radius: 8px;
+    border: 1.5px solid #0F4E42;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.25s ease, color 0.25s ease, transform 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hero-btn-ghost:hover {
+    background: #0F4E42;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+  }
+
+  /* ── Dot Navigation ── */
   .nalli-dots {
     position: absolute;
-    bottom: 28px;
+    bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 4;
     display: flex;
-    gap: 10px;
+    gap: 8px;
   }
   .nalli-dot {
     width: 8px;
     height: 8px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.5);
+    border-radius: 50% !important;
+    background: rgba(15, 78, 66, 0.3);
     border: none;
     cursor: pointer;
     transition: background 0.3s, transform 0.3s;
     padding: 0;
   }
   .nalli-dot.active {
-    background: #fff;
-    transform: scale(1.3);
+    background: #0F4E42;
+    transform: scale(1.35);
   }
 
-  /* ── Loading skeleton ── */
-  .nalli-hero-skeleton {
-    width: 100%;
-    height: 50vh;
-    min-height: 320px;
-    background: linear-gradient(90deg, #e8e4de 25%, #f0ece6 50%, #e8e4de 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-  }
-  @keyframes shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
+  /* ── Mobile Placement & Responsive Layout ── */
   @media (max-width: 768px) {
-    .nalli-hero { height: 55vh; min-height: 380px; }
-    .hero-divider { width: min(220px, 70vw); }
-    .s2-cta-row { flex-direction: row; justify-content: center; gap: 10px; margin-top: 20px; }
-    .s2-subtitle { margin-top: 12px; }
-    .nalli-hero-text-3 { align-items: center; text-align: center; padding: 0 20px; }
-    .s3-rule { width: min(220px, 70vw); margin: 10px 0; }
-    .s3-desc { margin-bottom: 18px; }
-    .s3-cta-row { flex-direction: row; justify-content: center; gap: 10px; flex-wrap: wrap; }
-    .nalli-hero-skeleton { height: 55vh; min-height: 380px; }
+    .nalli-hero {
+      height: clamp(420px, 62vh, 520px);
+    }
+    .nalli-slide-bg {
+      object-position: center top;
+    }
+    .nalli-hero-overlay {
+      background: linear-gradient(
+        to top,
+        rgba(250, 247, 242, 0.95) 0%,
+        rgba(250, 247, 242, 0.65) 45%,
+        rgba(250, 247, 242, 0.2) 75%,
+        transparent 100%
+      );
+    }
+    .hero-slide-wrapper {
+      padding: 0 20px 32px;
+      justify-content: center !important;
+      align-items: flex-end !important;
+      text-align: center !important;
+    }
+    .hero-content-card {
+      align-items: center !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      box-shadow: none !important;
+      border: none !important;
+      padding: 0 !important;
+      max-width: 100%;
+    }
+    .hero-tag {
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      margin-bottom: 4px;
+      text-shadow: none;
+    }
+    .hero-title {
+      font-size: clamp(24px, 6.8vw, 32px);
+      line-height: 1.15;
+      text-shadow: none;
+    }
+    .hero-subtitle {
+      font-size: clamp(24px, 6.2vw, 32px);
+      margin-top: 2px;
+      margin-bottom: 6px;
+      text-shadow: none;
+    }
+    .hero-rule {
+      display: none;
+    }
+    .hero-desc {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 14px;
+      text-shadow: none;
+      max-width: 320px;
+    }
+    .hero-cta-row {
+      margin-top: 8px;
+      gap: 10px;
+      justify-content: center;
+    }
+    .hero-btn-primary {
+      padding: 10px 28px;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      white-space: nowrap;
+      box-shadow: 0 4px 14px rgba(15, 78, 66, 0.25);
+    }
+    .hero-btn-ghost {
+      display: none;
+    }
+    .nalli-dots {
+      bottom: 8px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .hero-title {
+      font-size: 26px;
+    }
+    .hero-subtitle {
+      font-size: 24px;
+    }
+    .hero-btn-primary {
+      padding: 10px 24px;
+    }
   }
 `;
 
-// ─────────────────────────────────────────────
-// Slide text layouts — chosen by sortOrder position (1st, 2nd, 3rd+)
-// You can also use a custom field like slide.layout if your API supports it
-// ─────────────────────────────────────────────
-function SlideText({ slide, position }) {
-  const handleClick = () => {
-    if (slide.link) window.location.href = slide.link;
-  };
+function SlideText({ slide }) {
+  const isCenter = slide.layout === "center";
+  const hasText = slide.tag || slide.title || slide.subtitle || slide.content;
 
-  // Position 1 → Style 1 (centered title + script)
-  if (position === 1) {
-    return (
-      <div className="nalli-hero-text">
-        {slide.title && (
-          <span className="hero-word-top">{slide.title}</span>
-        )}
-        {slide.subtitle && (
-          <span className="hero-word-script">{slide.subtitle}</span>
-        )}
-        {slide.content && (
-          <span className="hero-word-sub">{slide.content}</span>
-        )}
-      </div>
-    );
-  }
+  if (!hasText && !slide.btnText) return null;
 
-  // Position 2 → Style 2 (big word + script subtitle + CTA)
-  if (position === 2) {
-    return (
-      <div className="nalli-hero-text-2">
-        {slide.title && (
-          <span className="s2-hero-word">{slide.title}</span>
+  return (
+    <div className={`hero-slide-wrapper ${isCenter ? "layout-center" : "layout-left"}`}>
+      <div className="hero-content-card">
+        {slide.tag && <span className="hero-tag">{slide.tag}</span>}
+        {slide.title && <h1 className="hero-title">{slide.title}</h1>}
+        {slide.subtitle && <span className="hero-subtitle">{slide.subtitle}</span>}
+
+        {(slide.title || slide.subtitle) && (
+          <div className="hero-rule">
+            <span className="hero-rule-line" />
+            <span className="hero-rule-diamond" />
+            <span className="hero-rule-line" />
+          </div>
         )}
-        {slide.subtitle && (
-          <span className="s2-subtitle">{slide.subtitle}</span>
-        )}
-        {slide.link && (
-          <div className="s2-cta-row">
-            <button className="s2-shop-btn" onClick={handleClick}>
-              Shop Now
-            </button>
+
+        {slide.content && <p className="hero-desc">{slide.content}</p>}
+
+        {(slide.link || slide.btnText) && (
+          <div className="hero-cta-row">
+            {slide.btnText && (
+              <Link to={slide.link || "/shop"} className="hero-btn-primary">
+                {slide.btnText}
+              </Link>
+            )}
+            {slide.secondaryBtnText && (
+              <Link to={slide.secondaryLink || "/shop"} className="hero-btn-ghost">
+                {slide.secondaryBtnText}
+              </Link>
+            )}
           </div>
         )}
       </div>
-    );
-  }
-
-  // Position 3+ → Style 3 (left-aligned + two CTAs)
-  return (
-    <div className="nalli-hero-text-3">
-      {slide.title && (
-        <>
-          <span className="s3-label">New Arrivals</span>
-          <span className="s3-headline">{slide.title}</span>
-        </>
-      )}
-      {slide.subtitle && (
-        <span className="s3-headline-script">{slide.subtitle}</span>
-      )}
-      <div className="s3-rule">
-        <span className="s3-rule-line" />
-        <span className="s3-rule-diamond" />
-        <span className="s3-rule-line" />
-      </div>
-      {slide.content && (
-        <span className="s3-desc">{slide.content}</span>
-      )}
-      {slide.link && (
-        <div className="s3-cta-row">
-          <button className="s3-shop-btn-primary" onClick={handleClick}>
-            Shop Collection
-          </button>
-          <button className="s3-shop-btn-ghost" onClick={handleClick}>
-            Explore Looks
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// Main Hero component
-// ─────────────────────────────────────────────
 export default function Hero() {
-  const [slides, setSlides]   = useState([]);
-  const [active, setActive]   = useState(0);
+  const [slides, setSlides] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState(false);
-  const timerRef              = useRef(null);
+  const [active, setActive] = useState(0);
+  const timerRef = useRef(null);
 
-  // Fetch active hero banners from your API
+  // Fetch active hero banners from API and display admin-uploaded images dynamically
   useEffect(() => {
+    let isMounted = true;
+
+    const finishLoading = (finalSlides) => {
+      if (!isMounted) return;
+      setSlides(finalSlides);
+      setLoading(false);
+    };
+
     fetch(`${API}/banners`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to fetch banners");
-        return r.json();
-      })
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        // Filter hero section + active status, then sort by sortOrder
+        if (!isMounted) return;
+        if (!Array.isArray(data)) {
+          finishLoading(PHYSICAL_SLIDES);
+          return;
+        }
+
         const heroSlides = data
           .filter((b) => b.section === "hero" && b.status === "Active")
           .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
-        setSlides(heroSlides);
-        setLoading(false);
+        if (heroSlides.length > 0) {
+          const mapped = heroSlides.map((apiItem, idx) => {
+            const fallback = PHYSICAL_SLIDES[idx % PHYSICAL_SLIDES.length];
+            const resolvedImg = apiItem.image ? getLocalImageUrl(apiItem.image) : fallback.image;
+            return {
+              id: apiItem.id || fallback.id,
+              image: resolvedImg || fallback.image,
+              tag: apiItem.tag || apiItem.label || "",
+              title: apiItem.title || "",
+              subtitle: apiItem.subtitle || "",
+              content: apiItem.content || "",
+              link: apiItem.link || fallback.link || "/shop",
+              btnText: apiItem.btnText || "Shop Collection",
+              secondaryBtnText: apiItem.secondaryBtnText || null,
+              secondaryLink: apiItem.secondaryLink || null,
+              layout: apiItem.layout || "left",
+            };
+          });
+
+          // Preload the first slide image so it appears instantly without flicker
+          const firstImgUrl = mapped[0]?.image;
+          if (firstImgUrl) {
+            const img = new Image();
+            let resolved = false;
+            const timeout = setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                finishLoading(mapped);
+              }
+            }, 1800);
+
+            img.onload = () => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                finishLoading(mapped);
+              }
+            };
+            img.onerror = () => {
+              if (!resolved) {
+                resolved = true;
+                clearTimeout(timeout);
+                finishLoading(mapped);
+              }
+            };
+            img.src = firstImgUrl;
+          } else {
+            finishLoading(mapped);
+          }
+        } else {
+          finishLoading(PHYSICAL_SLIDES);
+        }
       })
       .catch(() => {
-        setError(true);
-        setLoading(false);
+        // Silently use physical slides on network failure
+        finishLoading(PHYSICAL_SLIDES);
       });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Auto-advance slides — uses functional updater to avoid stale closure
+  // Auto-advance slides every 4.5 seconds
   useEffect(() => {
     if (slides.length <= 1) return;
     timerRef.current = setInterval(() => {
       setActive((prev) => (prev + 1) % slides.length);
-    }, 3000);
+    }, 4500);
     return () => clearInterval(timerRef.current);
   }, [slides]);
 
   const go = (index) => {
-    clearInterval(timerRef.current); // reset timer on manual nav
+    clearInterval(timerRef.current);
     setActive((index + slides.length) % slides.length);
   };
 
-  // ── States ──
-  if (loading) return <div className="nalli-hero-skeleton" />;
-  if (error || slides.length === 0) return null;
+  if (loading) {
+    return <HeroBannerSkeleton />;
+  }
 
   return (
     <>
       <style>{heroStyles}</style>
 
-      <section className="nalli-hero">
-
-        {/* Background images */}
+      <section className="nalli-hero" aria-label="Featured Promotions">
         {slides.map((slide, index) => (
           <div
-            key={slide.id}
+            key={slide.id || index}
             className={`nalli-slide ${index === active ? "active" : ""}`}
+            aria-hidden={index !== active}
           >
             <img
               className="nalli-slide-bg"
-              src={getLocalImageUrl(slide.image)}
-              alt={slide.title || `Banner ${index + 1}`}
+              src={slide.image}
+              alt={slide.title || `Hero banner ${index + 1}`}
               loading={index === 0 ? "eager" : "lazy"}
               decoding="async"
+              onError={(e) => {
+                const fallback = PHYSICAL_SLIDES[index % PHYSICAL_SLIDES.length]?.image;
+                if (fallback && e.target.src !== fallback) {
+                  e.target.src = fallback;
+                }
+              }}
             />
           </div>
         ))}
 
-        {/* Dark overlay */}
         <div className="nalli-hero-overlay" />
 
-        {/* Text overlay — layout depends on slide position */}
         {slides[active] && (
-          <SlideText
-            key={active} // re-mount on slide change to re-trigger animation
-            slide={slides[active]}
-            position={active + 1}
-          />
+          <SlideText key={slides[active].id || active} slide={slides[active]} />
         )}
 
-        {/* Dot navigation */}
         {slides.length > 1 && (
-          <div className="nalli-dots">
-            {slides.map((_, i) => (
+          <div className="nalli-dots" role="tablist">
+            {slides.map((slide, i) => (
               <button
-                key={i}
+                key={slide.id || i}
+                type="button"
                 className={`nalli-dot ${i === active ? "active" : ""}`}
                 onClick={() => go(i)}
-                aria-label={`Go to slide ${i + 1}`}
+                aria-label={`Slide ${i + 1}`}
+                role="tab"
+                aria-selected={i === active}
               />
             ))}
           </div>
         )}
-
       </section>
     </>
   );

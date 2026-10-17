@@ -34,6 +34,8 @@ import CartDrawer from './components/CartDrawer';
 import WishlistDrawer from './components/WishlistDrawer';
 import OfferBanner from './components/OfferBanner';
 import WhatsAppFloat from './components/WhatsAppFloat';
+import ScrollToTop from './components/ScrollToTop';
+import ScrollToTopOnNavigation from './components/ScrollToTopOnNavigation';
 
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 
@@ -45,9 +47,6 @@ function HomePage({ onOpenCart, onOpenWishlist }) {
 
   return (
     <>
-      <button id="back-top" className="back-to-top">
-        <i className="fa-regular fa-arrow-up"></i>
-      </button>
       <div className="mouse-cursor cursor-outer"></div>
       <div className="mouse-cursor cursor-inner"></div>
    
@@ -88,12 +87,14 @@ function AppContent() {
 
   return (
     <ShopProvider>
+      <ScrollToTopOnNavigation />
       <Routes>
         <Route path="/" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
         <Route path="/home" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
         <Route path="/shop" element={withHeader(ShopGridPage)} />
         <Route path="/sale" element={withHeader(ShopGridPage, { saleOnly: true })} />
         <Route path="/product-details" element={withHeader(ProductDetailsPage)} />
+        <Route path="/product/:slug" element={withHeader(ProductDetailsPage)} />
         <Route path="/about" element={withHeader(AboutPage)} />
         <Route path="/contact" element={withHeader(ContactPage)} />
         <Route path="/checkout" element={withHeader(CheckoutPage)} />
@@ -116,6 +117,7 @@ function AppContent() {
       </Routes>
       <CartDrawer open={cartOpen} onClose={closeCart} />
       <WishlistDrawer open={wishOpen} onClose={closeWish} onOpenCart={openCart} />
+      <ScrollToTop />
       <WhatsAppFloat />
     </ShopProvider>
   );

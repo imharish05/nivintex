@@ -10,6 +10,16 @@ const fs           = require('fs');
 const path         = require('path');
 const { Op }      = require('sequelize');
 
+function productSlug(name, id) {
+    const slug = String(name || 'product')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'product';
+    return `${slug}-${id}`;
+}
+
 // ── Shared helper: extract files from req.files array ────────────────────────
 function extractFiles(req) {
     const files         = req.files || [];
@@ -458,6 +468,8 @@ exports.getAllProducts = async (req, res) => {
             created_at: p.createdAt,
             updated_at: p.updatedAt,
             ...p.toJSON(),
+            billingProductId: p.billingProductId,
+            billing_product_id: p.billingProductId,
             franchise_price_final: p.franchise_price_final,
             billingSubcategoryId: p.billingSubcategoryId,
             billing_subcategory_id: p.billingSubcategoryId,
@@ -723,6 +735,37 @@ exports.getProductById = async (req, res) => {
     }
 };
 
+exports.getProductBySlug = async (req, res) => {
+    try {
+        const slug = String(req.params.slug || '').trim().toLowerCase();
+        const match = slug.match(/-(\d+)$/);
+        if (!match) return res.status(404).json({ success: false, message: 'Product not found.' });
+        const product = await Product.findByPk(match[1], { include: PRODUCT_INCLUDE });
+        if (!product || productSlug(product.productName, product.id) !== slug) {
+            return res.status(404).json({ success: false, message: 'Product not found.' });
+        }
+        const mappedProduct = {
+            id: product.id,
+            slug: productSlug(product.productName, product.id),
+            ...product.toJSON(),
+            billingProductId: product.billingProductId,
+            billing_product_id: product.billingProductId,
+            categoryId: product.categoryId,
+            subCategoryId: product.subCategoryId,
+            Variants: product.Variants || [],
+            image: product.image,
+            main_image: product.image,
+            productName: product.productName,
+            name: product.productName,
+            franchise_price_final: product.franchise_price_final,
+        };
+        return res.status(200).json({ success: true, product: mappedProduct });
+    } catch (error) {
+        console.error('Get product by slug failed:', error);
+        return res.status(500).json({ success: false, message: 'Could not load this product.' });
+    }
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 9. Delete a single gallery image
 // ─────────────────────────────────────────────────────────────────────────────
@@ -777,6 +820,8 @@ exports.getAllProductVariants = async (req, res) => {
             status: p.status,
             created_at: p.createdAt,
             updated_at: p.updatedAt,
+            billingProductId: p.billingProductId,
+            billing_product_id: p.billingProductId,
             variants: p.Variants?.map(v => ({
                 id: v.id,
                 product_id: v.productId,

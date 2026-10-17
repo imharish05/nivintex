@@ -1,9 +1,18 @@
 const Brand = require('../models/Brand');
+const { validateFields } = require('../utils/textValidation');
 
 // 1. Create Brand (Add)
 exports.createBrand = async (req, res) => {
     try {
         const { brandName, status } = req.body;
+
+        const validationError = validateFields([
+            { value: brandName, fieldName: 'Brand Name', required: true, maxChars: 60, maxWords: 8 },
+        ]);
+        if (validationError) {
+            return res.status(400).json({ error: validationError });
+        }
+
         const logoPath = req.file ? req.file.path.replace(/\\/g, "/") : null;
 
         const newBrand = await Brand.create({
@@ -33,6 +42,16 @@ exports.updateBrand = async (req, res) => {
     try {
         const { id } = req.params;
         const { brandName, status } = req.body;
+
+        if (brandName !== undefined) {
+            const validationError = validateFields([
+                { value: brandName, fieldName: 'Brand Name', required: true, maxChars: 60, maxWords: 8 },
+            ]);
+            if (validationError) {
+                return res.status(400).json({ error: validationError });
+            }
+        }
+
         let updateData = { brandName, status };
 
         if (req.file) {

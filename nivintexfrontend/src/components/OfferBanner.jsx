@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { offerBannerApi, getLocalImageUrl } from "../utils/api";
 import { Link } from 'react-router-dom';
+import { OfferBannerSkeleton } from "./Skeleton";
 
 function OfferCard({ offer }) {
   return (
@@ -12,22 +13,29 @@ function OfferCard({ offer }) {
           className="fa-offer-photo"
           loading="lazy"
           decoding="async"
+          onError={(e) => {
+            if (e.target.dataset.fallbackApplied) return;
+            e.target.dataset.fallbackApplied = "true";
+            e.target.src = "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?auto=format&fit=crop&w=800&q=80";
+          }}
         />
 
-        <div className="fa-offer-numeral">
-          <div className="fa-offer-numeral-num">
-            {offer.numeral}
-            <sup>{offer.numeralSup}</sup>
+        {offer.numeral ? (
+          <div className="fa-offer-numeral">
+            <div className="fa-offer-numeral-num">
+              {offer.numeral}
+              <sup>{offer.numeralSup}</sup>
+            </div>
+            {offer.numeralCaption && <div className="fa-offer-numeral-cap">{offer.numeralCaption}</div>}
           </div>
-          <div className="fa-offer-numeral-cap">{offer.numeralCaption}</div>
-        </div>
+        ) : null}
 
         <div className="fa-offer-content">
-          <div className="fa-offer-kicker">{offer.kicker}</div>
+          {offer.kicker && <div className="fa-offer-kicker">{offer.kicker}</div>}
           <h3 className="fa-offer-title">{offer.title}</h3>
           <div className="fa-offer-stitch" />
           <span className="fa-offer-cta">
-            Shop now
+            {offer.btnText || "Shop now"}
             <span className="fa-offer-arrow" />
           </span>
         </div>
@@ -38,6 +46,7 @@ function OfferCard({ offer }) {
 
 export default function OffersBanner() {
   const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const scrollRef = useRef(null);
 
   const scroll = (dir) => {
@@ -78,17 +87,22 @@ export default function OffersBanner() {
             numeral,
             numeralSup,
             numeralCaption,
-            kicker: b.subtitle || "Limited stock",
+            kicker: b.subtitle || b.offerLabel || "",
             title: b.title,
+            btnText: b.btnText || "Shop now",
             image: getLocalImageUrl(b.image),
             href: b.btnLink || "/shop",
           };
         });
         setOffers(mapped);
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
+  if (loading) return <OfferBannerSkeleton />;
   if (offers.length === 0) return null;
 
   return (
@@ -121,9 +135,10 @@ export default function OffersBanner() {
         }
         .fa-offers-header {
           display: flex;
-          align-items: baseline;
+          align-items: center;
           justify-content: space-between;
           padding: 0 clamp(16px, 3.5vw, 32px) 24px;
+          gap: 12px;
         }
         .fa-offers-heading {
           font-family: 'Cormorant Garamond', 'Playfair Display', serif;
@@ -137,6 +152,7 @@ export default function OffersBanner() {
           position: relative;
           padding-bottom: 8px;
           display: inline-block;
+          line-height: 1.15;
         }
         .fa-offers-heading::after {
           content: '';
@@ -146,6 +162,43 @@ export default function OffersBanner() {
           width: 60px;
           height: 2px;
           background: #C9A84C;
+        }
+        .fa-offers-viewall {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #0f5447;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          background: #ffffff;
+          border: 1px solid rgba(15, 84, 71, 0.3);
+          border-radius: 8px !important;
+          padding: 6px 14px;
+          transition: all 0.22s ease;
+          cursor: pointer;
+          line-height: 1;
+          white-space: nowrap;
+          box-shadow: 0 1px 4px rgba(15, 84, 71, 0.06);
+          flex-shrink: 0;
+          text-decoration: none;
+        }
+        .fa-offers-viewall:hover {
+          background: #0f5447;
+          color: #ffffff;
+          border-color: #0f5447;
+          box-shadow: 0 3px 10px rgba(15, 84, 71, 0.2);
+          transform: translateY(-1px);
+        }
+        .fa-offers-viewall svg {
+          width: 12px;
+          height: 12px;
+          stroke: currentColor;
+          transition: transform 0.2s ease;
+        }
+        .fa-offers-viewall:hover svg {
+          transform: translateX(2px);
         }
         .fa-offers-grid-wrap {
           overflow-x: auto;
@@ -209,8 +262,12 @@ export default function OffersBanner() {
           .fa-offers-grid { grid-auto-columns: 100%; }
         }
         @media (max-width: 600px) {
+          .fa-offers-header { padding: 0 16px 18px; align-items: center; }
+          .fa-offers-heading { font-size: clamp(20px, 5.2vw, 24px); }
+          .fa-offers-viewall { font-size: 11px; padding: 5px 11px; gap: 4px; }
+          .fa-offers-viewall svg { width: 10px; height: 10px; }
           .fa-offers-grid { grid-auto-columns: 100%; }
-          .fa-offers-arrow { display: none; }
+          .fa-offers-arrow { display: none !important; }
         }
         .fa-offer-frame {
           position: relative;
@@ -223,7 +280,7 @@ export default function OffersBanner() {
           content: "";
           position: absolute;
           inset: 0;
-          background: linear-gradient(180deg, rgba(11,36,25,0) 35%, rgba(11,36,25,0.88) 100%);
+          background: linear-gradient(180deg, rgba(11,36,25,0) 30%, rgba(11,36,25,0.7) 65%, rgba(11,36,25,0.95) 100%);
         }
         .fa-offer-photo {
           position: absolute;
@@ -276,8 +333,8 @@ export default function OffersBanner() {
           font-family: 'Playfair Display', serif;
           font-weight: 600;
           font-size: clamp(48px, 10vw, 74px);
-          color: #f6f2e6;
-          text-shadow: 0 3px 18px rgba(0,0,0,0.35);
+          color: #ffffff;
+          text-shadow: none;
         }
         .fa-offer-numeral-num sup {
           font-size: clamp(18px, 3.5vw, 26px);
@@ -287,7 +344,7 @@ export default function OffersBanner() {
         .fa-offer-numeral-cap {
           font-size: 11px;
           letter-spacing: 0.24em;
-          color: #c69a3f;
+          color: #DFB76C;
           text-transform: uppercase;
           margin-top: 6px;
           font-weight: 600;
@@ -304,7 +361,7 @@ export default function OffersBanner() {
           font-size: 11px;
           letter-spacing: 0.28em;
           text-transform: uppercase;
-          color: #c69a3f;
+          color: #DFB76C;
           font-weight: 600;
           margin-bottom: 8px;
         }
@@ -314,6 +371,7 @@ export default function OffersBanner() {
           font-size: clamp(22px, 4.5vw, 34px);
           color: #fff;
           margin: 0 0 14px;
+          text-shadow: none;
         }
         .fa-offer-stitch {
           width: 56px;
@@ -354,6 +412,12 @@ export default function OffersBanner() {
 
       <div className="fa-offers-header">
         <h2 className="fa-offers-heading">Offers</h2>
+        <Link to="/sale" className="fa-offers-viewall">
+          <span>View all</span>
+          <svg viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </Link>
       </div>
 
       <div className="fa-offers-carousel">

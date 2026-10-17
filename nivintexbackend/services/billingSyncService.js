@@ -74,11 +74,26 @@ async function fetchPayloads(productsOnly = false) {
     franchises: '/franchises',
   };
   const paths = productsOnly
-    ? { categories: allPaths.categories, subcategories: allPaths.subcategories, products: allPaths.products, productVariants: allPaths.productVariants, stocks: allPaths.stocks }
+    ? { categories: allPaths.categories, subcategories: allPaths.subcategories, products: allPaths.products, productVariants: allPaths.productVariants, variants: allPaths.variants, stocks: allPaths.stocks }
     : allPaths;
+  const fetchAllProductPages = async () => {
+    const firstResponse = await client.get(allPaths.products);
+    const firstPayload = firstResponse.data;
+    const lastPage = Math.max(1, Number(firstPayload?.meta?.last_page ?? firstPayload?.data?.meta?.last_page ?? 1) || 1);
+    if (lastPage <= 1) return firstPayload;
+    const pages = await Promise.all(Array.from({ length: lastPage - 1 }, (_, index) =>
+      client.get(allPaths.products, { params: { page: index + 2 } }).then(response => response.data)
+    ));
+    const firstProducts = collection(firstPayload, 'products');
+    const allProducts = [...firstProducts, ...pages.flatMap(payload => collection(payload, 'products'))];
+    return { ...firstPayload, products: allProducts, meta: { ...firstPayload.meta, total_pages_fetched: lastPage } };
+  };
+
   const entries = await Promise.all(Object.entries(paths).map(async ([name, path]) => {
     try {
-      const response = await client.get(path);
+      const response = name === 'products'
+        ? { data: await fetchAllProductPages() }
+        : await client.get(path);
       if (response.data?.status && Number(response.data.status) >= 400) {
         throw Object.assign(new Error(`Billing API ${path} returned status ${response.data.status}`), { response: { status: Number(response.data.status), data: response.data } });
       }
@@ -117,8 +132,14 @@ function buildProducts(payloads) {
 
   const stockByVariant = new Map();
   for (const stock of collection(payloads.stocks, 'stocks')) {
-    const variantId = idOf(stock.id ?? stock.product_variant_id ?? stock.variant_id);
-    if (variantId) stockByVariant.set(variantId, numberOrNull(stock.quantity));
+    const variantId = idOf(stock.product_variant_id ?? stock.product_varient_id ?? stock.variant_id ?? stock.productVariantId ?? stock.id);
+    const markedOutOfStock = stock.in_stock === false || stock.in_stock === 0
+      || ['false', '0', 'no', 'out of stock'].includes(String(stock.in_stock ?? '').trim().toLowerCase());
+    const stockQuantity = markedOutOfStock
+      ? 0
+      : numberOrNull(stock.available_stock ?? stock.available_quantity ?? stock.available_qty ?? stock.quantity_available
+        ?? stock.qty_available ?? stock.current_stock ?? stock.stock_qty ?? stock.quantity ?? stock.stock ?? stock.total_stock);
+    if (variantId && stockQuantity !== null) stockByVariant.set(variantId, stockQuantity);
   }
 
   return [...byId.entries()].map(([id, product]) => {
@@ -133,7 +154,8 @@ function buildProducts(payloads) {
       const variantId = idOf(variant.id);
       const stock = variantId && stockByVariant.has(variantId)
         ? stockByVariant.get(variantId)
-        : numberOrNull(variant.quantity ?? variant.stock);
+        : numberOrNull(variant.available_stock ?? variant.available_quantity ?? variant.available_qty ?? variant.quantity_available
+          ?? variant.qty_available ?? variant.current_stock ?? variant.stock_qty ?? variant.quantity ?? variant.stock ?? variant.total_stock);
       return { ...variant, _availableQuantity: Math.max(0, Math.floor(stock ?? 0)) };
     });
     return { ...product, id, variants };
@@ -228,7 +250,7 @@ async function syncAll(productsOnly = false) {
         }
         const billingCategoryId = idOf(billingReferenceId(source.category_id ?? source.categoryId ?? source.category));
         const variants = source.variants || [];
-        const salePrice = numberOrNull(source.franchise_price_final);
+        const salePrice = numberOrNull(source.franchise_price_final ?? source.prices?.franchise);
         const productValues = {
           billingProductId: billingId,
           categoryId: billingCategoryId ? (categoryMap.get(billingCategoryId) || target?.categoryId || null) : null,
@@ -287,9 +309,9 @@ async function syncAll(productsOnly = false) {
             weight: sourceVariant.weight || null,
             volume: sourceVariant.volume || null,
             nos: sourceVariant.nos || null,
-            mrp: numberOrNull(sourceVariant.franchise_price_final) ?? 0,
-            salesPrice: numberOrNull(sourceVariant.franchise_price_final) ?? 0,
-            franchise_price_final: numberOrNull(sourceVariant.franchise_price_final),
+            mrp: numberOrNull(sourceVariant.franchise_price_final ?? sourceVariant.prices?.franchise) ?? salePrice ?? 0,
+            salesPrice: numberOrNull(sourceVariant.franchise_price_final ?? sourceVariant.prices?.franchise) ?? salePrice ?? 0,
+            franchise_price_final: numberOrNull(sourceVariant.franchise_price_final ?? sourceVariant.prices?.franchise) ?? salePrice,
             stock: sourceVariant._availableQuantity,
             // Variant images are also uploaded and managed locally in this app.
             image: localUploadPath(variant?.image),

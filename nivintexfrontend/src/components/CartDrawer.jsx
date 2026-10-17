@@ -146,6 +146,7 @@ const CartDrawer = ({ open, onClose }) => {
                 padding: '11px 28px', fontWeight: 300, fontSize: '11px',
                 letterSpacing: '3px', textTransform: 'uppercase',
                 cursor: 'pointer', fontFamily: F.main,
+                borderRadius: '8px',
               }}>
                 Explore Dresses
               </button>
@@ -199,6 +200,18 @@ const CartDrawer = ({ open, onClose }) => {
                       {[item.color && `Colour: ${item.color}`, item.size && `Size: ${item.size}`, item.fabric && `Fabric: ${item.fabric}`].filter(Boolean).join(' · ')}
                     </p>
                   )}
+                  {item.billingVariantId && item.stockSyncStatus === 'verified' && (
+                    <p style={{ margin: '4px 0', fontSize: 11, color: item.availableStock < item.qty ? C.danger : C.muted, fontFamily: F.sub }}>
+                      {item.availableStock < item.qty
+                        ? `Only ${item.availableStock} currently available. Reduce quantity to continue.`
+                        : `${item.availableStock} available`}
+                    </p>
+                  )}
+                  {item.billingVariantId && item.stockSyncStatus !== 'verified' && (
+                    <p role="status" style={{ margin: '4px 0', fontSize: 11, color: C.danger, fontFamily: F.sub }}>
+                      Live stock could not be verified. Checkout will recheck before payment.
+                    </p>
+                  )}
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
                     {/* Qty stepper */}
@@ -219,10 +232,10 @@ const CartDrawer = ({ open, onClose }) => {
                       }}>{item.qty}</span>
                       <button onClick={() => updateQty(item.id, 1)} style={{
                         width: '30px', height: '30px', border: 'none', background: C.bg,
-                        cursor: 'pointer', fontSize: '16px', color: C.brand,
+                        cursor: item.billingVariantId && (item.stockSyncStatus !== 'verified' || item.qty >= item.availableStock) ? 'not-allowed' : 'pointer', fontSize: '16px', color: C.brand,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontFamily: F.main,
-                      }}>+</button>
+                      }} disabled={Boolean(item.billingVariantId && (item.stockSyncStatus !== 'verified' || item.qty >= item.availableStock))}>+</button>
                     </div>
                     <span style={{
                       fontWeight: 400, fontSize: '14px', color: C.brand,
@@ -295,6 +308,7 @@ const CartDrawer = ({ open, onClose }) => {
               fontWeight: 300, fontSize: '11px', letterSpacing: '3px',
               textTransform: 'uppercase', cursor: 'pointer',
               marginBottom: '10px', fontFamily: F.main,
+              borderRadius: '8px',
               transition: 'opacity 0.2s',
             }}
               onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}

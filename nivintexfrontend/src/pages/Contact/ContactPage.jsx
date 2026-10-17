@@ -299,7 +299,7 @@ const Contact = () => {
           color: #fff;
           border: none;
           padding: 12px 28px;
-          border-radius: 0px;
+          border-radius: 8px;
           font-family: ${F.main};
           font-size: 11px;
           font-weight: 300;

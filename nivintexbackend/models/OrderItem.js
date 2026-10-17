@@ -19,6 +19,14 @@ const OrderItem = sequelize.define('OrderItem', {
         allowNull: true,
         field:     'variant_id',
     },
+    billing_product_id: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+    },
+    billing_variant_id: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+    },
 
     name: {
         type:      DataTypes.STRING,

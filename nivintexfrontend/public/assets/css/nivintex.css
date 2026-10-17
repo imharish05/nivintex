@@ -70,8 +70,10 @@ h6.sub-title {
 }
 
 /* Back to top */
-.back-to-top {
+.back-to-top,
+.fa-scroll-top-btn {
   background-color: #1B6153 !important;
+  border-radius: 50% !important;
 }
 
 /* Section title underline / after */
@@ -88,13 +90,12 @@ select:focus {
   outline: none;
 }
 
-/* Consistent soft corners across storefront boxes and controls. This stylesheet
-   loads after the legacy theme CSS and overrides inline radius values as well. */
+/* Consistent soft corners across storefront boxes, controls, and buttons.
+   Standardizes all buttons across the website to a common 8px border radius. */
 #root :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
   textarea,
   select,
-  button,
   .ck-card,
   .ck-summary,
   .cp-info,
@@ -107,10 +108,53 @@ select:focus {
   .dropdown-menu,
   .form-control,
   .nice-select,
-  .theme-btn,
-  .back-to-top
+  .theme-btn
 ) {
   border-radius: 8px !important;
+}
+
+/* Unified button styling: common 8px border radius for all standard website buttons & CTAs */
+#root button:not(.fa-scroll-top-btn):not(.back-to-top):not(.product-action-btn):not(.bs-icon-btn):not(.bs-arrow):not(.cat-arr):not(.fa-offers-arrow):not(.ig-arr):not(.ig-play-badge):not(.nalli-dot):not([class*="circle"]):not([class*="round"]):not(.pdp-zoom-control):not(.pdp-zoom-close):not(.wa-float-btn),
+#root a.theme-btn,
+#root .theme-btn,
+#root .btn,
+#root [class*="btn"]:not(.fa-scroll-top-btn):not(.bs-icon-btn):not(.bs-arrow):not(.cat-arr):not(.fa-offers-arrow):not(.ig-arr):not([class*="circle"]):not(.wa-float-btn),
+#root .hero-btn-primary,
+#root .hero-btn-ghost,
+#root .bs-hero-btn,
+#root .bs-viewall,
+#root .na-viewall,
+#root .fa-offers-viewall,
+#root .pdp-action-btn-primary,
+#root .pdp-action-btn-outline,
+#root .ck-btn-primary,
+#root .cp-btn,
+#root .nv-btn,
+#root .nv-franchise-btn,
+#root .search-trending-chip {
+  border-radius: 8px !important;
+}
+
+/* Ensure circular buttons and floating controls remain perfectly 50% round */
+#root .wa-float-btn,
+.wa-float-btn,
+a.wa-float-btn,
+#root a.wa-float-btn,
+#root .fa-scroll-top-btn,
+#root .back-to-top,
+#root .product-action-btn,
+#root .bs-icon-btn,
+#root .bs-arrow,
+#root .cat-arr,
+#root .fa-offers-arrow,
+#root .ig-arr,
+#root .ig-play-badge,
+#root .nalli-dot,
+#root .pdp-zoom-control,
+#root .pdp-zoom-close,
+.fa-scroll-top-btn,
+.back-to-top {
+  border-radius: 50% !important;
 }
 
 /* Shop layout: fluid gutters keep filters and products usable on phones. */
@@ -391,4 +435,167 @@ img, video {
     max-height: calc(100dvh - 160px) !important;
   }
 }
+
+/* =========================================
+   Mobile Header & Hamburger Alignment Fixes
+   ========================================= */
+@media (max-width: 1199.98px) {
+  #header-sticky .header-inner-row,
+  #header-sticky > div {
+    padding-left: clamp(10px, 2.5vw, 24px) !important;
+    padding-right: clamp(10px, 2.5vw, 24px) !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .header-actions {
+    margin-left: auto !important;
+    gap: clamp(2px, 0.8vw, 6px) !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .header-actions button,
+  .header-actions .header-account-wrap button {
+    width: clamp(32px, 8vw, 36px) !important;
+    height: clamp(32px, 8vw, 36px) !important;
+    font-size: 15px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .header-hamburger-btn {
+    width: clamp(34px, 8.5vw, 38px) !important;
+    height: clamp(34px, 8.5vw, 38px) !important;
+    font-size: 18px !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .header-logo-link {
+    margin-right: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .header-logo-img {
+    height: 38px !important;
+    width: auto !important;
+    max-width: none !important;
+    object-fit: contain !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #header-sticky .header-inner-row,
+  #header-sticky > div {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .header-actions {
+    gap: clamp(4px, 1.5vw, 8px) !important;
+  }
+
+  .header-actions button {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 15px !important;
+  }
+
+  .header-hamburger-btn {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 17px !important;
+  }
+
+  .header-logo-img {
+    height: 36px !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 350px) {
+  .header-logo-img {
+    height: 34px !important;
+  }
+}
+
+/* =========================================
+   HEADER VERTICAL ALIGNMENT & OPTICAL BALANCE
+   ========================================= */
+.header-logo-link {
+  display: flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
+}
+
+.header-logo-img {
+  display: block !important;
+  transform: translateY(-3px) !important;
+}
+
+.header-actions,
+.header-actions > div:not(.header-account-wrap) {
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* Hide account icon on mobile & tablet (< 1200px) because all account options are inside the hamburger menu */
+@media (max-width: 1199.98px) {
+  .header-actions > .header-account-wrap,
+  .header-account-wrap {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1200px) {
+  .header-actions > .header-account-wrap,
+  .header-account-wrap {
+    display: flex !important;
+    align-items: center !important;
+  }
+}
+
+.header-actions button:not(.header-hamburger-btn) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
+@media (max-width: 1199.98px) {
+  .header-actions button.header-hamburger-btn,
+  .header-hamburger-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+  }
+}
+
+@media (min-width: 1200px) {
+  .header-actions button.header-hamburger-btn,
+  .header-hamburger-btn {
+    display: none !important;
+  }
+}
+
+.header-actions i {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+  margin: 0 !important;
+}
+
 

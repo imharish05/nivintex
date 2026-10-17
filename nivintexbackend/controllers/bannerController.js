@@ -1,16 +1,18 @@
 const Banner = require('../models/Banner');
+const { Op } = require('sequelize');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const Jimp = require('jimp');
+const { Jimp } = require('jimp');
+const { validateFields } = require('../utils/textValidation');
 
 async function processAndCompressImage(filePath, section = 'hero') {
   if (!filePath) return null;
   const absolutePath = path.resolve(filePath);
   
   try {
-    const image = await Jimp.read(absolutePath);
     const ext = path.extname(absolutePath);
+    const image = await Jimp.read(absolutePath);
     let targetPath = absolutePath;
     if (ext.toLowerCase() !== '.jpg' && ext.toLowerCase() !== '.jpeg') {
       targetPath = absolutePath.substring(0, absolutePath.lastIndexOf('.')) + '.jpg';
@@ -28,10 +30,8 @@ async function processAndCompressImage(filePath, section = 'hero') {
       height = 1100; // ~6:11 portrait
     }
     
-    await image
-      .cover(width, height)
-      .quality(80)
-      .writeAsync(targetPath);
+    image.cover({ w: width, h: height });
+    await image.write(targetPath, { quality: 80 });
       
     if (absolutePath !== targetPath && fs.existsSync(absolutePath)) {
       fs.unlinkSync(absolutePath);
@@ -39,7 +39,7 @@ async function processAndCompressImage(filePath, section = 'hero') {
     
     return path.relative(process.cwd(), targetPath).replace(/\\/g, '/');
   } catch (err) {
-    console.error('Error processing banner image with Jimp:', err);
+    console.error('Error processing banner image with Jimp:', err.message);
     return filePath;
   }
 }
@@ -69,8 +69,18 @@ const upload = multer({
       cb(new Error('Only JPG, JPEG, PNG, WEBP, GIF images are allowed'));
     }
   },
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
 });
+
+function handleBannerUpload(req, res, next) {
+  upload.single('image')(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'Banner image is too large. Maximum size is 15 MB.' });
+    }
+    return res.status(400).json({ error: err.message || 'Invalid banner upload.' });
+  });
+}
 
 // ── GET all banners ─────────────────────────────────────────────
 const getAllBanners = async (req, res) => {
@@ -125,10 +135,41 @@ const getBannersBySection = async (req, res) => {
 const addBanner = async (req, res) => {
   try {
     const { title, subtitle, content, link, sortOrder, status, section } = req.body;
+    const targetSection = section || 'hero';
+    const isRequired = ['new_arrivals', 'best_sellers'].includes(targetSection);
+
+    // Validate character and word limits
+    const validationError = validateFields([
+      { value: title, fieldName: 'Title', required: isRequired, maxChars: 60, maxWords: 10 },
+      { value: subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 80, maxWords: 15 },
+      { value: content, fieldName: 'Content / Description', maxChars: 250, maxWords: 40 },
+      { value: link, fieldName: 'Link/URL', required: isRequired, maxChars: 255 },
+    ]);
+    if (validationError) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+      }
+      return res.status(400).json({ error: validationError });
+    }
+
+    // Enforce only one banner for new_arrivals and best_sellers
+    if (['new_arrivals', 'best_sellers'].includes(targetSection)) {
+      const existing = await Banner.findOne({ where: { section: targetSection } });
+      if (existing) {
+        if (req.file && fs.existsSync(req.file.path)) {
+          try { fs.unlinkSync(req.file.path); } catch (e) {}
+        }
+        const sectionLabel = targetSection === 'new_arrivals' ? 'New Arrivals' : 'Best Sellers';
+        return res.status(400).json({
+          error: `Only 1 banner is allowed for the ${sectionLabel} section. An active banner already exists. Please edit or delete the existing banner instead.`,
+        });
+      }
+    }
+
     let image = req.file ? req.file.path.replace(/\\/g, '/') : null;
 
     if (image) {
-      image = await processAndCompressImage(image, section);
+      image = await processAndCompressImage(image, targetSection);
     }
 
     const banner = await Banner.create({
@@ -138,7 +179,7 @@ const addBanner = async (req, res) => {
       link:      link      || null,
       sortOrder: sortOrder ? parseInt(sortOrder) : 1,
       status:    status    || 'Active',
-      section:   section   || 'hero',
+      section:   targetSection,
       image,
     });
 
@@ -156,11 +197,50 @@ const updateBanner = async (req, res) => {
     if (!banner) return res.status(404).json({ error: 'Banner not found' });
 
     const { title, subtitle, content, link, sortOrder, status, section } = req.body;
+    const targetSection = section || banner.section;
+    const isRequired = ['new_arrivals', 'best_sellers'].includes(targetSection);
+
+    // Validate character and word limits if fields are provided
+    const validationError = validateFields([
+      { value: title !== undefined ? title : banner.title, fieldName: 'Title', required: isRequired, maxChars: 60, maxWords: 10 },
+      { value: subtitle !== undefined ? subtitle : banner.subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 80, maxWords: 15 },
+      { value: content !== undefined ? content : banner.content, fieldName: 'Content / Description', maxChars: 250, maxWords: 40 },
+      { value: link !== undefined ? link : banner.link, fieldName: 'Link/URL', required: isRequired, maxChars: 255 },
+    ]);
+    if (validationError) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch (e) {}
+      }
+      return res.status(400).json({ error: validationError });
+    }
+
+    // Enforce only one banner for new_arrivals and best_sellers
+    if (['new_arrivals', 'best_sellers'].includes(targetSection)) {
+      const existing = await Banner.findOne({
+        where: {
+          section: targetSection,
+          id: { [Op.ne]: req.params.id },
+        },
+      });
+      if (existing) {
+        if (req.file && fs.existsSync(req.file.path)) {
+          try { fs.unlinkSync(req.file.path); } catch (e) {}
+        }
+        const sectionLabel = targetSection === 'new_arrivals' ? 'New Arrivals' : 'Best Sellers';
+        return res.status(400).json({
+          error: `Only 1 banner is allowed for the ${sectionLabel} section. Another banner already exists for this section.`,
+        });
+      }
+    }
 
     if (req.file) {
-      if (banner.image && fs.existsSync(banner.image)) fs.unlinkSync(banner.image);
+      const previousImage = banner.image;
       let imagePath = req.file.path.replace(/\\/g, '/');
-      banner.image = await processAndCompressImage(imagePath, section || banner.section);
+      const processedImage = await processAndCompressImage(imagePath, targetSection);
+      banner.image = processedImage;
+      if (previousImage && previousImage !== processedImage && fs.existsSync(previousImage)) {
+        fs.unlinkSync(previousImage);
+      }
     }
 
     banner.title     = title     || banner.title;
@@ -169,7 +249,7 @@ const updateBanner = async (req, res) => {
     banner.link      = link      !== undefined ? link      : banner.link;
     banner.sortOrder = sortOrder ? parseInt(sortOrder)     : banner.sortOrder;
     banner.status    = status    || banner.status;
-    banner.section   = section   || banner.section;
+    banner.section   = targetSection;
 
     await banner.save();
     res.json({ message: 'Banner updated successfully', banner });
@@ -205,6 +285,7 @@ const deleteBanner = async (req, res) => {
 
 module.exports = {
   upload,
+  handleBannerUpload,
   getAllBanners,
   getBannerById,
   getBannersBySection,

@@ -5,11 +5,10 @@ import Swal from 'sweetalert2';
 
 const API = process.env.REACT_APP_API_URL;
 
-// Flow for franchise: Assigned -> Accepted -> Packed -> Out For Delivery -> Delivered
 const STATUS_OPTIONS = [
-  'assigned',
-  'accepted',
-  'packed',
+  'pending',
+  'confirmed',
+  'shipped',
   'out_for_delivery',
   'delivered'
 ];
@@ -36,7 +35,8 @@ export default function FranchiseDashboard({ showToast }) {
       .then(r => r.json())
       .then(data => {
         const all = Array.isArray(data.orders) ? data.orders : [];
-        setRows(all);
+        setRows(all.filter(order => String(order.status || '').toLowerCase() !== 'cancelled')
+          .map(order => ({ ...order, status: ({ assigned: 'pending', accepted: 'confirmed', packed: 'shipped' }[String(order.status || '').toLowerCase()] || String(order.status || 'pending').toLowerCase()) })));
       })
       .catch(() => showToast('Load Failed', 'Could not load orders.'))
       .finally(() => setLoading(false));
@@ -98,9 +98,9 @@ export default function FranchiseDashboard({ showToast }) {
   const getAvailableStatuses = (currentStatus) => {
     const statusLower = currentStatus?.toLowerCase();
     
-    if (statusLower === 'assigned') return ['assigned', 'accepted'];
-    if (statusLower === 'accepted') return ['accepted', 'packed'];
-    if (statusLower === 'packed') return ['packed', 'out_for_delivery'];
+    if (statusLower === 'pending') return ['pending', 'confirmed'];
+    if (statusLower === 'confirmed') return ['confirmed', 'shipped'];
+    if (statusLower === 'shipped') return ['shipped', 'out_for_delivery'];
     if (statusLower === 'out_for_delivery') return ['out_for_delivery', 'delivered'];
     if (statusLower === 'delivered') return ['delivered'];
     

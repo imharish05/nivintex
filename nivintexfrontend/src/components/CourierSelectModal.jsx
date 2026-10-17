@@ -416,7 +416,7 @@ export default function CourierSelectModal({
               onClick={onClose}
               style={{
                 padding: '9px 18px',
-                borderRadius: 6,
+                borderRadius: 8,
                 border: `1px solid ${BORDER}`,
                 background: '#fff',
                 color: '#475569',
@@ -436,7 +436,7 @@ export default function CourierSelectModal({
               disabled={!tempSelectedId}
               style={{
                 padding: '9px 22px',
-                borderRadius: 6,
+                borderRadius: 8,
                 border: 'none',
                 background: BRAND,
                 color: '#fff',

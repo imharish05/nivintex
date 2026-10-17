@@ -165,11 +165,11 @@ export const subCategoryApi = {
 const mapProduct = (p, allStocks = []) => {
   if (!p) return p;
   const sourceVariants = p.variants || p.Variants || p.product_varients || p.product_variants || [];
-  const variantFinals = sourceVariants.map(variant => Number(variant.franchise_price_final)).filter(price => Number.isFinite(price) && price > 0);
-  const productFinal = Number(p.franchise_price_final);
+  const variantFinals = sourceVariants.map(variant => Number(variant.franchise_price_final ?? variant.prices?.franchise)).filter(price => Number.isFinite(price) && price > 0);
+  const productFinal = Number(p.franchise_price_final ?? p.prices?.franchise);
   const finalPrice = Number.isFinite(productFinal) && productFinal > 0 ? productFinal : (variantFinals.length ? Math.min(...variantFinals) : 0);
   const variants = sourceVariants.map(variant => {
-    const variantFinal = Number(variant.franchise_price_final);
+    const variantFinal = Number(variant.franchise_price_final ?? variant.prices?.franchise);
     const price = Number.isFinite(variantFinal) && variantFinal > 0 ? variantFinal : finalPrice;
     return { ...variant, franchise_price_final: price || null, salesPrice: price, mrp: price };
   });
@@ -277,13 +277,18 @@ const saveVariantImage = async (billingVariantId, body) => {
 
 export const productApi = {
 
-    getAll: async () => { 
-        await syncBillingProducts();
+    getAll: async (forceSync = false) => { 
+        if (forceSync) {
+            await syncBillingProducts();
+        }
         const r = await get('/products');
         return mapProducts(r?.products || r?.data || r);
     },
-    getById: async (id) => { 
-        await syncBillingProducts();
+    sync: syncBillingProducts,
+    getById: async (id, forceSync = false) => { 
+        if (forceSync) {
+            await syncBillingProducts();
+        }
         const r = await get(`/products/${id}`);
         return mapProducts(r?.products || r?.product || r);
     },
@@ -365,16 +370,16 @@ export const sizeChartApi = {
 
 // ─── Variants ─────────────────────────────────────────────────────────────────
 export const variantApi = {
-    getAll: async () => productApi.getAll(),
+    getAll: async (forceSync = false) => productApi.getAll(forceSync),
     getByProduct: async (productId) => { 
-      const prods = await productApi.getAll();
-    const prod = prods.find(p => p.id === Number(productId) || p.id === String(productId));
-    return prod?.variants || prod?.Variants || [];
-  },
-  updateImage: saveVariantImage,
-  add: (productId, formData) => send('POST', `/variants/product/${productId}/add`, formData),
-  update: (id, formData) => send('PUT', `/variants/update/${id}`, formData),
-  remove: (id) => del(`/variants/${id}`),
+      const prods = await productApi.getAll(false);
+      const prod = prods.find(p => p.id === Number(productId) || p.id === String(productId));
+      return prod?.variants || prod?.Variants || [];
+    },
+    updateImage: saveVariantImage,
+    add: (productId, formData) => send('POST', `/variants/product/${productId}/add`, formData),
+    update: (id, formData) => send('PUT', `/variants/update/${id}`, formData),
+    remove: (id) => del(`/variants/${id}`),
 };
 
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const {
-  upload,
+  handleBannerUpload,
   getAllBanners,
   getBannerById,
   getBannersBySection,
@@ -13,8 +13,8 @@ const {
 router.get('/',                 getAllBanners);
 router.get('/section/:section', getBannersBySection);  // must be before /:id
 router.get('/:id',              getBannerById);
-router.post('/add',             upload.single('image'), addBanner);
-router.put('/update/:id',       upload.single('image'), updateBanner);
+router.post('/add',             handleBannerUpload, addBanner);
+router.put('/update/:id',       handleBannerUpload, updateBanner);
 router.delete('/:id',           deleteBanner);
 
 module.exports = router;

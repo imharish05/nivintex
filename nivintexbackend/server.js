@@ -110,6 +110,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use('/api/uploads', express.static('uploads'));
+app.use('/api/assets', express.static('assets'));
 
 app.use((req, res, next) => {
   res.setHeader('ngrok-skip-browser-warning', 'true');
@@ -176,6 +177,8 @@ const startServer = async () => {
     await require('./migrations/ensureCartShippingColumns')();
     startupStep = 'order item shipping details migration';
     await require('./migrations/ensureOrderItemShippingColumns')();
+    startupStep = 'order item Billing ID migration';
+    await require('./migrations/ensureOrderItemBillingIds')();
     startupStep = 'order billing fields migration';
     await require('./migrations/ensureOrderBillingFields')();
     startupStep = 'order Shiprocket fields migration';

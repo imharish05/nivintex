@@ -9,39 +9,55 @@ const WhatsAppFloat = () => {
       <style>{`
         .wa-float-btn {
           position: fixed;
-          bottom: 28px;
-          right: 28px;
-          width: 56px;
-          height: 56px;
+          bottom: 32px;
+          right: 32px;
+          width: 48px;
+          height: 48px;
           background-color: #25D366;
           color: #ffffff !important;
-          border-radius: 50%;
+          border-radius: 50% !important;
+          border: none !important;
+          outline: none !important;
+          padding: 0 !important;
+          box-sizing: border-box !important;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 4px 16px rgba(37, 211, 102, 0.45);
+          box-shadow: 0 4px 16px rgba(37, 211, 102, 0.35);
           z-index: 9999;
-          text-decoration: none;
-          transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+          text-decoration: none !important;
           cursor: pointer;
+          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                      box-shadow 0.25s ease,
+                      background-color 0.25s ease;
         }
 
         .wa-float-btn:hover {
-          transform: scale(1.1);
-          background-color: #20bd5a;
-          box-shadow: 0 6px 22px rgba(37, 211, 102, 0.6);
+          background-color: #20bd5a !important;
+          box-shadow: 0 6px 20px rgba(37, 211, 102, 0.5);
+          transform: translateY(-3px) scale(1.05);
           color: #ffffff !important;
         }
 
+        .wa-float-btn:active {
+          transform: translateY(0) scale(0.95);
+        }
+
         .wa-float-btn svg {
-          width: 32px;
-          height: 32px;
+          width: 26px;
+          height: 26px;
           fill: #ffffff;
+          display: block;
+          transition: transform 0.2s ease;
+        }
+
+        .wa-float-btn:hover svg {
+          transform: scale(1.05);
         }
 
         .wa-tooltip {
           position: absolute;
-          right: 68px;
+          right: 60px;
           background-color: #0f5447;
           color: #ffffff;
           padding: 6px 14px;
@@ -74,30 +90,40 @@ const WhatsAppFloat = () => {
           transform: translateX(0);
         }
 
-        /* Adjust back-to-top button so it doesn't overlap WhatsApp */
-        .back-to-top {
+        /* Adjust back-to-top button so it stacks neatly above WhatsApp */
+        .back-to-top,
+        .fa-scroll-top-btn {
           bottom: 96px !important;
-          right: 28px !important;
+          right: 32px !important;
+          width: 48px !important;
+          height: 48px !important;
+          border-radius: 50% !important;
         }
 
         @media (max-width: 768px) {
           .wa-float-btn {
-            bottom: 22px;
-            right: 22px;
-            width: 50px;
-            height: 50px;
+            bottom: 26px;
+            right: 26px;
+            width: 42px;
+            height: 42px;
+            border-radius: 50% !important;
           }
           .wa-float-btn svg {
-            width: 28px;
-            height: 28px;
+            width: 22px;
+            height: 22px;
           }
-          .back-to-top {
+          .wa-tooltip {
+            right: 52px;
+            font-size: 11px;
+            padding: 5px 10px;
+          }
+          .back-to-top,
+          .fa-scroll-top-btn {
             bottom: 82px !important;
-            right: 22px !important;
-            width: 44px;
-            height: 44px;
-            line-height: 44px;
-            font-size: 16px;
+            right: 26px !important;
+            width: 42px !important;
+            height: 42px !important;
+            border-radius: 50% !important;
           }
         }
       `}</style>
@@ -107,6 +133,7 @@ const WhatsAppFloat = () => {
         target="_blank"
         rel="noopener noreferrer"
         className="wa-float-btn"
+        style={{ borderRadius: '50%' }}
         aria-label="Chat on WhatsApp (+91 96291 22122)"
       >
         <span className="wa-tooltip">Chat with us</span>

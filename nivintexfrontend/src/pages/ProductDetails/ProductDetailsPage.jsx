@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useRef } from 'react';
 import Footer from '../../components/Footer';
 import { useShop } from '../../context/ShopContext';
-import { productApi, productSpecificationApi, sizeChartApi, stockApi, reviewApi, getImageUrl } from '../../utils/api';
+import { billingCatalogApi, productApi, productSpecificationApi, sizeChartApi, reviewApi, getImageUrl, slugifyProductName } from '../../utils/api';
 import SizeChartModal from '../../components/SizeChartModal';
 import defaultLogo from '../../assets/img/logo2.png';
 import { ProductDetailsSkeleton } from '../../components/Skeleton';
@@ -77,9 +77,9 @@ const Accordion = ({ label, defaultOpen = false, children }) => {
 /* ── Main Component ─────────────────────────────────────────────── */
 const ProductDetailsPage = () => {
   const navigate = useNavigate();
+  const { slug } = useParams();
   const goToProduct = (product) => {
-    sessionStorage.setItem('selectedProduct', JSON.stringify({ id: product.id }));
-    navigate('/product-details');
+    navigate(`/product/${product.slug || slugifyProductName(product.productName || product.name, product.id)}`);
     window.scrollTo(0, 0);
   };
   const [qty, setQty]                         = useState(1);
@@ -115,51 +115,79 @@ const ProductDetailsPage = () => {
   useEffect(() => {
     window.scrollTo(0, 0);
     const stored = sessionStorage.getItem('selectedProduct');
-    if (!stored) { setLoading(false); return; }
+    if (!slug && !stored) { setLoading(false); return; }
     try {
-      const parsed = JSON.parse(stored);
-      const id = parsed.id;
-      if (!id) { setProduct(parsed); setLoading(false); return; }
-      productApi.getById(id)
+      const parsed = stored ? JSON.parse(stored) : null;
+      const loadProduct = slug ? productApi.getBySlug(slug) : parsed?.id ? productApi.getById(parsed.id) : Promise.resolve(parsed);
+      if (!loadProduct) { setLoading(false); return; }
+      loadProduct
         .then(async data => {
-          // Attempt to fetch variants and stock from stock API
+          if (!data) throw new Error('Product not found.');
+          if (!data.id) { setProduct(data); return; }
+          // Use the Billing product-details endpoint for current, authoritative stock.
           try {
-            const allStocks = await stockApi.getAll();
-            const vars = allStocks.filter(s => String(s.product_id) === String(id));
-            
-            if (vars && vars.length > 0) {
-              data.Variants = vars;
-              
-              // Map 'quantity' to 'stock' so it works natively with existing logic
-              vars.forEach(v => {
-                if (v.quantity !== undefined && v.stock === undefined) {
-                  v.stock = v.quantity;
-                }
-              });
-              
-              // Update sizes and colors based on the variants
-              const vSizes = [...new Set(vars.map(v => v.size).filter(Boolean))];
-              const vColors = [...new Set(vars.map(v => v.color).filter(Boolean))];
-              
-              if (vSizes.length > 0) data.sizes = vSizes;
-              if (vColors.length > 0) data.colors = vColors;
-              
-              // Update salesPrice and mrp
-              const productFinal = [data.franchise_price_final, data.salesPrice, data.mrp].map(Number).find(price => Number.isFinite(price) && price > 0) || 0;
-              const validVariantFinals = vars.map(variant => Number(variant.franchise_price_final)).filter(price => Number.isFinite(price) && price > 0);
-              data.salesPrice = validVariantFinals.length ? Math.min(...validVariantFinals) : productFinal;
-              data.Variants = vars.map(variant => ({
-                ...variant,
-                franchise_price_final: Number(variant.franchise_price_final) > 0 ? Number(variant.franchise_price_final) : null,
-              }));
-              data.franchise_price_final = data.salesPrice;
-              data.mrp = data.salesPrice;
-              
-              // Total stock for the product
-              data.stock = vars.reduce((sum, v) => sum + Number(v.stock || 0), 0);
-            }
+            const billingProductId = data.billingProductId || data.billing_product_id;
+            if (!billingProductId) throw new Error('This product is missing its Billing product ID.');
+            const response = await billingCatalogApi.getProductDetails(billingProductId);
+            const stocksByVariant = await billingCatalogApi.getStocksByVariant();
+            const billingProduct = Array.isArray(response) ? response[0] : response;
+            const billingVariants = billingProduct?.variants || billingProduct?.product_variants || billingProduct?.product_varients || [];
+            if (!Array.isArray(billingVariants) || billingVariants.length === 0) throw new Error('Billing returned no variants for this product.');
+
+            const billingById = new Map(billingVariants.map(variant => [String(variant.id), variant]));
+            const billingByCode = new Map(billingVariants.flatMap(variant => [variant.variant_code, variant.sku].filter(Boolean).map(code => [String(code).toLowerCase(), variant])));
+            const localVariants = Array.isArray(data.Variants) ? data.Variants : [];
+            const getBillingMatch = variant => billingById.get(String(variant.billingVariantId || variant.billing_variant_id || ''))
+              || billingByCode.get(String(variant.variant_code || variant.sku || '').toLowerCase());
+            const getAvailable = variant => {
+              if (variant?.in_stock === false || variant?.in_stock === 0 || ['false', '0', 'no', 'out of stock'].includes(String(variant?.in_stock ?? '').trim().toLowerCase())) return 0;
+              const raw = variant?.available_stock ?? variant?.available_quantity ?? variant?.available_qty
+                ?? variant?.quantity_available ?? variant?.qty_available ?? variant?.current_stock ?? variant?.stock_qty ?? variant?.stock_quantity ?? variant?.qty ?? variant?.on_hand ?? variant?.balance_quantity
+                ?? variant?.quantity ?? variant?.stock ?? variant?.total_stock;
+              const quantity = Number(raw);
+              return raw !== undefined && raw !== null && raw !== '' && Number.isFinite(quantity) && quantity >= 0 ? Math.floor(quantity) : null;
+            };
+            const getSyncedStock = variant => {
+              const detailQuantity = getAvailable(variant);
+              const variantId = String(variant?.id ?? variant?.product_variant_id ?? variant?.variant_id ?? '');
+              const hasStockRow = stocksByVariant?.has(variantId);
+              const stockQuantity = stocksByVariant === null ? null : hasStockRow ? stocksByVariant.get(variantId) : 0;
+              const verified = detailQuantity !== null && (stocksByVariant === null || (hasStockRow ? stockQuantity !== null : true));
+              return { quantity: verified ? Math.min(detailQuantity, stockQuantity ?? detailQuantity) : 0, verified };
+            };
+
+            data.Variants = localVariants.length
+              ? localVariants.map(local => {
+                  const current = getBillingMatch(local);
+                  const liveStock = current ? getSyncedStock(current) : { quantity: 0, verified: false };
+                  return { ...local, stock: liveStock.quantity, billingVariantId: local.billingVariantId || local.billing_variant_id || current?.id || null, billingStockVerified: liveStock.verified };
+                })
+              : billingVariants.map(current => {
+                  const liveStock = getSyncedStock(current);
+                  return {
+                    ...current,
+                    id: null,
+                    billingVariantId: current.id,
+                    stock: liveStock.quantity,
+                    billingStockVerified: liveStock.verified,
+                    franchise_price_final: current.franchise_price_final ?? current.prices?.franchise ?? null,
+                    size: current.size || '',
+                    color: current.color || '',
+                  };
+                });
+            const vSizes = [...new Set(data.Variants.map(variant => variant.size).filter(Boolean))];
+            const vColors = [...new Set(data.Variants.map(variant => variant.color).filter(Boolean))];
+            if (vSizes.length) data.sizes = vSizes;
+            if (vColors.length) data.colors = vColors;
+            data.stock = data.Variants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0);
+            data.billingStockVerified = data.Variants.length > 0 && data.Variants.every(variant => variant.billingStockVerified);
+            data.billingStockError = data.billingStockVerified ? '' : 'Billing did not confirm stock for every variant. Refresh before purchasing.';
           } catch (err) {
-            console.error("Failed to load variants/stock", err);
+            console.error('Failed to load current Billing product stock:', err);
+            data.Variants = (data.Variants || []).map(variant => ({ ...variant, stock: 0, billingStockVerified: false }));
+            data.stock = 0;
+            data.billingStockVerified = false;
+            data.billingStockError = 'Live stock could not be verified with Billing. Refresh the page before trying again.';
           }
           
           setProduct(data);
@@ -184,7 +212,7 @@ const ProductDetailsPage = () => {
         .catch(() => setProduct(null))
         .finally(() => setLoading(false));
     } catch { setLoading(false); }
-  }, []);
+  }, [slug]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -752,13 +780,14 @@ const ProductDetailsPage = () => {
                 {/* Quantity */}
                 <div style={{ marginBottom: 12 }} ref={addToCartRef}>
                   <p style={{ fontFamily: F.main, fontSize: 9, fontWeight: 400, color: BRAND, marginBottom: 8, letterSpacing: 2.5, textTransform: 'uppercase' }}>Quantity</p>
-                  <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${BORDER}`, overflow: 'hidden', width: 'fit-content', background: 'transparent' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${BORDER}`, overflow: 'hidden', width: 'fit-content', background: 'transparent', borderRadius: 4 }}>
                     <button onClick={() => setQty(q => Math.max(1, q - 1))}
-                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: BRAND, fontFamily: F.main }}>−</button>
+                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
                     <span style={{ width: 42, textAlign: 'center', fontFamily: F.main, fontWeight: 400, color: BRAND, fontSize: 13, letterSpacing: 1 }}>{qty}</span>
                     <button onClick={() => setQty(q => Math.min(stock || 99, q + 1))}
-                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: BRAND, fontFamily: F.main }}>+</button>
+                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                   </div>
+                  {product.billingStockError && <p role="status" style={{ color: '#a33a2b', fontSize: 12, margin: '8px 0 0' }}>{product.billingStockError}</p>}
                 </div>
 
                 {/* Add to Cart + Buy Now + Wishlist */}
@@ -769,6 +798,7 @@ const ProductDetailsPage = () => {
                       background: addedToCart ? GOLD : inStock ? BRAND : '#ccc',
                       color: '#fff',
                       cursor: inStock ? 'pointer' : 'not-allowed',
+                      borderRadius: 8,
                     }}>
                     {addedToCart ? '✓ Added' : 'Add to Cart'}
                   </button>
@@ -776,6 +806,7 @@ const ProductDetailsPage = () => {
                     className="pdp-action-btn-outline"
                     style={{
                       cursor: inStock ? 'pointer' : 'not-allowed',
+                      borderRadius: 8,
                     }}>
                     Buy It Now
                   </button>
@@ -787,6 +818,7 @@ const ProductDetailsPage = () => {
                       background: wished ? '#fce4e4' : 'transparent',
                       color: '#c0392b', cursor: 'pointer', fontSize: 14,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: 8,
                     }}>
                     <i className={`${wished ? 'fa-solid' : 'fa-regular'} fa-heart`} />
                   </button>

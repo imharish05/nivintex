@@ -24,8 +24,8 @@ const Order = sequelize.define('Order', {
   total:           { type: DataTypes.FLOAT, defaultValue: 0 },
 
   coupon_code:        DataTypes.STRING,
-  // Billing form snapshot for website orders. The remote Billing API contract
-  // is not configured yet, so retain the mapped request locally for review/retry.
+  // Keep both the local editable snapshot and the exact Billing API exchange
+  // with each order for invoice sync auditing.
   billing_bill_number: { type: DataTypes.STRING, allowNull: true },
   billing_stock_location_id: { type: DataTypes.STRING, allowNull: true },
   billing_price_type: { type: DataTypes.STRING, allowNull: true },
@@ -39,6 +39,8 @@ const Order = sequelize.define('Order', {
   billing_paid_amount: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
   billing_balance: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
   billing_payload: { type: DataTypes.JSON, allowNull: true },
+  billing_request_payload: { type: DataTypes.JSON, allowNull: true },
+  billing_response: { type: DataTypes.JSON, allowNull: true },
   billing_sync_status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'not_configured' },
   billing_sync_error: { type: DataTypes.TEXT, allowNull: true },
   billing_stock_sync_status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'not_configured' },
@@ -72,7 +74,7 @@ const Order = sequelize.define('Order', {
       'return_received',
       'refunded'
     ),
-    defaultValue: 'processing',
+    defaultValue: 'pending',
   },
 
   awb_code:     DataTypes.STRING,

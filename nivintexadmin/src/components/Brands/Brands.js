@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
+import ImageUploadPreview from '../common/ImageUploadPreview';
+import CharWordCounter from '../common/CharWordCounter';
+import { validateFields, isOverLimit } from '../../utils/textValidation';
+import { getImageUrl } from '../../api';
 
 const API = process.env.REACT_APP_API_URL;
 const pillClass = { Active: 'pill-active', Inactive: 'pill-inactive' };
@@ -11,6 +15,7 @@ export default function Brands({ showToast }) {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ brandName: '', status: 'Active' });
   const [logoFile, setLogoFile] = useState(null);
+  const [existingLogo, setExistingLogo] = useState(null);
 
   useEffect(() => { fetchBrands(); }, []);
 
@@ -25,17 +30,28 @@ export default function Brands({ showToast }) {
   const closeForm = () => {
     setShowForm(false); setEditingId(null);
     setFormData({ brandName: '', status: 'Active' }); setLogoFile(null);
+    setExistingLogo(null);
   };
 
   const handleEditClick = (brand) => {
     setEditingId(brand.id);
     setFormData({ brandName: brand.brandName, status: brand.status || 'Active' });
-    setLogoFile(null); setShowForm(true);
+    setLogoFile(null);
+    setExistingLogo(brand.logo || null);
+    setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const validationError = validateFields([
+      { value: formData.brandName, fieldName: 'Brand Name', required: true, maxChars: 60, maxWords: 8 },
+    ]);
+    if (validationError) {
+      showToast('Validation Error', validationError);
+      return;
+    }
+
     const data = new FormData();
     data.append('brandName', formData.brandName);
     data.append('status', formData.status);
@@ -85,10 +101,18 @@ export default function Brands({ showToast }) {
             <form className="km-form-grid" onSubmit={handleSubmit}>
 
               <div className="km-field">
-                <label className="km-label">Brand Name</label>
-                <input className="km-input" type="text" placeholder="e.g. Nestlé" required
+                <label className="km-label">Brand Name <span style={{ color: 'red' }}>*</span></label>
+                <input
+                  className={`km-input ${isOverLimit(formData.brandName, { maxChars: 60, maxWords: 8 }) ? 'km-input-error' : ''}`}
+                  type="text" placeholder="e.g. Nestlé" required
                   value={formData.brandName}
-                  onChange={e => setFormData({ ...formData, brandName: e.target.value })} />
+                  onChange={e => setFormData({ ...formData, brandName: e.target.value })}
+                />
+                <CharWordCounter
+                  value={formData.brandName}
+                  maxChars={60}
+                  maxWords={8}
+                />
               </div>
 
               <div className="km-field">
@@ -100,16 +124,15 @@ export default function Brands({ showToast }) {
                 </select>
               </div>
 
-              <div className="km-field km-field-full">
-                <label className="km-label">Brand Logo (Optional)</label>
-                <div className="km-file-zone">
-                  <div className="km-file-icon">↑</div>
-                  {logoFile
-                    ? <p className="km-file-selected">✓ {logoFile.name}</p>
-                    : <p className="km-file-label">Click to upload image</p>}
-                  <input type="file" accept="image/*" onChange={e => setLogoFile(e.target.files[0])} />
-                </div>
-              </div>
+              <ImageUploadPreview
+                label="Brand Logo (Optional)"
+                file={logoFile}
+                existingUrl={existingLogo ? getImageUrl(existingLogo) : null}
+                onChange={setLogoFile}
+                onRemove={() => setLogoFile(null)}
+                helpText="Recommended: square logo (e.g. 200x200 PNG/JPG)"
+                previewMaxHeight={100}
+              />
 
               <button type="submit" className="km-btn-submit">
                 {editingId ? 'Update Brand' : 'Save Brand'}
@@ -131,7 +154,7 @@ export default function Brands({ showToast }) {
               <td>
                 <div className="img-thumb">
                   {row.logo
-                    ? <img src={`${API}/${row.logo}`} alt={row.brandName} width="36" height="36" />
+                    ? <img src={getImageUrl(row.logo)} alt={row.brandName} width="36" height="36" style={{ objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; }} />
                     : '🏷️'}
                 </div>
               </td>

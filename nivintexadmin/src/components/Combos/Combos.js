@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
+import ImageUploadPreview from '../common/ImageUploadPreview';
+import CharWordCounter from '../common/CharWordCounter';
+import { validateFields, isOverLimit } from '../../utils/textValidation';
 
-import defaultLogo from '../../assets/logo.png';
 const API = process.env.REACT_APP_API_URL;
 const pillClass = { Active: 'pill-active', Inactive: 'pill-inactive' };
 
@@ -26,6 +28,7 @@ export default function Combos({ showToast }) {
   const [editingRootId, setEditingRootId] = useState(null);
   const [rootFormData, setRootFormData] = useState({ name: '', status: 'Active' });
   const [rootImageFile, setRootImageFile] = useState(null);
+  const [existingRootImage, setExistingRootImage] = useState(null);
 
   // Child Combos states
   const [children, setChildren] = useState([]);
@@ -42,6 +45,7 @@ export default function Combos({ showToast }) {
     comboPrice: '',
   });
   const [childImageFile, setChildImageFile] = useState(null);
+  const [existingChildImage, setExistingChildImage] = useState(null);
   
   // Child Combo product selection state
   const [selectedProducts, setSelectedProducts] = useState([]); // array of { productId, quantity }
@@ -109,6 +113,7 @@ export default function Combos({ showToast }) {
     setEditingRootId(null);
     setRootFormData({ name: '', status: 'Active' });
     setRootImageFile(null);
+    setExistingRootImage(null);
   };
 
   const handleEditRootClick = (e, root) => {
@@ -116,14 +121,18 @@ export default function Combos({ showToast }) {
     setEditingRootId(root.id);
     setRootFormData({ name: root.name, status: root.status });
     setRootImageFile(null);
+    setExistingRootImage(root.image || null);
     setShowRootForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleRootSubmit = async (e) => {
     e.preventDefault();
-    if (!rootFormData.name.trim()) {
-      showToast('Validation Error', 'Combo name is required.');
+    const validationError = validateFields([
+      { value: rootFormData.name, fieldName: 'Combo Name', required: true, maxChars: 60, maxWords: 8 },
+    ]);
+    if (validationError) {
+      showToast('Validation Error', validationError);
       return;
     }
 
@@ -188,6 +197,7 @@ export default function Combos({ showToast }) {
       comboPrice: '',
     });
     setChildImageFile(null);
+    setExistingChildImage(null);
     setSelectedProducts([]);
     setProductSearch('');
   };
@@ -204,6 +214,7 @@ export default function Combos({ showToast }) {
       comboPrice: child.comboPrice?.toString() || '',
     });
     setChildImageFile(null);
+    setExistingChildImage(child.image || null);
     
     // Set selected products
     const linked = (child.ComboProducts || []).map(cp => ({
@@ -218,10 +229,20 @@ export default function Combos({ showToast }) {
 
   const handleChildSubmit = async (e) => {
     e.preventDefault();
-    const { name, originalPrice, comboPrice } = childFormData;
+    const { name, originalPrice, comboPrice, shortDescription, fullDescription } = childFormData;
 
-    if (!name.trim() || !originalPrice || !comboPrice) {
-      showToast('Validation Error', 'Please fill in all required fields.');
+    const validationError = validateFields([
+      { value: name, fieldName: 'Combo Pack Name', required: true, maxChars: 80, maxWords: 12 },
+      { value: shortDescription, fieldName: 'Short Description', maxChars: 160, maxWords: 30 },
+      { value: fullDescription, fieldName: 'Detailed Description', maxChars: 1000, maxWords: 160 },
+    ]);
+    if (validationError) {
+      showToast('Validation Error', validationError);
+      return;
+    }
+
+    if (!originalPrice || !comboPrice) {
+      showToast('Validation Error', 'Please fill in original and combo price.');
       return;
     }
 
@@ -335,9 +356,18 @@ export default function Combos({ showToast }) {
                   
                   <div className="km-field">
                     <label className="km-label">Combo Name *</label>
-                    <input className="km-input" type="text" placeholder="e.g. Birthday Combos" required
+                    <input
+                      className={`km-input ${isOverLimit(rootFormData.name, { maxChars: 60, maxWords: 8 }) ? 'km-input-error' : ''}`}
+                      type="text" placeholder="e.g. Birthday Combos" required
                       value={rootFormData.name}
-                      onChange={e => setRootFormData({ ...rootFormData, name: e.target.value })} />
+                      onChange={e => setRootFormData({ ...rootFormData, name: e.target.value })}
+                    />
+                    <CharWordCounter
+                      value={rootFormData.name}
+                      maxChars={60}
+                      maxWords={8}
+                      hint="Top-level category or theme name"
+                    />
                   </div>
 
                   <div className="km-field">
@@ -349,16 +379,15 @@ export default function Combos({ showToast }) {
                     </select>
                   </div>
 
-                  <div className="km-field km-field-full">
-                    <label className="km-label">Sidebar Image (Optional)</label>
-                    <div className="km-file-zone">
-                      <div className="km-file-icon">↑</div>
-                      {rootImageFile
-                        ? <p className="km-file-selected">✓ {rootImageFile.name}</p>
-                        : <p className="km-file-label">Click to upload sidebar image (Recommended: 5:6 aspect ratio)</p>}
-                      <input type="file" accept="image/*" onChange={e => setRootImageFile(e.target.files[0])} />
-                    </div>
-                  </div>
+                  <ImageUploadPreview
+                    label="Sidebar Image (Optional)"
+                    file={rootImageFile}
+                    existingUrl={existingRootImage ? resolveImageSrc(existingRootImage) : null}
+                    onChange={setRootImageFile}
+                    onRemove={() => setRootImageFile(null)}
+                    helpText="Recommended: 5:6 aspect ratio image"
+                    previewMaxHeight={140}
+                  />
 
                   <button type="submit" className="km-btn-submit">
                     {editingRootId ? 'Update Combo Group' : 'Save Combo Group'}
@@ -446,9 +475,18 @@ export default function Combos({ showToast }) {
                   
                   <div className="km-field">
                     <label className="km-label">Combo Pack Name *</label>
-                    <input className="km-input" type="text" placeholder="e.g. Kurti Combo Set of 2" required
+                    <input
+                      className={`km-input ${isOverLimit(childFormData.name, { maxChars: 80, maxWords: 12 }) ? 'km-input-error' : ''}`}
+                      type="text" placeholder="e.g. Kurti Combo Set of 2" required
                       value={childFormData.name}
-                      onChange={e => setChildFormData({ ...childFormData, name: e.target.value })} />
+                      onChange={e => setChildFormData({ ...childFormData, name: e.target.value })}
+                    />
+                    <CharWordCounter
+                      value={childFormData.name}
+                      maxChars={80}
+                      maxWords={12}
+                      hint="Display name for this combo deal"
+                    />
                   </div>
 
                   <div className="km-field">
@@ -476,17 +514,35 @@ export default function Combos({ showToast }) {
 
                   <div className="km-field km-field-full">
                     <label className="km-label">Short Description</label>
-                    <input className="km-input" type="text" placeholder="e.g. Get two handloom Kurtis of your choice at a special deal price"
+                    <input
+                      className={`km-input ${isOverLimit(childFormData.shortDescription, { maxChars: 160, maxWords: 30 }) ? 'km-input-error' : ''}`}
+                      type="text" placeholder="e.g. Get two handloom Kurtis of your choice at a special deal price"
                       value={childFormData.shortDescription}
-                      onChange={e => setChildFormData({ ...childFormData, shortDescription: e.target.value })} />
+                      onChange={e => setChildFormData({ ...childFormData, shortDescription: e.target.value })}
+                    />
+                    <CharWordCounter
+                      value={childFormData.shortDescription}
+                      maxChars={160}
+                      maxWords={30}
+                      hint="Brief summary for combo cards"
+                    />
                   </div>
 
                   <div className="km-field km-field-full">
                     <label className="km-label">Detailed Description / Inclusions</label>
-                    <textarea className="km-input" rows="3" placeholder="Describe the fabrics, package content, customisation rules..."
+                    <textarea
+                      className={`km-input ${isOverLimit(childFormData.fullDescription, { maxChars: 1000, maxWords: 160 }) ? 'km-input-error' : ''}`}
+                      rows="3" placeholder="Describe the fabrics, package content, customisation rules..."
                       style={{ resize: 'vertical' }}
                       value={childFormData.fullDescription}
-                      onChange={e => setChildFormData({ ...childFormData, fullDescription: e.target.value })} />
+                      onChange={e => setChildFormData({ ...childFormData, fullDescription: e.target.value })}
+                    />
+                    <CharWordCounter
+                      value={childFormData.fullDescription}
+                      maxChars={1000}
+                      maxWords={160}
+                      hint="Full specifications, inclusions, or fabric details"
+                    />
                   </div>
 
                   <div className="km-field">
@@ -498,13 +554,16 @@ export default function Combos({ showToast }) {
                     </select>
                   </div>
 
-                  <div className="km-field">
-                    <label className="km-label">Combo Cover Image</label>
-                    <div className="km-file-zone" style={{ padding: '8px 12px' }}>
-                      <input type="file" accept="image/*" onChange={e => setChildImageFile(e.target.files[0])} />
-                      {childImageFile ? <span style={{ color: '#39B54A' }}>✓ {childImageFile.name}</span> : <span>Click to upload image</span>}
-                    </div>
-                  </div>
+                  <ImageUploadPreview
+                    label="Combo Cover Image"
+                    className="km-field"
+                    file={childImageFile}
+                    existingUrl={existingChildImage ? resolveImageSrc(existingChildImage) : null}
+                    onChange={setChildImageFile}
+                    onRemove={() => setChildImageFile(null)}
+                    helpText="Product cover image for combo item"
+                    previewMaxHeight={110}
+                  />
 
                   {/* Product Association Selector */}
                   <div className="km-field km-field-full" style={{ borderTop: '1px solid #E5E7EB', paddingTop: 16, marginTop: 8 }}>

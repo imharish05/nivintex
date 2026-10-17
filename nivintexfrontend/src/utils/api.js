@@ -197,10 +197,12 @@ const mapProduct = (p) => {
   if (!p) return p;
   const sourceVariants = p.variants || p.Variants || p.product_varients || p.product_variants || [];
   const variants = sourceVariants.map(variant => {
-    const finalPrice = Number(variant.franchise_price_final) || 0;
-    return { ...variant, franchise_price_final: variant.franchise_price_final ?? null, salesPrice: finalPrice, mrp: finalPrice };
+    const rawFinal = variant.franchise_price_final ?? variant.prices?.franchise;
+    const finalPrice = Number(rawFinal) || 0;
+    return { ...variant, franchise_price_final: rawFinal ?? null, salesPrice: finalPrice, mrp: finalPrice };
   });
-  const finalPrice = Number(p.franchise_price_final ?? variants.find(variant => variant.franchise_price_final != null)?.franchise_price_final) || 0;
+  const rawProductFinal = p.franchise_price_final ?? p.prices?.franchise ?? variants.find(variant => variant.franchise_price_final != null)?.franchise_price_final;
+  const finalPrice = Number(rawProductFinal) || 0;
   let sizes = p.sizes || [];
   let colors = p.colors || [];
   let totalStock = p.stock || 0;
@@ -222,6 +224,7 @@ const mapProduct = (p) => {
 
   return {
     ...p,
+    slug: p.slug || p.product_slug || slugifyProductName(p.productName || p.name, p.id),
     productName: p.name || p.productName,
     categoryId: p.billingCategoryId || p.Category?.billingCategoryId || p.category_id || p.categoryId,
     // Keep Billing's subcategory id and our local subcategory id distinct.
@@ -243,24 +246,130 @@ const mapProduct = (p) => {
     sizes: sizes,
     colors: colors,
     stock: totalStock,
-    franchise_price_final: p.franchise_price_final ?? (variants.find(variant => variant.franchise_price_final != null)?.franchise_price_final ?? null),
+    franchise_price_final: rawProductFinal ?? null,
     salesPrice: finalPrice,
     mrp: finalPrice,
     image: p.main_image || p.image
   };
 };
+
+export const slugifyProductName = (name, id) => {
+  const base = String(name || 'product')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'product';
+  return `${base}-${id}`;
+};
+
 const mapProducts = (arr) => Array.isArray(arr) ? arr.map(mapProduct) : (arr ? mapProduct(arr) : arr);
+
+const enrichProductsWithBillingPrices = async products => {
+  const isArray = Array.isArray(products);
+  const rows = Array.isArray(products) ? products : products ? [products] : [];
+  if (!rows.length) return isArray ? [] : null;
+  let billingRows;
+  try {
+    billingRows = await billingCatalogApi.getProducts();
+  } catch (error) {
+    console.warn('[Products] Live Billing price lookup failed; using the local catalog price:', error.message);
+    return products;
+  }
+  const billingById = new Map(billingRows.map(row => [String(row.id ?? row.product_id), row]));
+  const enriched = rows.map(row => {
+    const billingId = row.billingProductId ?? row.billing_product_id ?? row.id;
+    const billing = billingById.get(String(billingId));
+    if (!billing) return row;
+    const franchisePrice = billing.prices?.franchise ?? billing.franchise_price_final;
+    const existingVariants = row.Variants || row.variants || [];
+    const billingVariants = billing.variants || billing.product_variants || billing.product_varients || [];
+    const billingVariantByCode = new Map(billingVariants.flatMap(variant =>
+      [variant.variant_code, variant.sku, variant.barcode].filter(Boolean).map(code => [String(code).toLowerCase(), variant])
+    ));
+    const Variants = existingVariants.map(variant => {
+      const matched = billingVariantByCode.get(String(variant.variant_code || variant.sku || variant.barcode || '').toLowerCase());
+      const variantPrice = matched?.prices?.franchise ?? matched?.franchise_price_final ?? variant.franchise_price_final ?? franchisePrice;
+      return { ...variant, franchise_price_final: variantPrice ?? null, salesPrice: Number(variantPrice) || 0, mrp: Number(variantPrice) || 0 };
+    });
+    return {
+      ...row,
+      prices: billing.prices || row.prices,
+      franchise_price_final: franchisePrice ?? row.franchise_price_final ?? null,
+      salesPrice: Number(franchisePrice ?? row.salesPrice) || 0,
+      mrp: Number(franchisePrice ?? row.mrp) || 0,
+      Variants,
+    };
+  });
+  return isArray ? enriched : enriched[0];
+};
 
 export const productApi = {
 
-  getAll:          async () => { const r = await get('/product_varients'); const arr = r?.product_varients || r?.products || r?.data || (Array.isArray(r) ? r : []); return mapProducts(arr); },
-  getById:         async (id) => { const r = await get(`/product_details/${id}`); return mapProducts(r?.products || r?.product || r); },
-  getByCategory:   async (catId) => { const r = await get(`/products/category/${catId}`); return mapProducts(r?.products || r); },
-  getBySubCategory:async (subCatId) => { const r = await get(`/products/subcategory/${subCatId}`); return mapProducts(r?.products || r); },
-  search:          async (query) => { const r = await get(`/products/search?q=${encodeURIComponent(query)}`); return mapProducts(r?.products || r); },
+  getAll:          async () => { const r = await get('/product_varients'); const arr = r?.product_varients || r?.products || r?.data || (Array.isArray(r) ? r : []); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(arr))); },
+  getById:         async (id) => { const r = await get(`/product_details/${id}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r?.product || r))); },
+  getBySlug:       async (slug) => { const r = await get(`/products/slug/${encodeURIComponent(slug)}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.product || r?.products || r))); },
+  getByCategory:   async (catId) => { const r = await get(`/products/category/${catId}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r))); },
+  getBySubCategory:async (subCatId) => { const r = await get(`/products/subcategory/${subCatId}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r))); },
+  search:          async (query) => { const r = await get(`/products/search?q=${encodeURIComponent(query)}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r))); },
   add:             (formData)      => post('/products/add', formData),
   update:          (id, formData)  => put(`/products/update/${id}`, formData),
   remove:          (id)            => del(`/products/delete/${id}`),
+};
+
+// Live Billing catalog endpoints; stock checks must not rely on a stale local sync.
+export const billingCatalogApi = {
+  getProducts: async () => {
+    const response = await get('/billing/products');
+    const products = response?.products || response?.data?.products || response?.data || response;
+    if (!Array.isArray(products)) throw new Error(response?.message || 'Billing returned an invalid products response.');
+    return products;
+  },
+  getProductVariants: async () => {
+    const response = await get('/billing/product-varients');
+    const products = response?.product_varients || response?.products || response?.data?.product_varients || response?.data?.products || response?.data || response;
+    if (!Array.isArray(products)) throw new Error(response?.message || 'Billing returned an invalid product variants response.');
+    return products;
+  },
+  getProductDetails: async billingProductId => {
+    const response = await get(`/billing/product-details/${encodeURIComponent(billingProductId)}`);
+    const candidates = [response?.product_details, response?.product, response?.products, response?.data?.product_details, response?.data?.product, response?.data?.products, response?.data?.data, response?.data, response];
+    const result = candidates.find(value => Array.isArray(value) || (value && typeof value === 'object' && (value.id != null || value.product_id != null)));
+    return Array.isArray(result) ? result[0] : result;
+  },
+  getStocksByVariant: async () => {
+    let response;
+    try {
+      response = await get('/billing/stocks');
+    } catch (error) {
+      if (error.status === 404) return null;
+      throw error;
+    }
+    if (Number(response?.status) === 404) return null;
+    if (Number(response?.status) >= 400) throw new Error(response.message || 'Billing stock list returned an error.');
+    const candidates = [response?.stocks, response?.data?.stocks, response?.data?.data?.stocks, response?.data, response];
+    const rows = candidates.find(Array.isArray);
+    if (!rows) throw new Error(response?.message || 'Billing returned an invalid stock list response.');
+    const stockByVariant = new Map();
+    for (const row of rows) {
+      const id = row?.product_variant_id ?? row?.product_varient_id ?? row?.variant_id ?? row?.productVariantId ?? row?.id;
+      if (id === undefined || id === null) continue;
+      const outOfStock = row.in_stock === false || row.in_stock === 0
+        || ['false', '0', 'no', 'out of stock'].includes(String(row.in_stock ?? '').trim().toLowerCase());
+      const raw = row.available_stock ?? row.available_quantity ?? row.available_qty ?? row.quantity_available
+        ?? row.qty_available ?? row.current_stock ?? row.stock_qty ?? row.stock_quantity ?? row.qty
+        ?? row.on_hand ?? row.balance_quantity ?? row.quantity ?? row.stock ?? row.total_stock;
+      const quantity = outOfStock ? 0 : raw === null || raw === undefined || raw === '' ? null : Number(raw);
+      const value = Number.isFinite(quantity) && quantity >= 0 ? Math.floor(quantity) : null;
+      const key = String(id);
+      if (!stockByVariant.has(key)) stockByVariant.set(key, value);
+      else {
+        const previous = stockByVariant.get(key);
+        stockByVariant.set(key, previous === null || value === null ? null : Math.min(previous, value));
+      }
+    }
+    return stockByVariant;
+  },
 };
 
 export const productSpecificationApi = {

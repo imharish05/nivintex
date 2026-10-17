@@ -30,6 +30,7 @@ const NAV_ITEMS = [
           <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
         </svg>
       )},
+      /*
       { id: 'sale-group', label: 'Sales', icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -38,6 +39,7 @@ const NAV_ITEMS = [
         { id: 'sale-manager', label: 'Single Product' },
         { id: 'combos', label: 'Combos' },
       ]},
+      */
       { id: 'instagram-posts', label: 'Instagram Posts', icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
@@ -107,6 +109,12 @@ const NAV_ITEMS = [
           <path d="M4 6h16M4 12h16M4 18h16"/>
         </svg>
       )},
+            { id: 'orders_pending', label: 'Pending Orders', icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+      )},
       { id: 'orders_confirmed', label: 'Confirmed Orders', icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
@@ -131,13 +139,6 @@ const NAV_ITEMS = [
       { id: 'orders_delivered', label: 'Delivered Orders', icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      )},
-      { id: 'orders_cancelled', label: 'Cancelled Orders', icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="15" y1="9" x2="9" y2="15"/>
-          <line x1="9" y1="9" x2="15" y2="15"/>
         </svg>
       )},
     ],

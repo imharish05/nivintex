@@ -98,8 +98,8 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
 
   const [confirmed, setConfirmed]     = useState(false);
-  const [billingStockWarning, setBillingStockWarning] = useState(false);
   const [billingSyncStatus, setBillingSyncStatus] = useState('');
+  const [billingSyncError, setBillingSyncError] = useState('');
   const [shipmentWarning, setShipmentWarning] = useState('');
   const [billingSame, setBillingSame] = useState(false);
   const [form, setForm]               = useState({
@@ -112,6 +112,7 @@ const CheckoutPage = () => {
   const [placing, setPlacing]         = useState(false);
   const [placeError, setPlaceError]   = useState('');
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [pendingOrderConfirmation, setPendingOrderConfirmation] = useState(null);
   const [shippingQuote, setShippingQuote] = useState(null);
   const [shippingQuoteError, setShippingQuoteError] = useState('');
   const [selectedCourierId, setSelectedCourierId] = useState('');
@@ -222,6 +223,18 @@ const CheckoutPage = () => {
     isBuyOneGetOne: !!item.isBuyOneGetOne,
   }));
 
+  const selectedBillingAddress = billingSame || !user ? form : billing;
+  const billingAddressReady = Boolean(
+    (billingSame || !user || savedAddresses.includes(billing))
+    && selectedBillingAddress?.firstName?.trim()
+    && selectedBillingAddress?.address?.trim()
+    && selectedBillingAddress?.city?.trim()
+    && selectedBillingAddress?.state?.trim()
+    && /^\d{6}$/.test(String(selectedBillingAddress?.zip || '').trim())
+    && selectedBillingAddress?.country?.trim()
+    && String(selectedBillingAddress?.phone || '').replace(/\D/g, '').length >= 7
+  );
+
   const { subtotal, savings } = buyNowItem ? calculateCartTotals([buyNowItem]) : getCartTotals();
   const quoteIsCurrent    = shippingQuote?.pincode === form.zip;
   const selectedCourier  = quoteIsCurrent ? shippingQuote?.couriers?.find(courier => String(courier.courierId) === String(selectedCourierId)) : null;
@@ -232,6 +245,7 @@ const CheckoutPage = () => {
   const formattedTax      = tax.toFixed(2);
   const formattedSubtotal = subtotal.toFixed(2);
   const formattedTotal    = total.toFixed(2);
+  const payDisabled = placing || orderItems.length === 0 || !quoteIsCurrent || !selectedCourier || !billingAddressReady;
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -319,6 +333,7 @@ const CheckoutPage = () => {
     if (!form.city?.trim())      errs.city      = 'City is required';
     if (!form.state?.trim())     errs.state     = 'State is required';
     if (!form.zip?.trim())       errs.zip       = 'PIN code is required';
+    if (!billingAddressReady) errs.billingAddress = 'Select a complete billing address or choose “Billing same as shipping”.';
     return errs;
   };
 
@@ -326,7 +341,7 @@ const CheckoutPage = () => {
     const errs = validate();
     if (Object.keys(errs).length) {
       setFormErrors(errs);
-      setPlaceError('Please fill in all required fields.');
+      setPlaceError(errs.billingAddress || 'Please fill in all required fields.');
       if (!showAddressForm) setShowAddressForm(true);
       setTimeout(() => errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
       return;
@@ -346,6 +361,7 @@ const CheckoutPage = () => {
       return;
     }
 
+    setPlacing(true);
     let checkoutItems = orderItems;
     try {
       const catalog = await productApi.getAll();
@@ -363,8 +379,8 @@ const CheckoutPage = () => {
               && (!item.color || String(candidate.color || '') === String(item.color))
               && (!item.fabric || String(candidate.fabric || '') === String(item.fabric)))
             : variants.length === 1 ? variants[0] : null;
-        if ((item.variantId || item.billingVariantId) && !variant) return { ...item, checkoutInvalid: true };
-        if (variants.length > 1 && !variant) return { ...item, checkoutInvalid: true };
+        if (item.variantId && !variant && !item.billingVariantId) return { ...item, checkoutInvalid: true };
+        if (variants.length > 1 && !variant && !item.billingVariantId) return { ...item, checkoutInvalid: true };
         return {
           ...item,
           productId: product.id,
@@ -376,16 +392,27 @@ const CheckoutPage = () => {
       const staleItem = checkoutItems.find(item => item.checkoutInvalid);
       if (staleItem) {
         setPlaceError(`${staleItem.name || 'An item'} or its selected variant is no longer available in the store catalog. Remove it from your cart and add the current product again. You have not been charged.`);
+        setPlacing(false);
         setTimeout(() => errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
         return;
       }
+
+      for (const item of checkoutItems) {
+        if (!item.billingProductId || !item.billingVariantId) {
+          throw new Error(`${item.name || 'An item'} is missing its Billing product or variant mapping. Refresh the product and cart before payment.`);
+        }
+        if (!Number.isInteger(Number(item.qty)) || Number(item.qty) < 1) {
+          throw new Error(`${item.name || 'An item'} has an invalid quantity. Update the cart before payment.`);
+        }
+      }
     } catch (error) {
-      setPlaceError(`Could not verify cart products before payment: ${error.message || 'catalog check failed'}. Please try again.`);
+      setPlaceError(error.message?.includes('Billing product or variant mapping') || error.message?.includes('invalid quantity')
+        ? error.message
+        : `Could not prepare the required Billing details before payment: ${error.message || 'validation failed'}. Please try again.`);
+      setPlacing(false);
       setTimeout(() => errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
       return;
     }
-
-    setPlacing(true);
 
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded || !window.Razorpay) {
@@ -395,7 +422,39 @@ const CheckoutPage = () => {
     }
 
     try {
-      const createdPayment = await razorpayApi.createOrder({ amount: Number(total.toFixed(2)), courierId: selectedCourier.courierId });
+      const billingPayload = {
+        customer_name: form.firstName.trim(),
+        customer_phone: form.phone.trim(),
+        customer_email: form.email.trim(),
+        source: 'Website',
+        entry_mode: 'Manual',
+        price_type: 'MRP',
+        payment_mode: 'Online',
+        has_gst: false,
+        bill_discount_amount: 0,
+        paid_amount: Number(formattedSubtotal),
+        items: checkoutItems.map(item => ({
+          product_id: item.billingProductId,
+          product_variant_id: item.billingVariantId,
+          quantity: Number(item.qty),
+          discount_amount: 0,
+        })),
+      };
+      const createdPayment = await razorpayApi.createOrder({
+        amount: Number(total.toFixed(2)),
+        courierId: selectedCourier.courierId,
+        billingAddress: {
+          name: selectedBillingAddress.firstName.trim(),
+          phone: selectedBillingAddress.phone.trim(),
+          address: selectedBillingAddress.address.trim(),
+          address2: String(selectedBillingAddress.address2 || '').trim(),
+          city: selectedBillingAddress.city.trim(),
+          state: selectedBillingAddress.state.trim(),
+          zip: String(selectedBillingAddress.zip).trim(),
+          country: selectedBillingAddress.country.trim(),
+        },
+        billingPayload,
+      });
       if (!createdPayment?.success || !createdPayment.orderId || !createdPayment.key) {
         throw new Error(createdPayment?.message || 'Could not start secure payment.');
       }
@@ -438,28 +497,26 @@ const CheckoutPage = () => {
 
   const handlePaymentSuccess = async (paymentResponse, checkoutItems = orderItems) => {
     try {
-      const shippingAddr = billingSame ? {
+      // The checkout form is the delivery address. `billingSame` only controls
+      // which address is copied into the invoice's billing address.
+      const shippingAddr = {
         name: form.firstName, address: form.address, address2: form.address2,
         city: form.city, state: form.state, zip: form.zip, country: form.country, phone: form.phone,
-      } : {
-        name: billing.firstName || form.firstName, address: billing.address,
-        address2: billing.address2, city: billing.city, state: billing.state, zip: billing.zip, country: billing.country, phone: billing.phone || form.phone,
+      };
+      const billingAddr = billingSame ? shippingAddr : {
+        name: billing.firstName || form.firstName, address: billing.address || '',
+        address2: billing.address2 || '', city: billing.city || '', state: billing.state || '',
+        zip: billing.zip || '', country: billing.country || 'India', phone: billing.phone || form.phone,
       };
 
       // ── Save order to local backend ────────────────────────────────────
-      const saveRes = await fetch(ORDER_SAVE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+      const paidOrderPayload = {
             customer_id: user?.id || null,
             clear_cart: !buyNowItem,
             customer_name: form.firstName,
             customer_email: form.email,
             customer_phone: form.phone,
-            billing_address: JSON.stringify({
-              name: form.firstName, address: form.address, address2: form.address2,
-              city: form.city, state: form.state, zip: form.zip, country: form.country, phone: form.phone,
-            }),
+            billing_address: JSON.stringify(billingAddr),
             shipping_address: JSON.stringify(shippingAddr),
             subtotal: formattedSubtotal,
             delivery_charge: shipping,
@@ -483,14 +540,33 @@ const CheckoutPage = () => {
               shippingWidthCm: i.shippingWidthCm,
               shippingHeightCm: i.shippingHeightCm,
             })),
-          }),
-      });
-      const saveData = await saveRes.json().catch(() => ({}));
-      if (!saveRes.ok || !saveData.success) {
-        throw new Error(saveData.message || 'The server could not save this order.');
+      };
+      let saveRes;
+      let saveData;
+      let saveFailure;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          saveRes = await fetch(ORDER_SAVE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(paidOrderPayload),
+          });
+          saveData = await saveRes.json().catch(() => ({}));
+          if (saveRes.ok && saveData.success) break;
+          saveFailure = new Error(saveData.message || saveData.error || `The server could not save this order (HTTP ${saveRes.status}).`);
+          if (saveRes.status < 500 || attempt === 2) throw saveFailure;
+        } catch (error) {
+          saveFailure = error;
+          const isNetworkFailure = !saveRes && (error instanceof TypeError || !error.status);
+          const retryableServerFailure = Boolean(saveRes && saveRes.status >= 500);
+          if (attempt === 2 || (!isNetworkFailure && !retryableServerFailure)) throw error;
+        }
+        await new Promise(resolve => window.setTimeout(resolve, 500 * (attempt + 1)));
+        saveRes = null;
       }
-      setBillingStockWarning(Boolean(saveData.billingStockWarning));
+      if (!saveRes?.ok || !saveData?.success) throw saveFailure || new Error('The server could not save this order.');
       setBillingSyncStatus(saveData.billingSyncStatus || '');
+      setBillingSyncError(saveData.billingSyncError || '');
       setShipmentWarning(saveData.shipmentWarning || '');
       console.log('[Order saved]', saveData);
 
@@ -508,9 +584,11 @@ const CheckoutPage = () => {
 
       setPaymentProcessing(false);
       setPlacing(false);
+      setPendingOrderConfirmation(null);
       setConfirmed(true);
     } catch (err) {
       setPaymentProcessing(false); setPlacing(false);
+      setPendingOrderConfirmation({ paymentResponse, checkoutItems });
       setPlaceError(
         `Payment received but order could not be confirmed: ${err.message || 'order save failed'}. Contact support with payment ID: ${paymentResponse.razorpay_payment_id}`
       );
@@ -780,7 +858,7 @@ const CheckoutPage = () => {
         /* ── Button ── */
         .ck-btn-primary {
           background: ${BRAND}; color: #fff; border: none;
-          padding: 13px 28px; border-radius: 0px; width: 100%;
+          padding: 13px 28px; border-radius: 8px; width: 100%;
           font-family: ${F.main}; font-size: 11px; font-weight: 300;
           letter-spacing: 3px; text-transform: uppercase; cursor: pointer;
           position: relative; overflow: hidden; transition: box-shadow 0.3s;
@@ -966,19 +1044,14 @@ const CheckoutPage = () => {
                   Thank you for your purchase. A confirmation has been sent to{' '}
                   <strong style={{ color: '#C9933A', fontWeight: 400 }}>{form.email || 'your email'}</strong>.
                 </p>
-                {billingStockWarning && (
-                  <p role="status" style={{ maxWidth: 560, margin: '16px auto 0', color: '#8a5a00', fontSize: 14 }}>
-                    Your payment and order were recorded, but the billing system did not confirm the stock update. Please contact support with your order details.
-                  </p>
-                )}
                 {shipmentWarning && (
                   <p role="status" style={{ maxWidth: 560, margin: '16px auto 0', color: '#8a5a00', fontSize: 14 }}>
                     Your payment and order were confirmed, but Shiprocket could not book the shipment yet: {shipmentWarning} Please contact support to arrange dispatch.
                   </p>
                 )}
-                {(billingSyncStatus === 'not_configured' || billingSyncStatus === 'needs_gst_review') && (
+                {billingSyncStatus && billingSyncStatus !== 'synced' && billingSyncStatus !== 'not_applicable' && (
                   <p role="status" style={{ maxWidth: 560, margin: '16px auto 0', color: '#8a5a00', fontSize: 14 }}>
-                    Your paid order is saved in the website database. Billing invoice sync is pending because its create API endpoint is not configured{billingSyncStatus === 'needs_gst_review' ? ' and this order contains different GST options that need review' : ''}.
+                    Your payment and order are saved. Billing invoice status: {billingSyncStatus.replace(/_/g, ' ')}.{billingSyncError ? ` ${billingSyncError}` : ''}
                   </p>
                 )}
                 <button onClick={() => navigate('/home')} className="ck-btn-primary"
@@ -1018,7 +1091,7 @@ const CheckoutPage = () => {
                             </div>
                             {loginError && <p style={{ margin: '0 0 16px', color: '#e74c3c', fontSize: 12, fontFamily: F.sub }}>{loginError}</p>}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                              <button type="submit" disabled={isLoggingIn} style={{ padding: '12px 32px', background: BRAND, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontFamily: F.main, fontSize: 13, fontWeight: 600 }}>
+                              <button type="submit" disabled={isLoggingIn} style={{ padding: '12px 32px', background: BRAND, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: F.main, fontSize: 13, fontWeight: 600 }}>
                                 {isLoggingIn ? 'Logging in...' : 'Login'}
                               </button>
                               <a href="#forgot-password" style={{ color: BRAND, fontSize: 13, fontFamily: F.sub, textDecoration: 'underline' }}>Forgot password?</a>
@@ -1042,7 +1115,7 @@ const CheckoutPage = () => {
                             setEditIndex(null);
                             setShowAddressForm(true);
                           }} 
-                            style={{ color: BRAND, border: `1px solid ${BRAND}`, background: 'transparent', padding: '6px 12px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                            style={{ color: BRAND, border: `1px solid ${BRAND}`, background: 'transparent', padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                             + Add New
                           </button>
                         )}
@@ -1053,6 +1126,20 @@ const CheckoutPage = () => {
                       <div className="ck-error-banner" ref={errorBannerRef}>
                         <strong>Could not proceed</strong>
                         {placeError}
+                        {pendingOrderConfirmation && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const pending = pendingOrderConfirmation;
+                              setPendingOrderConfirmation(null);
+                              setPaymentProcessing(true);
+                              handlePaymentSuccess(pending.paymentResponse, pending.checkoutItems);
+                            }}
+                            style={{ display: 'block', marginTop: 10, padding: '9px 14px', border: 0, borderRadius: 6, background: '#075c4b', color: '#fff', cursor: 'pointer' }}
+                          >
+                            Retry order confirmation
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1130,7 +1217,7 @@ const CheckoutPage = () => {
                         })}
 
                         <div style={{ display: 'flex', justifyContent: 'center', margin: '24px 0' }}>
-                          <div onClick={() => setBillingSame(!billingSame)} style={{ background: '#F9F9FB', border: '1px solid #EAE4D6', padding: '8px 16px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <div onClick={() => { setBillingSame(!billingSame); setPlaceError(''); }} style={{ background: '#F9F9FB', border: '1px solid #EAE4D6', padding: '8px 16px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                             <input type="checkbox" checked={billingSame} readOnly style={{ accentColor: BRAND, width: 14, height: 14 }} />
                             <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>Billing same as shipping</span>
                           </div>
@@ -1153,7 +1240,7 @@ const CheckoutPage = () => {
                               const isSelected = billing === addr;
                               return (
                                 <div key={`billing-${idx}`} 
-                                  onClick={() => setBilling(addr)}
+                                  onClick={() => { setBilling(addr); setPlaceError(''); }}
                                   style={{ border: isSelected ? `1px solid ${BRAND}` : '1px solid #EAE4D6', borderRadius: 8, padding: 16, background: isSelected ? ACCENT_SOFT : '#fff', position: 'relative', marginBottom: 12, cursor: 'pointer' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                                     <input type="radio" checked={isSelected} readOnly style={{ accentColor: BRAND, width: 16, height: 16 }} />
@@ -1283,7 +1370,7 @@ const CheckoutPage = () => {
                               }
                             });
                             setShowAddressForm(false);
-                          }} style={{ background: BRAND, color: '#fff', border: 'none', padding: '10px 24px', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                          }} style={{ background: BRAND, color: '#fff', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                             Save Address
                           </button>
                           <button type="button" onClick={() => {
@@ -1291,7 +1378,7 @@ const CheckoutPage = () => {
                               setForm(savedAddresses[selectedAddressIndex] || savedAddresses[0]);
                             }
                             setShowAddressForm(false);
-                          }} style={{ background: '#F9F9FB', color: '#1A1A1A', border: '1px solid #EAE4D6', padding: '10px 24px', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                          }} style={{ background: '#F9F9FB', color: '#1A1A1A', border: '1px solid #EAE4D6', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
                             Cancel
                           </button>
                         </div>
@@ -1361,7 +1448,7 @@ const CheckoutPage = () => {
                                 }
                                 setPlacing(false);
                               }}
-                              style={{ width: '100%', padding: '14px', background: BRAND, color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontFamily: F.main, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>
+                              style={{ width: '100%', padding: '14px', background: BRAND, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontFamily: F.main, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>
                               Confirm & Register
                             </button>
                           </div>
@@ -1527,11 +1614,18 @@ const CheckoutPage = () => {
                       </>
                     )}
 
+                    {!billingAddressReady && (
+                      <p role="alert" style={{ color: '#b42318', fontSize: 12, margin: '16px 0 0' }}>
+                        {user && !billingSame
+                          ? 'Select a complete billing address, or check “Billing same as shipping”, before payment.'
+                          : 'Complete the shipping address before payment.'}
+                      </p>
+                    )}
                     <button
                       onClick={handlePlaceOrder}
                       className="ck-btn-primary"
-                      disabled={placing || orderItems.length === 0 || !quoteIsCurrent || !selectedCourier}
-                      style={{ marginTop: 24 }}
+                      disabled={payDisabled}
+                      style={{ marginTop: 24, opacity: payDisabled ? 0.55 : 1, cursor: payDisabled ? 'not-allowed' : 'pointer' }}
                     >
                       <span>
                         {placing

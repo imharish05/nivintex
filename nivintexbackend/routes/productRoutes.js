@@ -39,6 +39,7 @@ const handleUpload = (req, res, next) => {
 
 router.get('/',                          productController.getAllProducts);
 router.get('/search',                    productController.searchProducts);
+router.get('/slug/:slug',                productController.getProductBySlug);
 router.put('/billing/:billingProductId/customization', requireAdmin, handleUpload, productController.updateBillingProductCustomization);
 router.put('/billing-variants/:billingVariantId/image', requireAdmin, handleUpload, productController.updateBillingVariantImage);
 router.post('/add',                      handleUpload, productController.createProduct);

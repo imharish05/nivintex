@@ -3,11 +3,46 @@ const router = express.Router();
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const ProductVariant = require('../models/ProductVariant');
+const billingCatalog = require('../services/billingCatalogService');
 
 const getAvailableStock = async ({ productId, variantId }) => {
     if (variantId) {
         const variant = await ProductVariant.findByPk(variantId);
-        if (!variant || Number(variant.productId) !== Number(productId)) throw new Error('Selected product variant not found');
+        if (!variant || Number(variant.productId) !== Number(productId)) {
+            const notFound = new Error('Selected product variant not found');
+            notFound.status = 404;
+            throw notFound;
+        }
+        if (variant.billingVariantId) {
+            const product = await Product.findByPk(productId);
+            if (!product?.billingProductId) throw new Error('This Billing variant is not linked to a Billing product.');
+            try {
+                // Match checkout's source of truth: current Billing /product_varients.
+                const response = await billingCatalog.getProductVariants();
+                const remoteVariant = billingCatalog.variantsFromResponse(response).find(item => String(item.id) === String(variant.billingVariantId));
+                if (!remoteVariant) {
+                    const unavailable = new Error('This variant is no longer listed by Billing. Refresh the product page.');
+                    unavailable.status = 409;
+                    throw unavailable;
+                }
+                const remoteProduct = billingCatalog.productsFromResponse(response).find(candidate =>
+                    (candidate?.variants || candidate?.product_variants || candidate?.product_varients || [])
+                        .some(item => String(item.id) === String(variant.billingVariantId)));
+                if (remoteProduct?.id != null && String(remoteProduct.id) !== String(product.billingProductId)) {
+                    const mismatch = new Error('This variant does not belong to the selected Billing product. Refresh the product page.');
+                    mismatch.status = 409;
+                    throw mismatch;
+                }
+                const stock = billingCatalog.stockValue(remoteVariant);
+                if (stock === null) throw new Error('Billing did not return a usable stock quantity.');
+                return stock;
+            } catch (error) {
+                if (error.status) throw error;
+                const unavailable = new Error('Could not verify current Billing stock. Please try again.');
+                unavailable.status = 503;
+                throw unavailable;
+            }
+        }
         return Number(variant.stock || 0);
     }
     const product = await Product.findByPk(productId);
@@ -24,7 +59,7 @@ router.delete('/clear/:customerId', async (req, res) => {
         res.json({ success: true, message: 'Cart cleared' });
     } catch (err) {
         console.error('Clear cart error:', err);
-        res.status(500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 
@@ -45,7 +80,7 @@ router.get('/customer/:customerId', async (req, res) => {
         res.json(items);
     } catch (err) {
         console.error('Get cart error:', err);
-        res.status(500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 
@@ -141,7 +176,7 @@ router.post('/add', async (req, res) => {
         res.status(201).json(item);
     } catch (err) {
         console.error('Add to cart error:', err);
-        res.status(500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 
@@ -167,7 +202,7 @@ router.put('/update/:id', async (req, res) => {
         res.json(item);
     } catch (err) {
         console.error('Update cart error:', err);
-        res.status(500).json({ error: err.message });
+        res.status(err.status || 500).json({ error: err.message });
     }
 });
 

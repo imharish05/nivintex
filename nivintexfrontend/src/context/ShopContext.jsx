@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { cartApi, wishlistApi, authApi, orderApi, productApi, getImageUrl } from '../utils/api';
+import { cartApi, wishlistApi, authApi, orderApi, productApi, billingCatalogApi, getImageUrl } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 
 const BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -30,6 +30,27 @@ const resolveImg = (img) => {
   return getImageUrl(img) || '';
 };
 const normId = (val) => (val === undefined || val === null) ? '' : String(val);
+
+const billingStock = (variant) => {
+  if (variant?.in_stock === false || variant?.in_stock === 0 || ['false', '0', 'no', 'out of stock'].includes(String(variant?.in_stock ?? '').trim().toLowerCase())) return 0;
+  for (const key of ['available_stock', 'available_quantity', 'available_qty', 'quantity_available', 'qty_available', 'current_stock', 'stock_qty', 'stock_quantity', 'qty', 'on_hand', 'balance_quantity', 'quantity', 'stock', 'total_stock']) {
+    const value = variant?.[key];
+    if (value === null || value === undefined || value === '') continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) return Math.floor(parsed);
+  }
+  return null;
+};
+
+const billingStockWithDedicatedRows = (variant, stockByVariant) => {
+  const listedStock = billingStock(variant);
+  if (listedStock === null) return null;
+  if (stockByVariant === null) return listedStock;
+  const id = normId(variant?.id ?? variant?.product_variant_id ?? variant?.variant_id);
+  if (!stockByVariant?.has(id)) return 0;
+  const stock = stockByVariant.get(id);
+  return stock === null || stock === undefined ? null : Math.min(listedStock, stock);
+};
 
 // ── Centralised Cart Totals Calculator (BOGO Offers) ──────────────────
 export const calculateCartTotals = (cartItems = [], applyOffers = true) => {
@@ -80,6 +101,7 @@ export const ShopProvider = ({ children }) => {
   });
   const [cartLoading, setCartLoading] = useState(false);
   const [toasts, setToasts]           = useState([]);
+  const cartStockSyncKey = cartItems.map(item => `${normId(item.billingVariantId)}:${Number(item.qty) || 0}`).join('|');
 
   const showToast = useCallback((message, type = 'success') => {
     const id = Date.now();
@@ -92,6 +114,45 @@ export const ShopProvider = ({ children }) => {
   /* Persist guest data */
   useEffect(() => { if (!user?.id) saveGuestCart(cartItems);        }, [cartItems,     user?.id]);
   useEffect(() => { if (!user?.id) saveGuestWishlist(wishlistItems); }, [wishlistItems, user?.id]);
+
+  // Keep saved and guest cart availability aligned with Billing, including
+  // after returning to a tab or leaving the cart open while inventory changes.
+  useEffect(() => {
+    if (!cartItems.some(item => item.billingVariantId)) return undefined;
+    let active = true;
+    const syncStock = async () => {
+      try {
+        const [products, stockByVariant] = await Promise.all([
+          billingCatalogApi.getProductVariants(),
+          billingCatalogApi.getStocksByVariant(),
+        ]);
+        if (!active) return;
+        const byVariantId = new Map(products.flatMap(product => (product?.variants || product?.product_variants || product?.product_varients || []).map(variant => [normId(variant.id), variant])));
+        setCartItems(current => current.map(item => {
+          if (!item.billingVariantId) return item;
+          const variant = byVariantId.get(normId(item.billingVariantId));
+          const availableStock = variant ? billingStockWithDedicatedRows(variant, stockByVariant) : 0;
+          const stockSyncStatus = availableStock === null ? 'unverified' : 'verified';
+          if (item.availableStock === availableStock && item.stockSyncStatus === stockSyncStatus) return item;
+          return { ...item, availableStock, stockSyncStatus };
+        }));
+      } catch (error) {
+        if (!active) return;
+        console.warn('[ShopContext] live Billing cart stock sync:', error.message);
+        setCartItems(current => current.map(item => item.billingVariantId && (item.availableStock !== null || item.stockSyncStatus !== 'unverified')
+          ? { ...item, availableStock: null, stockSyncStatus: 'unverified' }
+          : item));
+      }
+    };
+    syncStock();
+    const interval = window.setInterval(syncStock, 30000);
+    window.addEventListener('focus', syncStock);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', syncStock);
+    };
+  }, [user?.id, cartStockSyncKey]);
 
   // Refresh previously saved guest cart amounts from the current database catalog.
   useEffect(() => {
@@ -179,7 +240,8 @@ export const ShopProvider = ({ children }) => {
     setCartLoading(true);
     try {
       const rows = await cartApi.get(customerId);
-      setCartItems(Array.isArray(rows) ? rows.map(normaliseCartRow) : []);
+      const normalized = Array.isArray(rows) ? rows.map(normaliseCartRow) : [];
+      setCartItems(normalized);
     } catch (err) {
       console.warn('[ShopContext] fetchCart:', err.message);
     } finally {
@@ -384,28 +446,43 @@ export const ShopProvider = ({ children }) => {
     const billingProductId = product.billingProductId || null;
     const addQty    = parseInt(product.qty || 1, 10);
 
-    if (!product.silent) {
-      showToast(`${name} added to cart!`, 'cart');
+    let availableStock = null;
+    if (billingVariantId) {
+      try {
+        const [products, stockByVariant] = await Promise.all([
+          billingCatalogApi.getProductVariants(),
+          billingCatalogApi.getStocksByVariant(),
+        ]);
+        const variant = products.flatMap(row => row?.variants || row?.product_variants || row?.product_varients || []).find(row => normId(row.id) === normId(billingVariantId));
+        availableStock = variant ? billingStockWithDedicatedRows(variant, stockByVariant) : 0;
+        const existingQty = cartItems.filter(item => normId(item.billingVariantId) === normId(billingVariantId)).reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+        if (availableStock === null) throw new Error('Billing did not return a usable stock quantity. Please try again.');
+        if (availableStock < existingQty + addQty) throw new Error(`Only ${availableStock} unit${availableStock === 1 ? '' : 's'} are currently available for ${name}.`);
+      } catch (error) {
+        if (!product.silent) showToast(error.message || 'Could not verify current Billing stock.', 'error');
+        return false;
+      }
     }
 
     if (user?.id) {
       try {
         await cartApi.add({ customerId: user.id, productId, variantId: product.variantId || null, name, img, price, quantity: addQty, weight, color: product.color || '', size: product.size || '', fabric: product.fabric || '', shippingWeightKg, shippingLengthCm, shippingWidthCm, shippingHeightCm, isBuyOneGetOne });
         await fetchCart(user.id);
+        if (!product.silent) showToast(`${name} added to cart!`, 'cart');
+        return true;
       } catch (err) {
         console.warn('[ShopContext] addToCart:', err.message);
-        setCartItems(prev => {
-          const ex = prev.find(i => i.productId === productId && normId(i.variantId) === normId(product.variantId));
-          if (ex) return prev.map(i => i === ex ? { ...i, qty: i.qty + addQty } : i);
-          return [...prev, { id: Date.now(), productId, billingProductId, variantId: product.variantId || null, billingVariantId, color: product.color || '', size: product.size || '', fabric: product.fabric || '', name, image: resolveImg(img), subtitle: weight, price, qty: addQty, shippingWeightKg, shippingLengthCm, shippingWidthCm, shippingHeightCm, isBuyOneGetOne }];
-        });
+        if (!product.silent) showToast(err.message || 'Could not add this item to your cart.', 'error');
+        return false;
       }
     } else {
       setCartItems(prev => {
         const ex = prev.find(i => i.productId === productId && normId(i.variantId) === normId(product.variantId));
-        if (ex) return prev.map(i => i === ex ? { ...i, qty: i.qty + addQty } : i);
-        return [...prev, { id: `${productId}-${product.variantId || 'default'}`, productId, billingProductId, variantId: product.variantId || null, billingVariantId, color: product.color || '', size: product.size || '', fabric: product.fabric || '', name, image: resolveImg(img), subtitle: weight, price, qty: addQty, shippingWeightKg, shippingLengthCm, shippingWidthCm, shippingHeightCm, isBuyOneGetOne }];
+        if (ex) return prev.map(i => i === ex ? { ...i, qty: i.qty + addQty, availableStock, stockSyncStatus: billingVariantId ? 'verified' : 'unverified' } : i);
+        return [...prev, { id: `${productId}-${product.variantId || 'default'}`, productId, billingProductId, variantId: product.variantId || null, billingVariantId, availableStock, stockSyncStatus: billingVariantId ? 'verified' : 'unverified', color: product.color || '', size: product.size || '', fabric: product.fabric || '', name, image: resolveImg(img), subtitle: weight, price, qty: addQty, shippingWeightKg, shippingLengthCm, shippingWidthCm, shippingHeightCm, isBuyOneGetOne }];
       });
+      if (!product.silent) showToast(`${name} added to cart!`, 'cart');
+      return true;
     }
   };
 
@@ -421,6 +498,14 @@ export const ShopProvider = ({ children }) => {
     const item = cartItems.find(i => i.id === cartRowId);
     if (!item) return;
     const newQty = Math.max(1, item.qty + delta);
+    if (delta > 0 && item.billingVariantId && (item.stockSyncStatus !== 'verified' || item.availableStock === null || item.availableStock === undefined)) {
+      showToast('Current stock could not be verified. Refresh the cart and try again.', 'error');
+      return;
+    }
+    if (delta > 0 && item.billingVariantId && newQty > item.availableStock) {
+      showToast(`Only ${item.availableStock} unit${item.availableStock === 1 ? '' : 's'} are currently available.`, 'error');
+      return;
+    }
     setCartItems(prev => prev.map(i => i.id === cartRowId ? { ...i, qty: newQty } : i));
     if (user?.id) {
       try { await cartApi.update(cartRowId, { quantity: newQty }); }

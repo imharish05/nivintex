@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useShop } from "../context/ShopContext";
-import { getImageUrl, getLocalImageUrl } from "../utils/api";
+import { getImageUrl, getLocalImageUrl, slugifyProductName, productApi } from "../utils/api";
 import logo from "../assets/img/logo2.png";
 import { ProductCardSkeleton } from "./Skeleton";
 
@@ -31,9 +31,10 @@ const styles = `
 
   .bs-header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     padding: 0 clamp(16px, 3.5vw, 32px) 24px;
+    gap: 12px;
   }
 
   .bs-title {
@@ -48,6 +49,7 @@ const styles = `
     position: relative;
     padding-bottom: 8px;
     display: inline-block;
+    line-height: 1.15;
   }
 
   .bs-title::after {
@@ -61,21 +63,94 @@ const styles = `
   }
 
   .bs-viewall {
-    font-size: 13px;
-    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
     color: var(--green);
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--green);
-    padding-bottom: 2px;
-    transition: opacity 0.2s;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: #ffffff;
+    border: 1px solid rgba(15, 84, 71, 0.3);
+    border-radius: 8px !important;
+    padding: 6px 14px;
+    transition: all 0.22s ease;
     cursor: pointer;
-    background: none;
-    border-top: none;
-    border-left: none;
-    border-right: none;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(15, 84, 71, 0.06);
+    flex-shrink: 0;
   }
 
-  .bs-viewall:hover { opacity: 0.7; }
+  .bs-viewall:hover {
+    background: var(--green);
+    color: #ffffff;
+    border-color: var(--green);
+    box-shadow: 0 3px 10px rgba(15, 84, 71, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .bs-viewall svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    transition: transform 0.2s ease;
+  }
+
+  .bs-viewall:hover svg {
+    transform: translateX(2px);
+  }
+
+  .bs-header-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .bs-nav-arrows {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .bs-nav-arrow-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1px solid rgba(15, 84, 71, 0.3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--green);
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 4px rgba(15, 84, 71, 0.08);
+    padding: 0;
+    line-height: 1;
+  }
+
+  .bs-nav-arrow-btn:hover:not(:disabled) {
+    background: var(--green);
+    color: #ffffff;
+    border-color: var(--green);
+    box-shadow: 0 3px 10px rgba(15, 84, 71, 0.2);
+    transform: translateY(-1px);
+  }
+
+  .bs-nav-arrow-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-color: rgba(15, 84, 71, 0.15);
+  }
+
+  .bs-nav-arrow-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+  }
 
   .bs-carousel-outer {
     position: relative;
@@ -113,7 +188,7 @@ const styles = `
     position: relative;
     overflow: hidden;
     border-radius: 4px;
-    background: #2C2F33;
+    background: #0f3a31;
     cursor: pointer;
   }
 
@@ -123,63 +198,78 @@ const styles = `
     object-fit: cover;
     object-position: center top;
     display: block;
-    opacity: 0.82;
+    opacity: 0.9;
   }
 
   .bs-hero-fallback {
     width: 100%;
     height: 100%;
-    background: linear-gradient(160deg, #FFFFFF 0%, #2C2F33 100%);
+    background: linear-gradient(160deg, #0f5447 0%, #0b3a31 100%);
   }
 
   .bs-hero-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%);
+    background: linear-gradient(
+      to top,
+      rgba(11, 46, 38, 0.94) 0%,
+      rgba(11, 46, 38, 0.6) 45%,
+      rgba(11, 46, 38, 0.15) 75%,
+      transparent 100%
+    );
   }
 
   .bs-hero-content {
     position: absolute;
-    top: 28px;
-    left: 24px;
+    bottom: 28px;
+    left: 20px;
+    right: 20px;
+    z-index: 2;
   }
 
   .bs-hero-label {
     font-family: 'Josefin Sans', 'Raleway', sans-serif;
-    font-size: 56px;
+    font-size: clamp(28px, 2.5vw, 38px);
     font-weight: 700;
-    color: #fff;
+    color: #ffffff;
     display: block;
-    line-height: 1.05;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    line-height: 1.15;
+    text-shadow: none;
+    letter-spacing: 0.02em;
   }
 
   .bs-hero-sub {
     margin-top: 8px;
     font-size: 13px;
-    color: rgba(255,255,255,0.75);
-    letter-spacing: 0.4px;
+    color: #E2D9C5;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+    line-height: 1.4;
   }
 
   .bs-hero-btn {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-top: 14px;
-    font-size: 12px;
-    font-weight: 500;
-    color: #fff;
-    letter-spacing: 1px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f5447;
+    background: #C9A84C;
+    letter-spacing: 1.5px;
     text-transform: uppercase;
-    border-bottom: 1px solid rgba(255,255,255,0.7);
-    padding-bottom: 2px;
+    padding: 10px 22px;
+    border-radius: 8px;
+    border: none;
     cursor: pointer;
-    background: none;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    transition: opacity 0.2s;
+    transition: background 0.2s, transform 0.2s;
   }
 
-  .bs-hero-btn:hover { opacity: 0.75; }
+  .bs-hero-btn:hover {
+    background: #dbb758;
+    color: #0b3a31;
+    transform: translateY(-2px);
+  }
 
   .bs-card {
     flex: 0 0 var(--card-width);
@@ -375,34 +465,40 @@ const styles = `
     position: absolute;
     top: 38%;
     transform: translateY(-50%);
-    width: 42px;
-    height: 42px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    background: #fff;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(4px);
     border: 1px solid var(--border);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.14);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     z-index: 10;
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
   }
 
-  .bs-arrow:hover { background: var(--green); border-color: var(--green); }
+  .bs-arrow:hover {
+    background: var(--green);
+    border-color: var(--green);
+    transform: translateY(-50%) scale(1.06);
+    box-shadow: 0 4px 16px rgba(15, 84, 71, 0.25);
+  }
   .bs-arrow:hover svg { stroke: #fff; }
 
   .bs-arrow svg {
     width: 18px;
     height: 18px;
-    stroke: var(--text);
+    stroke: var(--green);
     fill: none;
-    stroke-width: 2;
+    stroke-width: 2.2;
     transition: stroke 0.2s;
   }
 
-  .bs-arrow-prev { left: 0; }
-  .bs-arrow-next { right: 0; }
+  .bs-arrow-prev { left: 10px; }
+  .bs-arrow-next { right: 10px; }
 
   .bs-loading, .bs-empty {
     padding: 40px 20px;
@@ -421,9 +517,22 @@ const styles = `
     :root { --card-width: 155px; --hero-width: 220px; --card-gap: 12px; }
     .bs-hero { height: 350px; }
     .bs-hero-label { font-size: 38px; }
-    .bs-header { padding: 0 16px 20px; }
+    .bs-header { padding: 0 16px 18px; align-items: center; }
+    .bs-title { font-size: clamp(20px, 5.2vw, 24px); }
+    .bs-viewall { font-size: 11px; padding: 5px 11px; gap: 4px; }
+    .bs-viewall svg { width: 10px; height: 10px; }
+    .bs-nav-arrow-btn { width: 28px; height: 28px; }
+    .bs-nav-arrow-btn svg { width: 12px; height: 12px; }
     .bs-carousel-outer { padding: 0 16px; }
-    .bs-arrow { display: none; }
+    .bs-arrow {
+      width: 32px;
+      height: 32px;
+      top: 35%;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .bs-arrow-prev { left: 4px; }
+    .bs-arrow-next { right: 4px; }
+    .bs-arrow svg { width: 14px; height: 14px; }
   }
 `;
 
@@ -434,13 +543,22 @@ export default function BestSellersSection() {
   const [products,  setProducts]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [bannerData, setBannerData] = useState(null);
+  const [bannerLoading, setBannerLoading] = useState(true);
   const scrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setCanScrollLeft(scrollLeft > 10);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+  };
 
   const goToShop = () => { navigate('/shop'); };
 
   const goToProduct = (product) => {
-    sessionStorage.setItem('selectedProduct', JSON.stringify({ id: product.id }));
-    navigate('/product-details');
+    navigate(`/product/${product.slug || slugifyProductName(product.productName || product.name, product.id)}`);
     window.scrollTo(0, 0);
   };
 
@@ -451,9 +569,8 @@ export default function BestSellersSection() {
   const [addedToCart, setAddedToCart] = useState(new Set());
 
   useEffect(() => {
-    fetch(`${BASE}/products/best-sellers`)
-      .then((r) => r.json())
-      .then((data) => setProducts(Array.isArray(data) ? data : []))
+    productApi.getAll()
+      .then((data) => setProducts(Array.isArray(data) ? data.filter(product => product.isBestSeller) : []))
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
 
@@ -463,8 +580,15 @@ export default function BestSellersSection() {
         const list = Array.isArray(data) ? data : [];
         if (list.length > 0) setBannerData(list[0]);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setBannerLoading(false));
   }, []);
+
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener('resize', checkScroll);
+    return () => window.removeEventListener('resize', checkScroll);
+  }, [products]);
 
   // ✅ Check cart via local set OR context
   const isInCart = (productId) =>
@@ -508,7 +632,8 @@ export default function BestSellersSection() {
 
   const scroll = (dir) => {
     if (!scrollRef.current) return;
-    scrollRef.current.scrollBy({ left: dir * (CARD_WIDTH + CARD_GAP), behavior: "smooth" });
+    const scrollAmount = Math.max(scrollRef.current.clientWidth * 0.75, 260);
+    scrollRef.current.scrollBy({ left: dir * scrollAmount, behavior: "smooth" });
   };
 
   const getSizes = (p) => {
@@ -525,18 +650,50 @@ export default function BestSellersSection() {
       <section className="bs-section">
         <div className="bs-header">
           <h2 className="bs-title">Best Sellers</h2>
-          <button className="bs-viewall" onClick={goToShop}>View all</button>
+          <div className="bs-header-right">
+            <button className="bs-viewall" onClick={goToShop}>
+              <span>View all</span>
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+            <div className="bs-nav-arrows">
+              <button
+                className="bs-nav-arrow-btn prev"
+                onClick={() => scroll(-1)}
+                aria-label="Previous products"
+                disabled={!canScrollLeft}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <button
+                className="bs-nav-arrow-btn next"
+                onClick={() => scroll(1)}
+                aria-label="Next products"
+                disabled={!canScrollRight}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="bs-carousel-outer">
-          <button className="bs-arrow bs-arrow-prev" onClick={() => scroll(-1)} aria-label="Previous">
-            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6" /></svg>
-          </button>
+          {canScrollLeft && (
+            <button className="bs-arrow bs-arrow-prev" onClick={() => scroll(-1)} aria-label="Previous">
+              <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6" /></svg>
+            </button>
+          )}
 
-          <div className="bs-track-wrap" ref={scrollRef}>
+          <div className="bs-track-wrap" ref={scrollRef} onScroll={checkScroll}>
             <div className="bs-track">
 
               <div className="bs-hero" onClick={(e) => {
+                  if (bannerLoading) return;
                   if (bannerData?.link) {
                     const link = bannerData.link;
                     if (link.startsWith("http://") || link.startsWith("https://")) {
@@ -548,32 +705,46 @@ export default function BestSellersSection() {
                     goToShop();
                   }
               }}>
-                {bannerData?.image
-                  ? <img src={getLocalImageUrl(bannerData.image)} alt="Best Sellers" loading="lazy" decoding="async" />
-                  : <div className="bs-hero-fallback" />
-                }
+                {bannerLoading ? (
+                  <div className="fa-skeleton-dark" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+                ) : bannerData?.image ? (
+                  <img src={getLocalImageUrl(bannerData.image)} alt="Best Sellers" loading="lazy" decoding="async" />
+                ) : (
+                  <div className="bs-hero-fallback" />
+                )}
                 <div className="bs-hero-overlay" />
                 <div className="bs-hero-content">
-                  <span className="bs-hero-label">{bannerData?.title || "Best Sellers"}</span>
-                  <p className="bs-hero-sub">{bannerData?.subtitle || "Customer favourites"}</p>
-                  <button
-                    className="bs-hero-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (bannerData?.link) {
-                        const link = bannerData.link;
-                        if (link.startsWith("http://") || link.startsWith("https://")) {
-                          window.open(link, "_blank", "noopener,noreferrer");
-                        } else {
-                          window.location.hash = link.startsWith("#") ? link : `#${link.replace(/^\//, "")}`;
-                        }
-                      } else {
-                        goToShop();
-                      }
-                    }}
-                  >
-                    Shop all
-                  </button>
+                  {bannerLoading ? (
+                    <>
+                      <div className="fa-skeleton" style={{ width: '60%', height: 20, borderRadius: 4, marginBottom: 8 }} />
+                      <div className="fa-skeleton" style={{ width: '85%', height: 14, borderRadius: 4, marginBottom: 16 }} />
+                      <div className="fa-skeleton" style={{ width: 100, height: 36, borderRadius: 4 }} />
+                    </>
+                  ) : (
+                    <>
+                      <span className="bs-hero-label">{bannerData?.title || "Best Sellers"}</span>
+                      <p className="bs-hero-sub">{bannerData?.subtitle || "Customer favourites"}</p>
+                      <button
+                        className="bs-hero-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (bannerData?.link) {
+                            const link = bannerData.link;
+                            if (link.startsWith("http://") || link.startsWith("https://")) {
+                              window.open(link, "_blank", "noopener,noreferrer");
+                            } else {
+                              const cleanPath = link.replace(/^#/, "");
+                              navigate(cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`);
+                            }
+                          } else {
+                            goToShop();
+                          }
+                        }}
+                      >
+                        {bannerData?.btnText || "Shop All"}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -646,9 +817,11 @@ export default function BestSellersSection() {
             </div>
           </div>
 
-          <button className="bs-arrow bs-arrow-next" onClick={() => scroll(1)} aria-label="Next">
-            <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>
-          </button>
+          {canScrollRight && (
+            <button className="bs-arrow bs-arrow-next" onClick={() => scroll(1)} aria-label="Next">
+              <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>
+            </button>
+          )}
         </div>
       </section>
     </>

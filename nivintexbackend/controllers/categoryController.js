@@ -1,4 +1,5 @@
 const Category = require('../models/Category');
+const { validateFields } = require('../utils/textValidation');
 
 // 1. Get All Categories
 exports.getAllCategories = async (req, res) => {
@@ -24,7 +25,13 @@ exports.createCategory = async (req, res) => {
     try {
         const { name, code_prefix, status } = req.body;
 
-        
+        const validationError = validateFields([
+            { value: name, fieldName: 'Category Name', required: true, maxChars: 60, maxWords: 8 },
+        ]);
+        if (validationError) {
+            return res.status(400).json({ error: validationError });
+        }
+
         const image = req.file
             ? req.file.path.replace(/\\/g, '/')
             : null;
@@ -41,6 +48,16 @@ exports.updateCategory = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, code_prefix, status } = req.body;
+
+        if (name !== undefined) {
+            const validationError = validateFields([
+                { value: name, fieldName: 'Category Name', required: true, maxChars: 60, maxWords: 8 },
+            ]);
+            if (validationError) {
+                return res.status(400).json({ error: validationError });
+            }
+        }
+
         let updateData = { name, code_prefix, status };
 
         if (req.file) {

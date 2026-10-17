@@ -7,6 +7,27 @@ const sequelize = require('../config/db');
 const axios = require('axios');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
+const billingCatalog = require('../services/billingCatalogService');
+const billingSyncService = require('../services/billingSyncService');
+const orderFlowLog = require('../utils/orderFlowLogger');
+
+// A successful Billing invoice is the inventory source of truth. Refresh the
+// complete local Billing product catalog immediately so product prices and
+// variant stock shown by the storefront match the post-invoice state.
+async function syncCatalogAfterBillingInvoice(billingVariantIds) {
+    const ids = [...new Set((billingVariantIds || []).map(value => String(value || '').trim()).filter(Boolean))];
+    const result = await billingSyncService.syncAll(true);
+    const refreshedVariants = await ProductVariant.findAll({
+        where: { billingVariantId: { [Op.in]: ids } },
+        attributes: ['billingVariantId'],
+    });
+    const refreshedIds = new Set(refreshedVariants.map(variant => String(variant.billingVariantId)));
+    const missingIds = ids.filter(id => !refreshedIds.has(id));
+    if (missingIds.length) {
+        throw new Error(`Billing catalog refreshed, but local variants were not found for Billing IDs: ${missingIds.join(', ')}.`);
+    }
+    return { ...result, refreshedVariants: refreshedIds.size };
+}
 
 const {
     sendOrderStatusEmail,
@@ -18,6 +39,8 @@ const {
 // 🛍 CREATE ORDER
 // ─────────────────────────────────────────
 const createOrder = async (req, res) => {
+    const flowId = `order-create ${req.body?.razorpay_order_id || req.body?.payment_id || `request-${Date.now()}`}`;
+    orderFlowLog.attachOrderApiResponseLogger(req, res, flowId);
     try {
         const {
             customer_id,
@@ -66,7 +89,7 @@ const createOrder = async (req, res) => {
             }
             const existingPaidOrder = await Order.findOne({ where: { razorpay_order_id } });
             if (existingPaidOrder) {
-                return res.json({ success: true, orderId: existingPaidOrder.id, duplicate: true, billingSyncStatus: existingPaidOrder.billing_sync_status || 'not_configured' });
+                return res.json({ success: true, orderId: existingPaidOrder.id, duplicate: true, billingSyncStatus: existingPaidOrder.billing_sync_status || 'not_configured', billingSyncError: existingPaidOrder.billing_sync_error || null });
             }
         }
 
@@ -82,6 +105,7 @@ const createOrder = async (req, res) => {
         // its durable Billing IDs, then store canonical local IDs on the order.
         for (const item of items) {
             const submittedProductId = item.product_id || item.productId || item.id;
+            const submittedBillingProductId = item.billingProductId || item.billing_product_id;
             const submittedVariantId = item.variantId || item.variant_id;
             const submittedBillingVariantId = item.billingVariantId || item.billing_variant_id;
             let product = null;
@@ -93,26 +117,25 @@ const createOrder = async (req, res) => {
                     const billingVariantId = item.billingVariantId || item.billing_variant_id || submittedVariantId;
                     variant = await ProductVariant.findOne({ where: { billingVariantId: String(billingVariantId) } });
                 }
-                if (!variant) {
+                if (!variant && !submittedBillingVariantId) {
                     return res.status(400).json({ success: false, message: `The selected variant for ${item.name || 'this product'} is no longer available. Refresh your cart and try again.` });
                 }
             } else if (submittedBillingVariantId) {
                 variant = await ProductVariant.findOne({ where: { billingVariantId: String(submittedBillingVariantId) } });
-                if (!variant) {
-                    return res.status(400).json({ success: false, message: `The selected Billing variant for ${item.name || 'this product'} is no longer mapped in the store catalog. Refresh your cart and try again.` });
-                }
             }
-            if (submittedProductId && /^\d+$/.test(String(submittedProductId))) {
+            if (submittedBillingProductId) {
+                product = await Product.findOne({ where: { billingProductId: String(submittedBillingProductId) } });
+            }
+            if (!product && submittedProductId && /^\d+$/.test(String(submittedProductId))) {
                 product = await Product.findByPk(submittedProductId);
             }
             if (!product) {
-                const billingProductId = item.billingProductId || item.billing_product_id
-                    || submittedProductId;
+                const billingProductId = submittedBillingProductId || submittedProductId;
                 if (billingProductId) product = await Product.findOne({ where: { billingProductId: String(billingProductId) } });
             }
             if (!product && variant) product = await Product.findByPk(variant.productId);
 
-            if (product && !variant && !submittedVariantId && (item.size || item.color || item.fabric)) {
+            if (product && !variant && !submittedVariantId && !submittedBillingVariantId && (item.size || item.color || item.fabric)) {
                 const variantWhere = { productId: product.id, billingVariantId: { [Op.ne]: null } };
                 for (const field of ['size', 'color', 'fabric']) {
                     if (item[field]) variantWhere[field] = String(item[field]).trim();
@@ -120,7 +143,7 @@ const createOrder = async (req, res) => {
                 const matches = await ProductVariant.findAll({ where: variantWhere, limit: 2 });
                 if (matches.length === 1) variant = matches[0];
             }
-            if (product && !variant && !submittedVariantId && !(item.size || item.color || item.fabric)) {
+            if (product && !variant && !submittedVariantId && !submittedBillingVariantId && !(item.size || item.color || item.fabric)) {
                 const soleVariant = await ProductVariant.findOne({
                     where: { productId: product.id, billingVariantId: { [Op.ne]: null } },
                 });
@@ -134,15 +157,24 @@ const createOrder = async (req, res) => {
             if (!product) {
                 const detail = `Product "${item.name || 'Unknown'}" (ID ${submittedProductId || 'missing'}) is no longer in the store catalog. Refresh your cart and try again.`;
                 require('fs').appendFileSync('error.log', `${new Date().toISOString()} Val Error: ${detail}\n`);
-                return res.status(400).json({ success: false, message: detail });
+                // Payment is already captured at this point. If checkout gave us
+                // durable Billing IDs, preserve the paid line item even when a
+                // local catalog row has not been imported yet.
+                if (payment_status !== 'paid' || !submittedBillingProductId || !submittedBillingVariantId) {
+                    return res.status(400).json({ success: false, message: detail });
+                }
             }
-            if (variant && Number(variant.productId) !== Number(product.id)) {
+            if (product && variant && Number(variant.productId) !== Number(product.id)) {
                 return res.status(400).json({ success: false, message: `The selected variant for ${item.name || 'this product'} does not belong to the selected product. Refresh your cart and try again.` });
             }
-            item.product_id = product.id;
-            item.id = product.id;
+            if (variant && submittedBillingVariantId && variant.billingVariantId
+                && String(variant.billingVariantId) !== String(submittedBillingVariantId)) {
+                return res.status(400).json({ success: false, message: `The selected variant for ${item.name || 'this product'} no longer matches the Billing catalog. Refresh your cart and try again.` });
+            }
+            item.product_id = product?.id || null;
+            item.id = product?.id || null;
             item.variantId = variant?.id || null;
-            item.billingProductId = item.billingProductId || product.billingProductId || null;
+            item.billingProductId = item.billingProductId || item.billing_product_id || product?.billingProductId || null;
             item.billingVariantId = item.billingVariantId || variant?.billingVariantId || null;
         }
 
@@ -151,7 +183,7 @@ const createOrder = async (req, res) => {
                 ? await ProductVariant.findByPk(item.variantId || item.variant_id)
                 : null;
             const product = await Product.findByPk(item.product_id || item.id);
-            const billingVariantId = variant?.billingVariantId || item.billingVariantId || item.billing_variant_id || product?.billingVariantId || '';
+            const billingVariantId = variant?.billingVariantId || item.billingVariantId || item.billing_variant_id || '';
             const gstLabel = String(product?.mrpGstType || '').toLowerCase();
             const gstPercent = gstLabel.includes('without') ? 0 : 5;
             return {
@@ -164,7 +196,7 @@ const createOrder = async (req, res) => {
         }));
         const gstRates = [...new Set(billingItems.map(item => Number(item.gst_percent)))];
         const hasMixedGst = gstRates.length > 1;
-        const hasGst = billingItems.some(item => Number(item.gst_percent) > 0);
+        const hasGst = false;
         const checkoutSubtotal = Number(subtotal) || 0;
         const checkoutDiscount = Number(discount) || 0;
         const checkoutTotal = Number(total) || 0;
@@ -174,7 +206,7 @@ const createOrder = async (req, res) => {
             franchise_location_id: '',
             price_type: 'MRP',
             payment_mode: 'Online',
-            has_gst: hasGst ? 1 : 0,
+            has_gst: false,
             customer_id: '',
             customer_name: String(customer_name),
             customer_phone: String(customer_phone || ''),
@@ -182,15 +214,17 @@ const createOrder = async (req, res) => {
             billing_address: addressText(billing_address),
             shipping_address: addressText(shipping_address),
             source: 'Website',
-            entry_mode: '',
+            entry_mode: 'Manual',
             items: billingItems,
             bill_discount_amount: checkoutDiscount,
-            paid_amount: payment_status === 'paid' ? checkoutTotal : 0,
+            // Billing receives the product amount only; keep delivery locally
+            // for order/admin records until its inclusion in Billing is confirmed.
+            paid_amount: payment_status === 'paid' ? checkoutSubtotal : 0,
             subtotal: checkoutSubtotal,
             gst_amount: checkoutTax,
             delivery_charge: Number(delivery_charge) || 0,
-            total: checkoutTotal,
-            balance: payment_status === 'paid' ? 0 : Math.max(0, checkoutTotal - (Number(req.body.paid_amount) || 0)),
+            total: checkoutSubtotal,
+            balance: payment_status === 'paid' ? 0 : Math.max(0, checkoutSubtotal - (Number(req.body.paid_amount) || 0)),
             submission_action: 'complete',
         };
 
@@ -205,6 +239,7 @@ const createOrder = async (req, res) => {
                 requestedStockByVariant.set(key, requested);
                 const variant = await ProductVariant.findByPk(item.variantId);
                 if (!variant) {
+                    if (item.billingVariantId || item.billing_variant_id) continue;
                     require('fs').appendFileSync('error.log', new Date().toISOString() + ' Warn: Selected variant not found, falling back to main product.\n');
                     // Fallback to main product stock check
                     const product = await Product.findByPk(item.product_id || item.id);
@@ -214,13 +249,16 @@ const createOrder = async (req, res) => {
                     if (product && product.stock < requestedProduct) {
                         return res.status(400).json({ success: false, message: `Only ${product.stock || 0} units available for ${item.name}.` });
                     }
-                } else if (variant.stock < requested) {
+                } else if (!variant.billingVariantId && variant.stock < requested) {
                     require('fs').appendFileSync('error.log', new Date().toISOString() + ' Val Error: Variant stock < quantity\n');
                     return res.status(400).json({
                         success:  false,
                         message:  `Only ${variant.stock || 0} unit${variant.stock === 1 ? '' : 's'} available for ${item.name || 'this product'}.`
                     });
                 }
+            } else if (item.billingVariantId || item.billing_variant_id) {
+                // Billing remains the source of truth for externally mapped variants.
+                continue;
             } else {
                 const product  = await Product.findByPk(item.product_id || item.id);
                 if (!product) {
@@ -228,6 +266,7 @@ const createOrder = async (req, res) => {
                     return res.status(400).json({ success: false, message: 'Selected product not found.' });
                 }
                 const productKey = String(product.id);
+                if (item.billingVariantId || item.billing_variant_id) continue;
                 const requestedProduct = (requestedStockByProduct.get(productKey) || 0) + quantity;
                 requestedStockByProduct.set(productKey, requestedProduct);
                 if (product.stock < requestedProduct) {
@@ -270,11 +309,9 @@ const createOrder = async (req, res) => {
                 billing_paid_amount: billingPayload.paid_amount,
                 billing_balance: billingPayload.balance,
                 billing_payload: billingPayload,
-                billing_sync_status: hasMixedGst ? 'needs_gst_review' : 'not_configured',
-                billing_sync_error: hasMixedGst
-                    ? 'This order contains products with different GST options; the Billing form supports one GST option per bill. Payload stored locally for review.'
-                    : 'Billing create endpoint is not configured; payload stored locally for later sync.',
-                billing_stock_sync_status: String(process.env.BILLING_API_TOKEN || '').trim() ? 'pending' : 'not_configured',
+                billing_sync_status: payment_status === 'paid' ? 'pending' : 'not_applicable',
+                billing_sync_error: null,
+                billing_stock_sync_status: payment_status === 'paid' ? 'pending' : 'not_applicable',
                 shiprocket_requested_courier_id: courier_id ? String(courier_id) : null,
                 shiprocket_requested_courier_name: courier_name || null,
                 shiprocket_requested_rate: Number.isFinite(Number(courier_rate)) ? Number(courier_rate) : (Number(delivery_charge) || 0),
@@ -285,7 +322,7 @@ const createOrder = async (req, res) => {
                 razorpay_signature,
                 payment_status: payment_status || 'paid',
                 image:  items[0]?.image || items[0]?.img || null,
-                status: 'confirmed'
+                status: 'pending'
             }, { transaction });
 
             await OrderItem.bulkCreate(
@@ -293,6 +330,8 @@ const createOrder = async (req, res) => {
                     orderId:    order.id,
                     product_id: item.product_id || item.id,
                     variant_id: item.variantId || null,
+                    billing_product_id: item.billingProductId || item.billing_product_id || null,
+                    billing_variant_id: item.billingVariantId || item.billing_variant_id || null,
                     name:       item.name,
                     price:      parseFloat(item.price)                  || 0,
                     quantity:   Math.max(1, parseInt(item.quantity, 10) || 1),
@@ -316,13 +355,16 @@ const createOrder = async (req, res) => {
                     decrementedLocalVariants.add(String(item.variantId));
                     const variant = await ProductVariant.findByPk(item.variantId);
                     if (variant) {
-                        const newStock = Math.max(0, (variant.stock || 0) - (requestedStockByVariant.get(String(item.variantId)) || quantity));
-                        await variant.update({ stock: newStock }, { transaction });
+                        if (!variant.billingVariantId) {
+                            const newStock = Math.max(0, (variant.stock || 0) - (requestedStockByVariant.get(String(item.variantId)) || quantity));
+                            await variant.update({ stock: newStock }, { transaction });
+                        }
                         variantUpdated = true;
                     }
                 }
                 
                 if (!variantUpdated) {
+                    if (item.billingVariantId || item.billing_variant_id) continue;
                     const product  = await Product.findByPk(item.product_id || item.id);
                     if (product) {
                         const key = String(product.id);
@@ -339,92 +381,123 @@ const createOrder = async (req, res) => {
 
             await transaction.commit();
 
-            // Billing owns inventory. Send its variant IDs only after the local order commits.
-            const billingBase = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
-            const billingToken = String(process.env.BILLING_API_TOKEN || '').trim();
-            const billingHeaders = { Accept: 'application/json', 'Content-Type': 'application/json' };
-            if (billingToken) billingHeaders.Authorization = `Bearer ${billingToken}`;
-            const stockErrors = [];
-            const orderStockItems = new Map();
-            let billingStockSyncStatus = billingToken ? 'pending' : 'not_configured';
-            let billingStockSyncedAt = null;
-            for (const item of items) {
-                const localVariantId = item.variantId || item.variant_id;
-                const variant = localVariantId ? await ProductVariant.findByPk(localVariantId) : null;
-                const billingVariantId = variant?.billingVariantId || item.billingVariantId || item.billing_variant_id;
-                if (!billingVariantId) {
-                    stockErrors.push(`No Billing variant ID is mapped for ${item.name || localVariantId || 'an order item'}.`);
-                    continue;
-                }
-                const key = String(billingVariantId);
-                const current = orderStockItems.get(key) || { billingVariantId, quantity: 0 };
-                current.quantity += Math.max(1, parseInt(item.quantity, 10) || 1);
-                orderStockItems.set(key, current);
-            }
-            for (const item of items) {
-                if (item.variantId || item.variant_id) continue;
-                const product = await Product.findByPk(item.product_id || item.id);
-                const billingVariantId = item.billingVariantId || product?.billingVariantId;
-                if (!billingVariantId) {
-                    stockErrors.push(`No Billing variant ID is mapped for ${item.name || item.product_id || item.id || 'an order item'}.`);
-                    continue;
-                }
-                const key = String(billingVariantId);
-                const current = orderStockItems.get(key) || { billingVariantId, quantity: 0 };
-                current.quantity += Math.max(1, parseInt(item.quantity, 10) || 1);
-                orderStockItems.set(key, current);
-            }
-            if (!billingToken) {
-                stockErrors.push('Billing stock update skipped: BILLING_API_TOKEN is not configured.');
-                console.error('Billing stock decrement skipped: BILLING_API_TOKEN is not configured.');
-            } else {
-                for (const { billingVariantId, quantity } of orderStockItems.values()) {
-                    try {
-                        const response = await axios.post(`${billingBase}/stocks/decrement`, { product_variant_id: billingVariantId, quantity }, {
-                            headers: billingHeaders,
-                            timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
-                            maxRedirects: 0,
-                        });
-                        const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
-                        if (response.status >= 300 && response.status < 400) {
-                            throw new Error('Billing redirected the stock request to login. Check BILLING_API_TOKEN.');
-                        }
-                        if (!contentType.includes('application/json')) {
-                            throw new Error('Billing stock endpoint returned a non-JSON response (likely a login page). Check BILLING_API_TOKEN and the API URL.');
-                        }
-                        if (response.status < 200 || response.status >= 300) {
-                            throw new Error(`Billing stock endpoint returned HTTP ${response.status}.`);
-                        }
-                        if (response.data?.success === false || response.data?.status === false) {
-                            throw new Error(response.data?.message || 'Billing rejected the stock decrement.');
-                        }
-                    } catch (stockError) {
-                        const status = stockError.response?.status;
-                        const message = status >= 300 && status < 400
-                            ? 'Billing redirected the stock request to login. Check BILLING_API_TOKEN.'
-                            : status === 401 || status === 403
-                                ? 'Billing rejected BILLING_API_TOKEN or it lacks stock write access.'
-                                : stockError.message || 'Unknown Billing API error.';
-                        stockErrors.push(`Billing stock update failed for variant ${billingVariantId}${status ? ` (HTTP ${status})` : ''}: ${message}`);
-                        console.error('Billing stock decrement failed:', { variantId: billingVariantId, status: status || null, message });
+            // Billing creates the invoice and decrements its own stock atomically.
+            // Never call /stocks/decrement here as that would subtract inventory twice.
+            let billingSyncStatus = payment_status === 'paid' ? 'failed' : 'not_applicable';
+            let billingSyncError = null;
+            let billingStockSyncStatus = payment_status === 'paid' ? 'pending' : 'not_applicable';
+            let billingRequestPayload = null;
+            let billingResponse = null;
+            if (payment_status === 'paid') {
+                try {
+                    billingRequestPayload = makeBillingCreatePayload(billingPayload);
+                    await order.update({
+                        billing_sync_status: 'pending',
+                        billing_request_payload: billingRequestPayload,
+                        billing_sync_error: null,
+                    });
+                    const billingBase = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
+                    const billingUrl = `${billingBase}/billings`;
+                    orderFlowLog.logRequest(`${flowId} Billing invoice`, 'POST', billingUrl, billingRequestPayload);
+                    const response = await axios.post(billingUrl, billingRequestPayload, {
+                        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                        timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
+                        maxRedirects: 0,
+                    });
+                    billingResponse = response.data;
+                    orderFlowLog.logResponse(`${flowId} Billing invoice`, response.status, response.data);
+                    if (response.data?.success === false || response.data?.status === false || Number(response.data?.status) >= 400) {
+                        const rejection = new Error(response.data?.message || 'Billing rejected the invoice request.');
+                        rejection.billingRejected = true;
+                        throw rejection;
                     }
+                    billingSyncStatus = 'synced';
+                    billingStockSyncStatus = 'synced';
+                    let localStockSyncError = null;
+                    try {
+                        const requestedBillingIds = [...new Set(billingRequestPayload.items.map(item => String(item.product_variant_id)))];
+                        const localSync = await syncCatalogAfterBillingInvoice(requestedBillingIds);
+                        if (localSync.refreshedVariants < requestedBillingIds.length) {
+                            billingStockSyncStatus = 'refresh_failed';
+                            localStockSyncError = `Billing created the invoice, but only ${localSync.refreshedVariants} of ${requestedBillingIds.length} local variant records were verified after catalog refresh.`;
+                        }
+                    } catch (stockRefreshError) {
+                        billingStockSyncStatus = 'refresh_failed';
+                        localStockSyncError = `Billing created the invoice, but the local stock cache could not be refreshed: ${stockRefreshError.message}`;
+                    }
+                    await order.update({
+                        billing_sync_status: billingSyncStatus,
+                        billing_sync_error: null,
+                        billing_response: billingResponse,
+                        billing_stock_sync_status: billingStockSyncStatus,
+                        billing_stock_sync_error: localStockSyncError,
+                        billing_stock_synced_at: billingStockSyncStatus === 'synced' ? new Date() : null,
+                    });
+                } catch (billingError) {
+                    if (billingError.response) orderFlowLog.logFailure(`${flowId} Billing invoice`, billingError);
+                    else if (billingResponse !== null) orderFlowLog.logResponse(`${flowId} Billing invoice`, 'REJECTED', billingResponse);
+                    else orderFlowLog.logFailure(`${flowId} Billing invoice`, billingError);
+                    billingResponse = billingError.response?.data ?? billingResponse ?? null;
+                    billingSyncError = billingError.response?.status
+                        ? `Billing invoice request returned HTTP ${billingError.response.status}: ${billingError.response.data?.message || billingError.message}${Number(billingError.response.status) >= 500 ? ' Check Billing before retrying because invoice creation may have completed.' : ''}`
+                        : billingError.billingRejected
+                            ? billingError.message
+                        : billingResponse !== null && !billingError.request
+                            ? `Billing returned a response, but the website could not confirm it was saved locally: ${billingError.message}`
+                        : billingError.request
+                            ? `Billing invoice request outcome is unknown (${billingError.code || 'network error'}). Check Billing before retrying to avoid creating a duplicate invoice.`
+                            : billingError.message || 'Could not prepare Billing invoice request.';
+                    if (Number(billingError.response?.status) === 422
+                        && /insufficient stock/i.test(String(billingError.response?.data?.message || billingError.message || ''))
+                        && billingRequestPayload?.items?.length) {
+                        try {
+                            await billingCatalog.assertBillingStock(billingRequestPayload.items);
+                            billingSyncError += ' Immediate Billing GET recheck still reported enough stock; Billing /billings and its GET stock snapshot disagree, or the invoice checks a different stock location.';
+                        } catch (stockCheckError) {
+                            if (Array.isArray(stockCheckError.stockIssues) && stockCheckError.stockIssues.length) {
+                                const latest = stockCheckError.stockIssues
+                                    .map(issue => `${issue.label}: ${issue.available} available, ${issue.requested} requested`)
+                                    .join('; ');
+                                billingSyncError += ` Immediate Billing GET recheck: ${latest}.`;
+                            } else {
+                                billingSyncError += ` Immediate Billing GET recheck could not confirm current stock: ${stockCheckError.message}`;
+                            }
+                        }
+                    }
+                    const uncertainBillingOutcome = (billingError.request && !billingError.response)
+                        || (billingResponse !== null && !billingError.response)
+                        || Number(billingError.response?.status) >= 500;
+                    billingSyncStatus = billingError.billingRejected || (billingError.response && Number(billingError.response.status) < 500)
+                        ? 'failed'
+                        : uncertainBillingOutcome ? 'unknown' : 'failed';
+                    billingStockSyncStatus = billingSyncStatus;
+                    let stockRefreshError = billingSyncError;
+                    if (billingError.response && Number(billingError.response.status) >= 400 && Number(billingError.response.status) < 500 && billingRequestPayload?.items?.length) {
+                        try {
+                            const ids = [...new Set(billingRequestPayload.items.map(item => String(item.product_variant_id)))];
+                            await syncCatalogAfterBillingInvoice(ids);
+                            billingStockSyncStatus = 'synced';
+                            stockRefreshError = `${billingSyncError} Billing rejected the invoice, so stock was not decremented; the local catalog was refreshed from Billing.`;
+                        } catch (refreshError) {
+                            billingStockSyncStatus = 'refresh_failed';
+                            stockRefreshError = `${billingSyncError} Local catalog refresh after rejection failed: ${refreshError.message}`;
+                        }
+                    }
+                    try {
+                        await order.update({
+                            billing_sync_status: billingSyncStatus,
+                            billing_sync_error: billingSyncError,
+                            billing_response: billingResponse,
+                            billing_request_payload: billingRequestPayload,
+                            billing_stock_sync_status: billingStockSyncStatus,
+                            billing_stock_sync_error: stockRefreshError,
+                            billing_stock_synced_at: billingStockSyncStatus === 'synced' ? new Date() : null,
+                        });
+                    } catch (saveError) {
+                        console.error('Could not persist Billing invoice failure:', saveError.message);
+                    }
+                    console.error('Billing invoice creation failed:', billingSyncError);
                 }
-            }
-
-            if (billingToken) {
-                billingStockSyncStatus = stockErrors.length ? 'failed' : 'synced';
-                if (billingStockSyncStatus === 'synced') billingStockSyncedAt = new Date();
-            } else {
-                billingStockSyncStatus = 'not_configured';
-            }
-            try {
-                await order.update({
-                    billing_stock_sync_status: billingStockSyncStatus,
-                    billing_stock_sync_error: stockErrors.length ? stockErrors.join('\n').slice(0, 60000) : null,
-                    billing_stock_synced_at: billingStockSyncedAt,
-                });
-            } catch (stockStatusSaveError) {
-                console.error('Could not persist Billing stock sync status:', stockStatusSaveError.message);
             }
 
             // ── Clear customer cart ───────────────────────────────────────────
@@ -462,7 +535,9 @@ const createOrder = async (req, res) => {
 
             let shipment = null;
             let shipmentWarning = null;
-            if (payment_status === 'paid' && courier_id) {
+            if (payment_status === 'paid' && courier_id && billingSyncStatus !== 'synced') {
+                shipmentWarning = 'Shipment booking is paused until Billing confirms the invoice and stock decrement.';
+            } else if (payment_status === 'paid' && courier_id) {
                 try {
                     const shipmentOrder = await Order.findByPk(order.id, {
                         include: [{ model: OrderItem, as: 'OrderItems' }],
@@ -492,7 +567,7 @@ const createOrder = async (req, res) => {
                         shiprocket_requested_courier_name: selectedCourier.courierName,
                         shiprocket_requested_rate: selectedCourier.rate,
                         shiprocket_estimated_delivery_days: selectedCourier.estimatedDeliveryDays || selectedCourier.etd || null,
-                        status: 'shipped',
+                        status: 'pending',
                     });
                     shipment = { shipmentId: booked.shipmentId, awbCode: booked.awbCode, courierName };
                 } catch (error) {
@@ -501,7 +576,7 @@ const createOrder = async (req, res) => {
                     console.error('Post-payment Shiprocket booking failed:', error.response?.data || error.message);
                 }
             }
-            return res.json({ success: true, orderId: order.id, billingSyncStatus: order.billing_sync_status || 'not_configured', billingStockSyncStatus, ...(shipment ? { shipment } : {}), ...(shipmentWarning ? { shipmentWarning } : {}), ...(stockErrors.length ? { billingStockWarning: true, billingStockErrors: stockErrors } : {}) });
+            return res.json({ success: true, orderId: order.id, billingSyncStatus, billingSyncError, billingStockSyncStatus, ...(shipment ? { shipment } : {}), ...(shipmentWarning ? { shipmentWarning } : {}) });
 
         } catch (txErr) {
             await transaction.rollback();
@@ -562,11 +637,41 @@ const buildBillingPayload = async order => {
         gst_amount: savedPayload.gst_amount ?? (Number(order.tax) || 0),
         delivery_charge: savedPayload.delivery_charge ?? (Number(order.delivery_charge) || 0),
         paid_amount: savedPayload.paid_amount ?? (Number(order.billing_paid_amount ?? order.total) || 0),
-        total: savedPayload.total ?? (Number(order.total) || 0),
+        total: savedPayload.total ?? (Number(order.subtotal) || 0),
         balance: savedPayload.balance ?? (Number(order.billing_balance) || 0),
         submission_action: 'complete',
     };
 };
+
+function makeBillingCreatePayload(snapshot) {
+    const items = (Array.isArray(snapshot.items) ? snapshot.items : []).map(item => {
+        const variantId = item.product_variant_id;
+        if (variantId === undefined || variantId === null || String(variantId).trim() === '') {
+            throw new Error('A purchased item has no Billing variant ID. Map every order variant to Billing before invoice creation.');
+        }
+        const value = String(variantId).trim();
+        return {
+            product_variant_id: /^\d+$/.test(value) ? Number(value) : value,
+            quantity: Math.max(1, parseInt(item.quantity, 10) || 1),
+            discount_amount: Number(item.discount_amount) || 0,
+        };
+    });
+    if (!items.length) throw new Error('Billing invoice needs at least one purchased variant.');
+
+    return {
+        customer_name: String(snapshot.customer_name || ''),
+        customer_phone: String(snapshot.customer_phone || ''),
+        customer_email: String(snapshot.customer_email || ''),
+        source: 'Website',
+        entry_mode: 'Manual',
+        price_type: 'MRP',
+        payment_mode: 'Online',
+        has_gst: false,
+        bill_discount_amount: Number(snapshot.bill_discount_amount) || 0,
+        paid_amount: Number(snapshot.paid_amount) || 0,
+        items,
+    };
+}
 
 const getBillingPayload = async (req, res) => {
     try {
@@ -614,26 +719,109 @@ const updateBillingPayload = async (req, res) => {
         next.paid_amount = Number(order.billing_paid_amount ?? order.total) || 0;
         next.subtotal = Number(order.subtotal) || 0;
         next.gst_amount = Number(order.tax) || 0;
-        next.total = Number(order.total) || 0;
+        next.total = Number(order.subtotal) || 0;
         next.balance = Number(order.billing_balance) || 0;
         next.submission_action = 'complete';
-        const gstRates = [...new Set((next.items || []).map(item => Number(item.gst_percent)).filter(Number.isFinite))];
-        const hasMixedGst = gstRates.length > 1;
-
         await order.update({
             billing_stock_location_id: null,
             billing_price_type: next.price_type || order.billing_price_type,
             billing_has_gst: Boolean(next.has_gst),
             billing_payload: next,
-            billing_sync_status: hasMixedGst ? 'needs_gst_review' : 'not_configured',
-            billing_sync_error: hasMixedGst
-                ? 'This order contains products with different GST options; the Billing form supports one GST option per bill. Payload stored locally for review.'
-                : 'Billing create/update endpoint is not configured; edited payload is stored locally.',
         });
         return res.json({ success: true, orderId: order.id, billingPayload: next, billingSyncStatus: order.billing_sync_status });
     } catch (error) {
         console.error('Update order billing payload failed:', error.message);
         return res.status(500).json({ success: false, message: 'Could not save the order billing details.' });
+    }
+};
+
+const retryBillingInvoice = async (req, res) => {
+    const order = await Order.findByPk(req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
+    if (order.payment_status !== 'paid') return res.status(400).json({ success: false, message: 'Only paid orders can be invoiced.' });
+    if (order.billing_sync_status === 'synced') return res.status(409).json({ success: false, message: 'Billing already confirmed this invoice.' });
+    if (!/HTTP 422: Insufficient stock/i.test(String(order.billing_sync_error || ''))) {
+        return res.status(409).json({ success: false, message: 'Automatic retry is allowed only when Billing explicitly rejected the previous request for insufficient stock. Check Billing first if the previous outcome was unknown.' });
+    }
+
+    let billingRequestPayload;
+    let billingResponse = null;
+    try {
+        const savedRequest = parseJson(order.billing_request_payload);
+        if (!savedRequest) throw new Error('The original Billing request was not saved.');
+        billingRequestPayload = makeBillingCreatePayload(savedRequest);
+        const stockCheck = await billingCatalog.assertBillingStock(billingRequestPayload.items);
+        await order.update({ billing_sync_status: 'pending', billing_sync_error: null });
+        const billingBase = (process.env.BILLING_API_BASE_URL || 'https://billing.fashionaura26.com/api').replace(/\/+$/, '');
+        const billingUrl = `${billingBase}/billings`;
+        orderFlowLog.logRequest(`order-${order.id} Billing invoice retry`, 'POST', billingUrl, billingRequestPayload);
+        const response = await axios.post(billingUrl, billingRequestPayload, {
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
+            maxRedirects: 0,
+        });
+        billingResponse = response.data;
+        orderFlowLog.logResponse(`order-${order.id} Billing invoice retry`, response.status, response.data);
+        if (response.data?.success === false || response.data?.status === false || Number(response.data?.status) >= 400) {
+            const rejection = new Error(response.data?.message || 'Billing rejected the invoice request.');
+            rejection.billingRejected = true;
+            throw rejection;
+        }
+
+        let stockSyncStatus = 'synced';
+        let stockSyncError = null;
+        try {
+            const ids = [...new Set(billingRequestPayload.items.map(item => String(item.product_variant_id)))];
+            const refreshed = await syncCatalogAfterBillingInvoice(ids);
+            if (refreshed.refreshedVariants < ids.length) {
+                stockSyncStatus = 'refresh_failed';
+                stockSyncError = `Invoice created; only ${refreshed.refreshedVariants} of ${ids.length} local variant records were verified after catalog refresh.`;
+            }
+        } catch (error) {
+            stockSyncStatus = 'refresh_failed';
+            stockSyncError = `Invoice created, but local stock cache refresh failed: ${error.message}`;
+        }
+        await order.update({
+            billing_sync_status: 'synced',
+            billing_sync_error: null,
+            billing_request_payload: billingRequestPayload,
+            billing_response: response.data,
+            billing_stock_sync_status: stockSyncStatus,
+            billing_stock_sync_error: stockSyncError,
+            billing_stock_synced_at: stockSyncStatus === 'synced' ? new Date() : null,
+        });
+        return res.json({ success: true, orderId: order.id, billingSyncStatus: 'synced', billingStockSyncStatus: stockSyncStatus, stockCheckedAt: stockCheck.checkedAt });
+    } catch (error) {
+        if (error.response) orderFlowLog.logFailure(`order-${order.id} Billing invoice retry`, error);
+        else if (billingResponse !== null) orderFlowLog.logResponse(`order-${order.id} Billing invoice retry`, 'REJECTED', billingResponse);
+        else orderFlowLog.logFailure(`order-${order.id} Billing invoice retry`, error);
+        const message = error.response?.status
+            ? `Billing invoice request returned HTTP ${error.response.status}: ${error.response.data?.message || error.message}`
+            : error.message || 'Could not retry the Billing invoice.';
+        const status = error.response?.status && Number(error.response.status) >= 500 ? 'unknown' : 'failed';
+        let stockSyncStatus = status;
+        let stockSyncError = message;
+        if (error.response && Number(error.response.status) >= 400 && Number(error.response.status) < 500 && billingRequestPayload?.items?.length) {
+            try {
+                const ids = [...new Set(billingRequestPayload.items.map(item => String(item.product_variant_id)))];
+                await syncCatalogAfterBillingInvoice(ids);
+                stockSyncStatus = 'synced';
+                stockSyncError = `${message} Billing rejected the invoice, so stock was not decremented; the local catalog was refreshed from Billing.`;
+            } catch (refreshError) {
+                stockSyncStatus = 'refresh_failed';
+                stockSyncError = `${message} Local catalog refresh after rejection failed: ${refreshError.message}`;
+            }
+        }
+        await order.update({
+            billing_sync_status: status,
+            billing_sync_error: message,
+            ...(billingRequestPayload ? { billing_request_payload: billingRequestPayload } : {}),
+            ...(error.response?.data ? { billing_response: error.response.data } : {}),
+            billing_stock_sync_status: stockSyncStatus,
+            billing_stock_sync_error: stockSyncError,
+            billing_stock_synced_at: stockSyncStatus === 'synced' ? new Date() : null,
+        });
+        return res.status(error.status || error.response?.status || 502).json({ success: false, message, stockIssues: error.stockIssues || [] });
     }
 };
 
@@ -663,6 +851,7 @@ function addressText(value) {
 const getAllOrders = async (req, res) => {
     try {
         const whereClause = {};
+        whereClause.status = { [Op.ne]: 'cancelled' };
         if (req.query.franchise_id) {
             whereClause.franchise_id = req.query.franchise_id;
         }
@@ -715,20 +904,28 @@ const getCustomerOrders = async (req, res) => {
 
 
 // ─────────────────────────────────────────
+// ─────────────────────────────────────────
 // 🔄 UPDATE STATUS
 // ─────────────────────────────────────────
 const updateOrderStatus = async (req, res) => {
     try {
-        const order = await Order.findByPk(req.params.id);
+        const order = await Order.findByPk(req.params.id, {
+            include: [{ model: OrderItem, as: 'OrderItems' }]
+        });
         if (!order) {
             return res.status(404).json({ success: false, message: 'Order not found' });
         }
 
         const normalizedStatus = req.body.status.toLowerCase();
 
+        const allowedStatuses = ['pending', 'confirmed', 'shipped', 'out_for_delivery', 'delivered'];
+        if (!allowedStatuses.includes(normalizedStatus)) {
+            return res.status(400).json({ success: false, message: 'Status must be pending, confirmed, shipped, out_for_delivery, or delivered.' });
+        }
+
         // Restore stock on cancellation
         if (normalizedStatus === 'cancelled' && order.status !== 'cancelled') {
-            const orderItems = await OrderItem.findAll({ where: { orderId: order.id } });
+            const orderItems = order.OrderItems || await OrderItem.findAll({ where: { orderId: order.id } });
             for (const item of orderItems) {
                 const product = await Product.findByPk(item.product_id);
                 if (product) {
@@ -781,7 +978,7 @@ const assignFranchise = async (req, res) => {
         await order.update({ 
             franchise_id, 
             franchise_name: franchise_id === null ? null : (franchise_name || null),
-            status: franchise_id === null ? (order.status === 'assigned' ? 'confirmed' : order.status) : 'assigned'
+            status: order.status
         });
 
         return res.json({ success: true, order });
@@ -796,29 +993,39 @@ const assignFranchise = async (req, res) => {
 // ─────────────────────────────────────────
 const updateFranchiseStatus = async (req, res) => {
     try {
-        const order = await Order.findByPk(req.params.id);
+        const order = await Order.findByPk(req.params.id, {
+            include: [{ model: OrderItem, as: 'OrderItems' }]
+        });
         if (!order) {
             return res.status(404).json({ success: false, message: 'Order not found' });
         }
 
-        // Validate flow: Assigned -> Accepted -> Packed -> Out For Delivery -> Delivered
-        const newStatus = req.body.status.toLowerCase();
+        // Franchise updates follow the storefront's supported order statuses.
+        const newStatus = String(req.body.status || '').toLowerCase();
+        const currentStatus = ({ assigned: 'pending', accepted: 'confirmed', packed: 'shipped' })[String(order.status || '').toLowerCase()] || String(order.status || '').toLowerCase();
         const flow = {
-            'assigned': ['accepted'],
-            'accepted': ['packed'],
-            'packed': ['out_for_delivery'],
+            'pending': ['confirmed'],
+            'confirmed': ['shipped'],
+            'shipped': ['out_for_delivery'],
             'out_for_delivery': ['delivered']
         };
 
-        if (order.status !== 'assigned' && !flow[order.status]) {
+        if (!flow[currentStatus]) {
              return res.status(400).json({ success: false, message: 'Invalid current status for franchise update' });
         }
 
-        if (flow[order.status] && !flow[order.status].includes(newStatus)) {
-             return res.status(400).json({ success: false, message: `Cannot change status from ${order.status} to ${newStatus}` });
+        if (!flow[currentStatus].includes(newStatus)) {
+             return res.status(400).json({ success: false, message: `Cannot change status from ${currentStatus} to ${newStatus}` });
         }
 
         await order.update({ status: newStatus });
+
+        try {
+            await sendOrderStatusEmail(order, newStatus);
+        } catch (mailErr) {
+            console.error('⚠️ Franchise status change email failed:', mailErr.message);
+        }
+
         return res.json({ success: true, order });
     } catch (err) {
         console.error('updateFranchiseStatus error:', err);
@@ -833,6 +1040,7 @@ module.exports = {
     createOrder,
     getBillingPayload,
     updateBillingPayload,
+    retryBillingInvoice,
     getAllOrders,
     getCustomerOrders,
     updateOrderStatus,

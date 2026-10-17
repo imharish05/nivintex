@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useShop } from '../context/ShopContext';
 import CartDrawer from './CartDrawer';
 import WishlistDrawer from './WishlistDrawer';
-import { categoryApi, subCategoryApi, productApi, getImageUrl } from '../utils/api';
+import { categoryApi, subCategoryApi, productApi, getImageUrl, slugifyProductName } from '../utils/api';
 import logo from '../assets/img/logo2.png';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Skeleton, { CategoryCircleSkeleton } from './Skeleton';
@@ -75,13 +75,28 @@ const styles = {
   }),
   headerInner: {
     maxWidth: '1400px', margin: '0 auto',
-    padding: '0 clamp(16px, 3vw, 40px)',
+    padding: '0 clamp(10px, 3vw, 40px)',
     display: 'flex', alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
     height: '68px', gap: '0',
+    boxSizing: 'border-box',
   },
 
-  logoLink: { flexShrink: 0, textDecoration: 'none', display: 'flex', alignItems: 'center', marginRight: 'clamp(12px, 3vw, 40px)' },
-  logoImg:  { height: 'clamp(38px, 5vw, 50px)', width: 'auto', display: 'block' },
+  logoLink: {
+    flexShrink: 0,
+    textDecoration: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    marginRight: 'clamp(6px, 2vw, 32px)',
+  },
+  logoImg:  {
+    height: 'clamp(36px, 4.5vw, 48px)',
+    width: 'auto',
+    objectFit: 'contain',
+    display: 'block',
+    transform: 'translateY(-3px)',
+  },
 
   nav:     { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' },
   navList: { display: 'flex', gap: '2px', listStyle: 'none', margin: 0, padding: 0, position: 'relative', alignItems: 'center' },
@@ -165,24 +180,35 @@ const styles = {
   },
 
   // ── Right actions ─────────────────────────────────────────────────────────
-  actions: { display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, marginLeft: 'clamp(8px, 2vw, 32px)' },
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'clamp(2px, 0.8vw, 6px)',
+    flexShrink: 0,
+    marginLeft: 'auto',
+  },
 
   iconBtn: (active) => ({
-    position: 'relative', width: '38px', height: '38px',
+    position: 'relative',
+    width: 'clamp(32px, 7.5vw, 38px)',
+    height: 'clamp(32px, 7.5vw, 38px)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     border: 'none', background: 'transparent',
     cursor: 'pointer', color: active ? '#A2C579' : '#fff',
-    fontSize: '15px', transition: 'color 0.2s',
+    fontSize: 'clamp(14px, 3.5vw, 15px)',
+    transition: 'color 0.2s',
     fontFamily: F.main,
+    padding: 0,
+    flexShrink: 0,
   }),
 
   // ── Badge (cart/wishlist count circle) ──────────────────────────────────
   badge: () => ({
-    position: 'absolute', top: '-6px', right: '-6px',
+    position: 'absolute', top: '-5px', right: '-5px',
     background: '#C9933A', color: '#fff',
     borderRadius: '50%',
-    minWidth: '18px', height: '18px', padding: '0 4px',
-    fontSize: '10px', fontWeight: 600,
+    minWidth: '17px', height: '17px', padding: '0 3px',
+    fontSize: '9px', fontWeight: 600,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     border: '2px solid #0f5447',
     lineHeight: 1,
@@ -191,95 +217,201 @@ const styles = {
     transition: 'border-color 0.35s ease',
   }),
 
-  accountWrap: { position: 'relative' },
+  accountWrap: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    flexShrink: 0,
+    marginLeft: '2px',
+  },
   accountBtn: (open) => ({
-    display: 'flex', alignItems: 'center',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: '0',
-    border: 'none', background: 'transparent',
-    cursor: 'pointer', color: open ? '#A2C579' : '#fff',
-    fontSize: '15px', transition: 'color 0.2s',
-    width: '38px', height: '38px', justifyContent: 'center',
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    color: open ? '#A2C579' : '#fff',
+    transition: 'all 0.2s ease',
+    borderRadius: '24px',
     fontFamily: F.main,
+    flexShrink: 0,
   }),
 
   dropdown: (visible) => ({
-    position: 'absolute', top: 'calc(100% + 10px)', right: 0,
-    minWidth: '230px', maxWidth: 'calc(100vw - 24px)', background: '#FFFFFF',
-    border: '1px solid #EAE4D6',
-    boxShadow: '0 12px 40px rgba(31,92,68,0.14)',
-    overflow: 'hidden', zIndex: 1100,
+    position: 'absolute',
+    top: 'calc(100% + 12px)',
+    right: 0,
+    width: '280px',
+    maxWidth: 'calc(100vw - 24px)',
+    background: '#FFFFFF',
+    borderRadius: '16px',
+    border: '1px solid rgba(15,84,71,0.10)',
+    boxShadow: '0 18px 48px -8px rgba(15,84,71,0.22), 0 6px 18px rgba(20,35,28,0.08)',
+    padding: '0',
+    zIndex: 1100,
     opacity: visible ? 1 : 0,
     transform: visible ? 'translateY(0) scale(1)' : 'translateY(-8px) scale(0.97)',
     pointerEvents: visible ? 'all' : 'none',
     transition: 'opacity 0.2s ease, transform 0.2s ease',
     fontFamily: F.main,
-    borderTop: '3px solid #0f5447',
+    boxSizing: 'border-box',
   }),
-  profileCard: {
-    padding: '16px 18px 14px', borderBottom: '1px solid #EAE4D6',
-    display: 'flex', alignItems: 'center', gap: '12px',
+  profileHeader: {
+    padding: '17px 18px',
+    background: 'linear-gradient(135deg, #F7F8F1 0%, #FBF8F1 100%)',
+    borderBottom: '1px solid #E9EEE7',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    borderTopLeftRadius: '16px',
+    borderTopRightRadius: '16px',
+    boxSizing: 'border-box',
   },
   profileAvatar: {
-    width: '38px', height: '38px', background: '#0f5447',
-    color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '13px', fontWeight: 300, flexShrink: 0,
-    fontFamily: F.main, letterSpacing: '1px',
+    width: '42px',
+    height: '42px',
+    borderRadius: '50%',
+    background: '#0f5447',
+    border: '1.5px solid #C9933A',
+    color: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '14px',
+    fontWeight: 600,
+    flexShrink: 0,
+    fontFamily: F.main,
+    letterSpacing: '0.5px',
+    boxShadow: '0 2px 6px rgba(15,84,71,0.2)',
   },
   profileName: {
-    margin: 0, fontSize: '13px', fontWeight: 400, color: '#0f5447',
-    fontFamily: F.main, letterSpacing: '1.5px', textTransform: 'uppercase',
+    margin: 0,
+    fontSize: '14px',
+    fontWeight: 650,
+    color: '#0f5447',
+    fontFamily: F.main,
+    letterSpacing: '0.2px',
+    textTransform: 'capitalize',
+    lineHeight: 1.3,
   },
   profileEmail: {
-    margin: 0, fontSize: '11px', color: '#6B7A6B',
-    fontFamily: F.sub, fontWeight: 300, letterSpacing: '0.3px',
+    margin: '2px 0 0',
+    fontSize: '11.5px',
+    color: '#6B7A6B',
+    fontFamily: F.sub,
+    fontWeight: 400,
+    maxWidth: '188px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    lineHeight: 1.3,
   },
-  dropItem: (danger) => ({
-    display: 'flex', alignItems: 'center', gap: '10px',
-    padding: '11px 18px', fontSize: '11px', fontWeight: 300,
-    letterSpacing: '2px', textTransform: 'uppercase',
-    color: danger ? '#E05252' : '#0f5447', cursor: 'pointer',
-    textDecoration: 'none', transition: 'background 0.15s',
-    background: 'transparent', width: '100%', border: 'none',
-    textAlign: 'left', boxSizing: 'border-box',
-    fontFamily: F.main,
-  }),
+  menuList: {
+    padding: '9px 10px 10px',
+  },
   dropIcon: (danger) => ({
-    width: '28px', height: '28px',
-    background: danger ? 'rgba(224,82,82,0.09)' : 'rgba(15,84,71,0.08)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '12px', color: danger ? '#E05252' : '#0f5447', flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: '46px',
+    padding: '7px 10px',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: 500,
+    letterSpacing: '0.2px',
+    color: danger ? '#DC2626' : '#2D3748',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    transition: 'all 0.15s ease',
+    background: 'transparent',
+    border: 'none',
+    boxSizing: 'border-box',
+    fontFamily: F.main,
+    margin: '2px 0',
   }),
-  dropDivider:  { height: '1px', background: '#EAE4D6', margin: '4px 0' },
+  dropItemIcon: (danger) => ({
+    width: '30px',
+    height: '30px',
+    borderRadius: '9px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: '11px',
+    flexShrink: 0,
+    color: danger ? '#C2413A' : '#0F6252',
+    background: danger ? '#FFF1EF' : '#EEF5EF',
+  }),
+  dropDivider: {
+    height: '1px',
+    background: '#E9EEE7',
+    margin: '7px 4px 6px',
+  },
 
   guestPanel: {
-    padding: '20px 18px', borderBottom: '1px solid #EAE4D6',
+    padding: '18px 18px 14px',
     textAlign: 'center',
   },
   guestIcon: {
-    width: '48px', height: '48px', background: '#F4F0E8',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    margin: '0 auto 12px', fontSize: '20px', color: '#6B7A6B',
-    border: '1px solid #EAE4D6',
+    width: '46px',
+    height: '46px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #F5F1E8 0%, #FFFFFF 100%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '0 auto 10px',
+    fontSize: '18px',
+    color: '#0f5447',
+    border: '1.5px solid #EAE4D6',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
   },
   guestTitle: {
-    margin: '0 0 4px', fontSize: '13px', fontWeight: 300, color: '#0f5447',
-    fontFamily: F.main, letterSpacing: '3px', textTransform: 'uppercase',
+    margin: '0 0 3px',
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#0f5447',
+    fontFamily: F.main,
+    letterSpacing: '1px',
+    textTransform: 'uppercase',
   },
   guestSub: {
-    margin: '0 0 14px', fontSize: '11px', color: '#6B7A6B',
-    fontFamily: F.sub, fontWeight: 300, letterSpacing: '0.5px',
+    margin: '0 0 14px',
+    fontSize: '11px',
+    color: '#718076',
+    fontFamily: F.sub,
+    fontWeight: 400,
   },
   signInBtn: {
-    display: 'block', width: '100%', padding: '10px 0',
-    background: '#0f5447', color: '#fff', border: 'none',
-    fontSize: '11px', fontWeight: 300, cursor: 'pointer',
-    textDecoration: 'none', textAlign: 'center',
-    letterSpacing: '3px', textTransform: 'uppercase',
+    display: 'block',
+    width: '100%',
+    padding: '10px 0',
+    background: 'linear-gradient(135deg, #0f5447 0%, #15453b 100%)',
+    color: '#fff',
+    borderRadius: '24px',
+    border: 'none',
+    fontSize: '11px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    textDecoration: 'none',
+    textAlign: 'center',
+    letterSpacing: '1.5px',
+    textTransform: 'uppercase',
     fontFamily: F.main,
+    boxShadow: '0 3px 12px rgba(15,84,71,0.25)',
+    transition: 'all 0.15s ease',
   },
   registerLink: {
-    display: 'block', marginTop: '10px', fontSize: '11px', color: '#6B7A6B',
-    textDecoration: 'none', fontFamily: F.sub, fontWeight: 300, letterSpacing: '1px',
+    display: 'block',
+    marginTop: '10px',
+    fontSize: '11px',
+    color: '#718076',
+    textDecoration: 'none',
+    fontFamily: F.sub,
+    fontWeight: 400,
+    letterSpacing: '0.3px',
+    transition: 'color 0.15s',
   },
 };
 
@@ -288,16 +420,43 @@ const DropItem = ({ icon, label, onClick, danger }) => {
   const [hovered, setHovered] = useState(false);
   return (
     <button
+      type="button"
+      aria-label={label}
       style={{
-        ...styles.dropItem(danger),
-        background: hovered ? (danger ? 'rgba(224,82,82,0.05)' : 'rgba(31,92,68,0.05)') : 'transparent',
+        ...styles.dropIcon(danger),
+        background: hovered ? (danger ? '#FFF1EF' : '#F3F7F2') : danger ? 'rgba(220,38,38,0.025)' : 'transparent',
       }}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
     >
-      <span style={styles.dropIcon(danger)}><i className={icon} /></span>
-      {label}
+      <span style={styles.dropItemIcon(danger)}>
+        <i className={icon} style={{ fontSize: '13px' }} />
+      </span>
+      <span
+        style={{
+          flex: 1,
+          textAlign: 'left',
+          fontSize: '13.5px',
+          fontWeight: hovered ? 600 : 550,
+          color: danger ? '#B93832' : '#263B34',
+          letterSpacing: '0.2px',
+        }}
+      >
+        {label}
+      </span>
+      <i
+        className="fa-solid fa-chevron-right"
+        style={{
+          fontSize: '9px',
+          color: danger ? 'rgba(220,38,38,0.4)' : '#A3B0A5',
+          transform: hovered ? 'translateX(2px)' : 'none',
+          transition: 'all 0.15s ease',
+          flexShrink: 0,
+        }}
+      />
     </button>
   );
 };
@@ -347,7 +506,13 @@ const NavLinkCmp = ({ label, path, active, onClick, children, asSpan, hoverColor
   }
   const handleClick = (event) => {
     onClick?.(event);
-    if ((path || '/') === '/') window.scrollTo(0, 0);
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
   };
   return (
     <Link to={path || '/'} style={computed} onClick={handleClick}
@@ -515,10 +680,9 @@ const Header = () => {
   }, [searchOpen, searchQuery]);
 
   const openProductFromSearch = (product) => {
-    sessionStorage.setItem('selectedProduct', JSON.stringify({ id: product.id }));
     setSearchOpen(false);
     setSearchQuery('');
-    navigate('/product-details');
+    navigate(`/product/${product.slug || slugifyProductName(product.productName || product.name, product.id)}`);
     window.scrollTo(0, 0);
   };
 
@@ -567,7 +731,7 @@ const Header = () => {
   };
   const handleCollLeave = () => { collTimer.current = setTimeout(() => { setCollOpen(false); setCollHovered(false); }, 160); };
   const handleAccEnter  = () => { clearTimeout(accTimer.current); setAccountOpen(true); };
-  const handleAccLeave  = () => { accTimer.current = setTimeout(() => setAccountOpen(false), 160); };
+  const handleAccLeave  = () => { accTimer.current = setTimeout(() => setAccountOpen(false), 250); };
 
   // ── Navigate to Shop page pre-filtered by the chosen category ──
   const handleCatNav = (cat) => {
@@ -607,11 +771,11 @@ const Header = () => {
       <div style={{ height: '68px' }} />
 
       <header style={{ ...styles.headerWrap(), background: C.brand }} id="header-sticky">
-        <div style={styles.headerInner}>
+        <div style={styles.headerInner} className="header-inner-row">
 
           {/* Logo */}
-          <Link to="/" style={styles.logoLink}>
-            <img src={logo} alt="Fashion Aura" style={styles.logoImg} />
+          <Link to="/" style={styles.logoLink} className="header-logo-link">
+            <img src={logo} alt="Fashion Aura" style={styles.logoImg} className="header-logo-img" />
           </Link>
 
           {/* Nav */}
@@ -678,10 +842,10 @@ const Header = () => {
           </nav>
 
           {/* Actions */}
-          <div style={styles.actions}>
+          <div style={styles.actions} className="header-actions">
 
             {/* Database-backed product search */}
-            <div ref={searchRef} style={{ position: 'relative' }}>
+            <div ref={searchRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <IconBtn
                 active={searchOpen}
                 title="Search products"
@@ -708,46 +872,129 @@ const Header = () => {
               {cartCount > 0 && <span style={styles.badge()}>{cartCount}</span>}
             </IconBtn>
 
-            {/* Account */}
-            <div ref={accountRef} style={styles.accountWrap}
+            {/* Account (Desktop only - mobile accesses account inside hamburger menu) */}
+            <div ref={accountRef} style={styles.accountWrap} className="header-account-wrap d-none d-xl-flex"
               onMouseEnter={handleAccEnter} onMouseLeave={handleAccLeave}>
               <button
                 style={{
                   ...styles.accountBtn(accountOpen),
-                  color: (accountOpen || accHovered) ? C.navHover : C.text,
+                  outline: 'none',
                 }}
                 onClick={() => setAccountOpen(o => !o)}
                 onMouseEnter={() => setAccHovered(true)}
                 onMouseLeave={() => setAccHovered(false)}
+                title={user ? `${user.name} - Account` : 'Sign in'}
+                aria-label="Account options"
+                aria-expanded={accountOpen}
               >
-                {user
-                  ? <span style={{
-                      fontSize: '12px', fontWeight: 300,
-                      background: C.accent,
-                      width: '28px', height: '28px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontFamily: F.main, letterSpacing: '1px',
-                    }}>
+                {user ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '3px 6px 3px 3px',
+                      borderRadius: '24px',
+                      background: (accountOpen || accHovered) ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #C9933A 0%, #A87826 100%)',
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        fontFamily: F.main,
+                        letterSpacing: '0.5px',
+                        boxShadow: (accountOpen || accHovered)
+                          ? '0 0 0 2px #FFFFFF, 0 3px 8px rgba(0,0,0,0.25)'
+                          : '0 0 0 1.5px rgba(255,255,255,0.4)',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
                       {initials || <i className="fa-solid fa-user" style={{ fontSize: '11px' }} />}
-                    </span>
-                  : <i className="fa-regular fa-user" />
-                }
+                    </div>
+                    <i
+                      className="fa-solid fa-chevron-down"
+                      style={{
+                        fontSize: '9px',
+                        color: (accountOpen || accHovered) ? '#C9933A' : 'rgba(255,255,255,0.7)',
+                        transition: 'transform 0.25s ease, color 0.2s',
+                        transform: accountOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: (accountOpen || accHovered) ? C.navHover : C.text,
+                      background: (accountOpen || accHovered) ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                      fontSize: '15px',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <i className="fa-regular fa-user" />
+                  </div>
+                )}
               </button>
 
               <div style={styles.dropdown(accountOpen)}>
+                {/* Invisible hover bridge to prevent cursor gap drop */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-16px',
+                    left: 0,
+                    right: 0,
+                    height: '16px',
+                    background: 'transparent',
+                  }}
+                />
+
+                {/* Pointer Caret */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '-6px',
+                    right: '16px',
+                    width: '12px',
+                    height: '12px',
+                    background: '#FAF8F5',
+                    transform: 'rotate(45deg)',
+                    borderTop: '1px solid #EAE6DF',
+                    borderLeft: '1px solid #EAE6DF',
+                    zIndex: 2,
+                  }}
+                />
+
                 {user ? (
                   <>
-                    <div style={styles.profileCard}>
+                    <div style={styles.profileHeader}>
                       <div style={styles.profileAvatar}>{initials}</div>
-                      <div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={styles.profileName}>{user.name}</p>
-                        <p style={styles.profileEmail}>{user.email}</p>
+                        <p style={styles.profileEmail} title={user.email}>{user.email}</p>
                       </div>
                     </div>
-                    <DropItem icon="fa-solid fa-user"               label="My Profile" onClick={() => { navigate('/profile'); setAccountOpen(false); }} />
-                    <DropItem icon="fa-solid fa-truck"              label="My Orders"  onClick={() => { navigate('/orders');  setAccountOpen(false); }} />
-                    <div style={styles.dropDivider} />
-                    <DropItem icon="fa-solid fa-right-from-bracket" label="Logout"     onClick={() => { setAccountOpen(false); logout(); }} danger />
+                    <div style={styles.menuList}>
+                      <DropItem icon="fa-solid fa-user"               label="My Profile" onClick={() => { navigate('/profile'); setAccountOpen(false); }} />
+                      <DropItem icon="fa-solid fa-truck"              label="My Orders"  onClick={() => { navigate('/orders');  setAccountOpen(false); }} />
+                      <div style={styles.dropDivider} />
+                      <DropItem icon="fa-solid fa-right-from-bracket" label="Logout"     onClick={() => { setAccountOpen(false); logout(); }} danger />
+                    </div>
                   </>
                 ) : (
                   <div style={styles.guestPanel}>
@@ -769,10 +1016,15 @@ const Header = () => {
 
             {/* Mobile hamburger */}
             <button
-              className="d-xl-none"
+              className="d-xl-none header-hamburger-btn"
               aria-label="Toggle Navigation Menu"
               onClick={() => setMobileNavOpen(true)}
-              style={{ ...styles.iconBtn(false), color: C.text }}
+              style={{
+                ...styles.iconBtn(false),
+                color: C.text,
+                fontSize: '17px',
+                flexShrink: 0,
+              }}
             >
               <i className="fas fa-bars" />
             </button>
@@ -896,7 +1148,16 @@ const Header = () => {
             <React.Fragment key={path}>
               <Link
                 to={path}
-                onClick={() => setMobileNavOpen(false)}
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  try {
+                    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                  } catch {
+                    window.scrollTo(0, 0);
+                  }
+                  document.documentElement.scrollTop = 0;
+                  document.body.scrollTop = 0;
+                }}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '12px 20px', textDecoration: 'none',
@@ -1416,7 +1677,7 @@ const Header = () => {
                               padding: '9px 12px',
                               background: '#FAF8F5',
                               border: '1px solid #EAE4D6',
-                              borderRadius: '6px',
+                              borderRadius: '8px',
                               textAlign: 'left',
                               cursor: 'pointer',
                               fontSize: '11px',
@@ -1468,7 +1729,7 @@ const Header = () => {
                     color: '#ffffff',
                     border: 'none',
                     padding: '9px 18px',
-                    borderRadius: '6px',
+                    borderRadius: '8px',
                     fontSize: '11px',
                     letterSpacing: '1.5px',
                     textTransform: 'uppercase',

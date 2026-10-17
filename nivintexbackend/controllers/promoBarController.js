@@ -2,6 +2,7 @@
 "use strict";
 
 const PromoBar = require("../models/PromoBar");
+const { validateFields } = require("../utils/textValidation");
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  PUBLIC
@@ -67,8 +68,14 @@ const create = async (req, res) => {
     isActive, sortOrder,
   } = req.body;
 
-  if (!message || !String(message).trim()) {
-    return res.status(400).json({ error: "'message' is required" });
+  const validationError = validateFields([
+    { value: message, fieldName: 'Promo Message', required: true, maxChars: 120, maxWords: 20 },
+    { value: codeLabel, fieldName: 'Code Label', maxChars: 30, maxWords: 4 },
+    { value: code, fieldName: 'Promo Code', maxChars: 30, maxWords: 3 },
+    { value: linkUrl, fieldName: 'Link URL', maxChars: 255 },
+  ]);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
 
   try {
@@ -103,6 +110,16 @@ const update = async (req, res) => {
       bgGradient, textColor, linkUrl,
       isActive, sortOrder,
     } = req.body;
+
+    const validationError = validateFields([
+      { value: message !== undefined ? message : bar.message, fieldName: 'Promo Message', required: true, maxChars: 120, maxWords: 20 },
+      { value: codeLabel !== undefined ? codeLabel : bar.codeLabel, fieldName: 'Code Label', maxChars: 30, maxWords: 4 },
+      { value: code !== undefined ? code : bar.code, fieldName: 'Promo Code', maxChars: 30, maxWords: 3 },
+      { value: linkUrl !== undefined ? linkUrl : bar.linkUrl, fieldName: 'Link URL', maxChars: 255 },
+    ]);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
+    }
 
     await bar.update({
       ...(message    !== undefined && { message:    String(message).trim() }),

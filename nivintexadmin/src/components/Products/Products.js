@@ -25,7 +25,7 @@ const fieldStyle = { display: 'flex', flexDirection: 'column', gap: 5 };
 const labelStyle = { fontSize: 11, fontWeight: 500, color: KM.muted, textTransform: 'uppercase', letterSpacing: '0.05em' };
 const inputStyle = { padding: '9px 12px', border: `1px solid ${KM.border}`, borderRadius: 8, fontSize: 13, color: KM.text, background: '#fff', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box' };
 const emptyShippingDetails = () => ({ weightKg: '', lengthCm: '', widthCm: '', heightCm: '' });
-const DEFAULT_SHIPPING_STORAGE_KEY = 'nivintex_default_shipping_package';
+const DEFAULT_SHIPPING_STORAGE_KEY = 'fashionaura_default_shipping_package';
 
 const confirmSizeChartDelete = async title => {
   const result = await Swal.fire({
@@ -161,6 +161,7 @@ function VariantImageGallery({ variant, saving, onSave }) {
 
 export default function Products({ showToast }) {
   const location = useLocation();
+  const hasSyncedBillingProducts = useRef(false);
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -183,7 +184,9 @@ export default function Products({ showToast }) {
 
   useEffect(() => {
     fetchCategories();
-    fetchProducts();
+    const shouldSyncBilling = !hasSyncedBillingProducts.current;
+    hasSyncedBillingProducts.current = true;
+    fetchProducts(shouldSyncBilling);
     try {
       const savedDefault = JSON.parse(localStorage.getItem(DEFAULT_SHIPPING_STORAGE_KEY) || 'null');
       if (savedDefault && ['weightKg', 'lengthCm', 'widthCm', 'heightCm'].every(key => Number(savedDefault[key]) > 0)) setDefaultShippingDetails(savedDefault);
@@ -193,10 +196,10 @@ export default function Products({ showToast }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (forceSync = false) => {
     setLoading(true);
     try {
-      const data = await productApi.getAll();
+      const data = await productApi.getAll(forceSync);
       const products = Array.isArray(data) ? data : [];
       setRows(products);
       return products;
@@ -383,7 +386,7 @@ export default function Products({ showToast }) {
     files.forEach(file => body.append('images', file));
     try {
       await variantApi.updateImage(billingVariantId, body);
-      const products = await fetchProducts();
+      const products = await fetchProducts(false);
       const updatedProduct = products.find(product => String(product.billingProductId) === String(editing?.billingProductId));
       if (updatedProduct) setEditing(updatedProduct);
       showToast('Saved', 'Variant image gallery updated.');
@@ -428,7 +431,7 @@ export default function Products({ showToast }) {
       await productApi.updateCustomization(editing.billingProductId, body);
       showToast('Updated!', 'Product image and storefront settings saved.');
       closeEditor();
-      await fetchProducts();
+      await fetchProducts(false);
     } catch (error) {
       showToast('Failed', error.message || 'Could not update product.');
     } finally {
@@ -453,7 +456,7 @@ export default function Products({ showToast }) {
     <div>
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div className="section-title">Products Management</div>
-        <button className="action-btn btn-edit" onClick={fetchProducts} disabled={loading}>
+        <button className="action-btn btn-edit" onClick={() => fetchProducts(true)} disabled={loading}>
           {loading ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
@@ -668,6 +671,31 @@ export default function Products({ showToast }) {
                   <span style={{ color: imageFile ? KM.green : KM.muted, fontWeight: imageFile ? 600 : 400 }}>
                     {imageFile ? `✓ ${imageFile.name}` : imagePreview ? 'Click to replace main image' : 'Click to upload main product image'}
                   </span>
+                  {imageFile && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageFile(null);
+                        setImagePreview(editing?.image || null);
+                      }}
+                      style={{
+                        marginLeft: 12,
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        border: '1px solid #fca5a5',
+                        borderRadius: 4,
+                        padding: '2px 8px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        position: 'relative',
+                        zIndex: 2,
+                      }}
+                    >
+                      ✕ Cancel selection
+                    </button>
+                  )}
                 </div>
               </div>
 

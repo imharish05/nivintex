@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
+import CharWordCounter from '../common/CharWordCounter';
+import { validateFields, isOverLimit } from '../../utils/textValidation';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 const pillClass = { true: 'pill-active', false: 'pill-inactive' };
@@ -69,6 +71,18 @@ export default function PromoBar({ showToast }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const validationError = validateFields([
+      { value: formData.message, fieldName: 'Promo Message', required: true, maxChars: 120, maxWords: 20 },
+      { value: formData.codeLabel, fieldName: 'Code Label', maxChars: 30, maxWords: 4 },
+      { value: formData.code, fieldName: 'Promo Code', maxChars: 30, maxWords: 3 },
+      { value: formData.linkUrl, fieldName: 'Link URL', maxChars: 255 },
+    ]);
+    if (validationError) {
+      showToast('Validation Error', validationError);
+      return;
+    }
+
     const method = editingId ? 'PUT' : 'POST';
     const url    = editingId
       ? `${API}/promo-bar/${editingId}`
@@ -197,12 +211,18 @@ export default function PromoBar({ showToast }) {
               <div className="km-field km-field-full">
                 <label className="km-label">Promo Message <span style={{ color: 'red' }}>*</span></label>
                 <input
-                  className="km-input"
+                  className={`km-input ${isOverLimit(formData.message, { maxChars: 120, maxWords: 20 }) ? 'km-input-error' : ''}`}
                   type="text"
                   required
                   placeholder="e.g. Pay Online & GET 10% OFF on your Purchase"
                   value={formData.message}
                   onChange={e => set('message', e.target.value)}
+                />
+                <CharWordCounter
+                  value={formData.message}
+                  maxChars={120}
+                  maxWords={20}
+                  hint="Top banner announcement text"
                 />
               </div>
 
@@ -210,11 +230,16 @@ export default function PromoBar({ showToast }) {
               <div className="km-field">
                 <label className="km-label">Code Label</label>
                 <input
-                  className="km-input"
+                  className={`km-input ${isOverLimit(formData.codeLabel, { maxChars: 30, maxWords: 4 }) ? 'km-input-error' : ''}`}
                   type="text"
                   placeholder="e.g. USE CODE:"
                   value={formData.codeLabel}
                   onChange={e => set('codeLabel', e.target.value)}
+                />
+                <CharWordCounter
+                  value={formData.codeLabel}
+                  maxChars={30}
+                  maxWords={4}
                 />
               </div>
 
@@ -222,11 +247,16 @@ export default function PromoBar({ showToast }) {
               <div className="km-field">
                 <label className="km-label">Promo Code</label>
                 <input
-                  className="km-input"
+                  className={`km-input ${isOverLimit(formData.code, { maxChars: 30, maxWords: 3 }) ? 'km-input-error' : ''}`}
                   type="text"
                   placeholder="e.g. PREPAID10 (leave blank to hide)"
                   value={formData.code}
                   onChange={e => set('code', e.target.value)}
+                />
+                <CharWordCounter
+                  value={formData.code}
+                  maxChars={30}
+                  maxWords={3}
                 />
               </div>
 
@@ -250,7 +280,7 @@ export default function PromoBar({ showToast }) {
                     type="color"
                     value={formData.textColor.startsWith('#') ? formData.textColor : '#F8F6F2'}
                     onChange={e => set('textColor', e.target.value)}
-                    style={{ width: 44, height: 38, border: 'none', borderRadius: 6, cursor: 'pointer', padding: 2 }}
+                    style={{ width: 40, height: 38, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0 }}
                   />
                   <input
                     className="km-input"
@@ -267,11 +297,16 @@ export default function PromoBar({ showToast }) {
               <div className="km-field">
                 <label className="km-label">Link URL (optional)</label>
                 <input
-                  className="km-input"
+                  className={`km-input ${isOverLimit(formData.linkUrl, { maxChars: 255 }) ? 'km-input-error' : ''}`}
                   type="text"
                   placeholder="e.g. /shop or https://..."
                   value={formData.linkUrl}
                   onChange={e => set('linkUrl', e.target.value)}
+                />
+                <CharWordCounter
+                  value={formData.linkUrl}
+                  maxChars={255}
+                  showWords={false}
                 />
               </div>
 

@@ -40,12 +40,11 @@ const PAGE_CONFIG = {
   reviews:            { title: 'Reviews' },
   coupons:            { title: 'Coupon Management' },
   orders:             { title: 'All Orders' },
-  orders_new:         { title: 'New Orders' },
+  orders_pending:     { title: 'Pending Orders' },
   orders_confirmed:   { title: 'Confirmed Orders' },
   orders_shipped:     { title: 'Shipped Orders' },
   orders_delivery:    { title: 'Out for Delivery' },
   orders_delivered:   { title: 'Delivered Orders' },
-  orders_cancelled:   { title: 'Cancelled Orders' },
   contacts:           { title: 'Contact Requests' },
   banners:            { title: 'Banners' },
   'offer-banners':    { title: 'Offer Banners' },
@@ -86,12 +85,11 @@ function AdminLayoutWrapper({ handleLogout, showToast, toast }) {
             <Route path="/sale-manager"       element={<SaleManager   showToast={showToast} />} />
 
             <Route path="/orders"             element={<Orders showToast={showToast} status={null} />} />
-            <Route path="/orders_new"         element={<Orders showToast={showToast} status="processing" />} />
+            <Route path="/orders_pending"     element={<Orders showToast={showToast} status="pending" />} />
             <Route path="/orders_confirmed"   element={<Orders showToast={showToast} status="confirmed" />} />
             <Route path="/orders_shipped"     element={<Orders showToast={showToast} status="shipped" />} />
             <Route path="/orders_delivery"    element={<Orders showToast={showToast} status="out_for_delivery" />} />
             <Route path="/orders_delivered"   element={<Orders showToast={showToast} status="delivered" />} />
-            <Route path="/orders_cancelled"   element={<Orders showToast={showToast} status="cancelled" />} />
 
             <Route path="/contacts"           element={<AdminContactManager showToast={showToast} />} />
             <Route path="/promo-bar" element={<PromoBar showToast={showToast} />} />

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const orderFlowLog = require('../utils/orderFlowLogger');
 
 const API_BASE = 'https://apiv2.shiprocket.in/v1/external';
 let cachedToken = null;
@@ -30,11 +31,17 @@ async function getToken() {
 
   let data;
   try {
-    ({ data } = await axios.post(`${API_BASE}/auth/login`, { email, password }, {
+    const url = `${API_BASE}/auth/login`;
+    const requestBody = { email, password };
+    orderFlowLog.logRequest('Shiprocket authentication', 'POST', url, requestBody);
+    const response = await axios.post(url, requestBody, {
       timeout: 15000,
       headers: { 'Content-Type': 'application/json' },
-    }));
+    });
+    data = response.data;
+    orderFlowLog.logResponse('Shiprocket authentication', response.status, data);
   } catch (error) {
+    orderFlowLog.logFailure('Shiprocket authentication', error);
     error.shiprocketStage = 'API User authentication';
     const message = error.response?.data?.message;
     if (error.response?.status === 400 && typeof message === 'string' && /blocked.*too many failed login attempts/i.test(message)) {
@@ -58,15 +65,30 @@ async function getAvailableCouriers({ deliveryPostcode, weightKg = 0.5 }) {
     ? requestedWeight
     : configuredFallbackWeight;
   const token = await getToken();
-  const { data } = await axios.get(`${API_BASE}/courier/serviceability/`, {
-    timeout: 15000,
-    headers: { Authorization: `Bearer ${token}` },
-    params: {
-      pickup_postcode: pickupPostcode,
-      delivery_postcode: deliveryPostcode,
-      cod: 0,
-      weight: configuredWeight,
-    },
+  const url = `${API_BASE}/courier/serviceability/`;
+  const params = {
+    pickup_postcode: pickupPostcode,
+    delivery_postcode: deliveryPostcode,
+    cod: 0,
+    weight: configuredWeight,
+  };
+  orderFlowLog.logRequest('Shiprocket courier serviceability', 'GET', url, params);
+  let response;
+  try {
+    response = await axios.get(url, {
+      timeout: 15000,
+      headers: { Authorization: `Bearer ${token}` },
+      params,
+    });
+  } catch (error) {
+    orderFlowLog.logFailure('Shiprocket courier serviceability', error);
+    throw error;
+  }
+  const { data } = response;
+  orderFlowLog.logResponse('Shiprocket courier serviceability', response.status, {
+    status: data?.status,
+    message: data?.message,
+    available_courier_companies: data?.data?.available_courier_companies,
   });
 
   const couriers = data?.data?.available_courier_companies || [];
@@ -148,16 +170,37 @@ async function bookShipment({ order, courierId }) {
     sub_total: Number(order.total) || 0,
     length: packageLength, breadth: packageWidth, height: packageHeight, weight: totalWeight,
   };
-  const { data: created } = await axios.post(`${API_BASE}/orders/create/adhoc`, payload, {
-    timeout: 20000,
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const createUrl = `${API_BASE}/orders/create/adhoc`;
+  orderFlowLog.logRequest(`Shiprocket create shipment order-${order.id}`, 'POST', createUrl, payload);
+  let createResponse;
+  try {
+    createResponse = await axios.post(createUrl, payload, {
+      timeout: 20000,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (error) {
+    orderFlowLog.logFailure(`Shiprocket create shipment order-${order.id}`, error);
+    throw error;
+  }
+  const created = createResponse.data;
+  orderFlowLog.logResponse(`Shiprocket create shipment order-${order.id}`, createResponse.status, created);
   const shipmentId = created?.shipment_id;
   if (!shipmentId) throw new Error('Shiprocket did not return a shipment ID.');
-  const { data: assigned } = await axios.post(`${API_BASE}/courier/assign/awb`, {
+  const awbUrl = `${API_BASE}/courier/assign/awb`;
+  const awbPayload = {
     shipment_id: shipmentId,
     courier_id: courierId,
-  }, { timeout: 20000, headers: { Authorization: `Bearer ${token}` } });
+  };
+  orderFlowLog.logRequest(`Shiprocket assign AWB order-${order.id}`, 'POST', awbUrl, awbPayload);
+  let awbResponse;
+  try {
+    awbResponse = await axios.post(awbUrl, awbPayload, { timeout: 20000, headers: { Authorization: `Bearer ${token}` } });
+  } catch (error) {
+    orderFlowLog.logFailure(`Shiprocket assign AWB order-${order.id}`, error);
+    throw error;
+  }
+  const assigned = awbResponse.data;
+  orderFlowLog.logResponse(`Shiprocket assign AWB order-${order.id}`, awbResponse.status, assigned);
   return { shipmentId, awbCode: assigned?.response?.data?.awb_code || assigned?.awb_code || null, courierName: assigned?.response?.data?.courier_name || assigned?.courier_name || null };
 }
 

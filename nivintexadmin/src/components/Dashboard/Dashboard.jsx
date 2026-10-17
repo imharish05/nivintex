@@ -33,6 +33,7 @@ function stockLabel(s) {
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DONUT_COLORS = ['#0f5447','#28C76F','#FF9F43','#EA5455','#00CFE8','#9B59B6'];
 const STATUS_CONFIG = [
+  { key:'pending',          label:'Pending',           color:'#F59E0B' },
   { key:'processing',       label:'Processing',        color:'#FF9F43' },
   { key:'confirmed',        label:'Confirmed',         color:'#00CFE8' },
   { key:'shipped',          label:'Shipped',           color:'#0f5447' },

@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
+import ImageUploadPreview from '../common/ImageUploadPreview';
+import CharWordCounter from '../common/CharWordCounter';
+import { validateFields, isOverLimit } from '../../utils/textValidation';
 import { categoryApi, getImageUrl } from '../../api';
 import defaultLogo from '../../assets/logo.png';
 
@@ -14,6 +17,7 @@ export default function Categories({ showToast }) {
 
   const [status, setStatus]         = useState('Active');
   const [imageFile, setImageFile]   = useState(null);
+  const [existingImage, setExistingImage] = useState(null);
 
   useEffect(() => { fetchCategories(); }, []);
 
@@ -30,13 +34,21 @@ export default function Categories({ showToast }) {
   const handleEditClick = (cat) => {
     setEditingId(cat.id); setCategoryName(cat.name);
     setStatus(cat.status || 'Active');
-    setImageFile(null);   setShowForm(true);
+    setImageFile(null);
+    setExistingImage(cat.image || null);
+    setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!categoryName) { showToast('Missing Name', 'Please enter a category name.'); return; }
+    const validationError = validateFields([
+      { value: categoryName, fieldName: 'Category Name', required: true, maxChars: 60, maxWords: 8 },
+    ]);
+    if (validationError) {
+      showToast('Validation Error', validationError);
+      return;
+    }
 
     const formData = new FormData();
     formData.append('name', categoryName);
@@ -62,6 +74,7 @@ export default function Categories({ showToast }) {
   const resetForm = () => {
     setShowForm(false); setEditingId(null);
     setCategoryName(''); setStatus('Active'); setImageFile(null);
+    setExistingImage(null);
   };
 
   const handleDelete = async (id) => {
@@ -100,10 +113,16 @@ export default function Categories({ showToast }) {
           <div className="km-form-body">
             <form className="km-form-grid" onSubmit={handleSubmit}>
               <div className="km-field km-field-half">
-                <label className="km-label">Category Name</label>
+                <label className="km-label">Category Name <span style={{ color: 'red' }}>*</span></label>
                 <input
-                  className="km-input" type="text" placeholder="e.g. Kurthis" required
+                  className={`km-input ${isOverLimit(categoryName, { maxChars: 60, maxWords: 8 }) ? 'km-input-error' : ''}`}
+                  type="text" placeholder="e.g. Kurthis" required
                   value={categoryName} onChange={(e) => setCategoryName(e.target.value)}
+                />
+                <CharWordCounter
+                  value={categoryName}
+                  maxChars={60}
+                  maxWords={8}
                 />
               </div>
 
@@ -118,18 +137,16 @@ export default function Categories({ showToast }) {
                 </select>
               </div>
 
-              <div className="km-field km-field-full">
-                <label className="km-label">
-                  Category Image {editingId && '(Leave blank to keep current)'}
-                </label>
-                <div className="km-file-zone">
-                  <div className="km-file-icon">↑</div>
-                  {imageFile
-                    ? <p className="km-file-selected">✓ {imageFile.name}</p>
-                    : <p className="km-file-label">Click to upload image</p>}
-                  <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} />
-                </div>
-              </div>
+              <ImageUploadPreview
+                label="Category Image"
+                note={editingId ? '(Leave blank to keep current)' : ''}
+                file={imageFile}
+                existingUrl={existingImage ? getImageUrl(existingImage) : null}
+                onChange={setImageFile}
+                onRemove={() => setImageFile(null)}
+                helpText="Recommended: square or portrait image (e.g. 400x400)"
+                previewMaxHeight={120}
+              />
 
               <button type="submit" className="km-btn-submit">
                 {editingId ? 'Update Category' : 'Save Category'}

@@ -402,8 +402,8 @@ const buildPriceSummary = (order, extra = {}) => {
             <td style="padding:5px 0;font-size:13px;color:${B.navy};text-align:right;">₹${subtotal.toFixed(2)}</td>
           </tr>
           ${tax > 0 ? `<tr>
-            <td style="padding:5px 0;font-size:13px;color:${B.text};">GST (Tax)</td>
-            <td style="padding:5px 0;font-size:13px;color:${B.navy};text-align:right;">+₹${tax.toFixed(2)}</td>
+            <td style="padding:5px 0;font-size:13px;color:${B.text};">GST added (5%)</td>
+            <td style="padding:5px 0;font-size:13px;color:${B.navy};text-align:right;">₹${tax.toFixed(2)}</td>
           </tr>` : ''}
           ${deliveryRow}
           ${discountRow}
@@ -674,8 +674,8 @@ const buildConfirmationHTML = ({ email, name, paymentId, orderId, items = [], su
           </tr>
           ${parsedTax > 0 ? `
           <tr>
-            <td style="padding:5px 0;font-size:13px;color:${B.text};">GST (Tax)</td>
-            <td style="padding:5px 0;font-size:13px;color:${B.navy};text-align:right;">+₹${parsedTax.toFixed(2)}</td>
+            <td style="padding:5px 0;font-size:13px;color:${B.text};">GST added (5%)</td>
+            <td style="padding:5px 0;font-size:13px;color:${B.navy};text-align:right;">₹${parsedTax.toFixed(2)}</td>
           </tr>` : ''}
           ${deliveryRow}
           ${discountRow}

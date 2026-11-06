@@ -6,6 +6,22 @@ import { useShop, calculateCartTotals } from '../../context/ShopContext';
 import { productApi, razorpayApi } from '../../utils/api';
 import CourierSelectModal from '../../components/CourierSelectModal';
 import { API_BASE_URL } from '../../config/api';
+import { State } from 'country-state-city';
+
+const INDIAN_STATES = (() => {
+  try {
+    const states = State.getStatesOfCountry('IN');
+    if (Array.isArray(states) && states.length > 0) return states.map(s => s.name);
+  } catch (_) {}
+  return [
+    'Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar',
+    'Chandigarh', 'Chhattisgarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Goa',
+    'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand', 'Karnataka',
+    'Kerala', 'Ladakh', 'Lakshadweep', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+    'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Puducherry', 'Punjab', 'Rajasthan',
+    'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
+  ];
+})();
 
 const ORDER_SAVE_URL = `${API_BASE_URL}/orders/save`;
 const SHIPPING_QUOTE_URL = `${API_BASE_URL}/shipping/quote`;
@@ -46,6 +62,195 @@ const Field = ({ label, optional, error, ...props }) => (
     {error && <span className="ck-error-msg">{error}</span>}
   </>
 );
+
+const StateAutocompleteField = ({ label, value, onChange, error, optional, placeholder = 'Select or type state' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const wrapperRef = useRef(null);
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const query = (value || '').trim().toLowerCase();
+  const filtered = query
+    ? INDIAN_STATES.filter(s => s.toLowerCase().includes(query)).sort((a, b) => {
+        const aStarts = a.toLowerCase().startsWith(query);
+        const bStarts = b.toLowerCase().startsWith(query);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        return a.localeCompare(b);
+      })
+    : INDIAN_STATES;
+
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [value]);
+
+  const handleSelect = (stateName) => {
+    onChange(stateName);
+    setIsOpen(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isOpen) {
+        setIsOpen(true);
+      } else {
+        setHighlightedIndex(prev => (prev < filtered.length - 1 ? prev + 1 : 0));
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!isOpen) {
+        setIsOpen(true);
+      } else {
+        setHighlightedIndex(prev => (prev > 0 ? prev - 1 : filtered.length - 1));
+      }
+    } else if (e.key === 'Enter') {
+      if (isOpen && filtered.length > 0) {
+        e.preventDefault();
+        const pickIndex = highlightedIndex >= 0 ? highlightedIndex : 0;
+        handleSelect(filtered[pickIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (highlightedIndex >= 0 && listRef.current) {
+      const items = listRef.current.children;
+      if (items && items[highlightedIndex]) {
+        items[highlightedIndex].scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [highlightedIndex]);
+
+  return (
+    <div ref={wrapperRef} style={{ width: '100%', marginBottom: error ? '4px' : '16px', position: 'relative' }}>
+      <label className="ck-label" style={error ? { color: '#c0392b' } : {}}>
+        {label}
+        {optional && <span style={{ fontWeight: 300, textTransform: 'none', letterSpacing: 0, fontSize: 11, color: '#8FA88A' }}> (optional)</span>}
+      </label>
+
+      <div style={{ position: 'relative' }}>
+        <input
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          autoComplete="off"
+          style={{
+            ...inputStyle,
+            paddingRight: '36px',
+            marginBottom: 0,
+            ...(error ? { borderColor: '#e74c3c', background: '#fff8f7', boxShadow: '0 0 0 3px rgba(231,76,60,0.10)' } : {})
+          }}
+          onFocus={e => {
+            onFocus(e);
+            setIsOpen(true);
+          }}
+          onBlur={e => {
+            onBlur(e);
+            const trimmed = (value || '').trim().toLowerCase();
+            if (trimmed) {
+              const match = INDIAN_STATES.find(s => s.toLowerCase() === trimmed);
+              if (match && value !== match) {
+                onChange(match);
+              }
+            }
+          }}
+          onChange={e => {
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+        />
+        <div
+          onClick={() => setIsOpen(prev => !prev)}
+          style={{
+            position: 'absolute',
+            right: 12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            cursor: 'pointer',
+            color: '#8FA88A',
+            fontSize: 12,
+            userSelect: 'none',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <i className="fa-solid fa-chevron-down" style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+        </div>
+      </div>
+
+      {error && <span className="ck-error-msg" style={{ display: 'block', marginTop: 4 }}>{error}</span>}
+
+      {isOpen && (
+        <ul
+          ref={listRef}
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            background: '#ffffff',
+            border: '1px solid #C9933A',
+            borderTop: 'none',
+            maxHeight: '220px',
+            overflowY: 'auto',
+            margin: 0,
+            padding: 0,
+            listStyle: 'none',
+            boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
+          }}
+        >
+          {filtered.length === 0 ? (
+            <li style={{ padding: '10px 14px', fontSize: 12, color: '#888', fontStyle: 'italic', fontFamily: F.sub }}>
+              No matching Indian state found
+            </li>
+          ) : (
+            filtered.map((stateName, idx) => {
+              const isSelected = value && value.trim().toLowerCase() === stateName.toLowerCase();
+              const isHighlighted = idx === highlightedIndex;
+              return (
+                <li
+                  key={stateName}
+                  onMouseDown={() => handleSelect(stateName)}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  style={{
+                    padding: '9px 14px',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    fontFamily: F.sub,
+                    color: isSelected ? '#fff' : '#1A1A1A',
+                    background: isSelected ? BRAND : (isHighlighted ? '#F0F5ED' : '#fff'),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid #f2f2f2'
+                  }}
+                >
+                  <span>{stateName}</span>
+                  {isSelected && <i className="fa-solid fa-check" style={{ fontSize: 10, color: '#fff' }} />}
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 const SelectField = ({ label, value, onChange, options }) => (
   <>
@@ -101,7 +306,7 @@ const CheckoutPage = () => {
   const [billingSyncStatus, setBillingSyncStatus] = useState('');
   const [billingSyncError, setBillingSyncError] = useState('');
   const [shipmentWarning, setShipmentWarning] = useState('');
-  const [billingSame, setBillingSame] = useState(false);
+  const [billingSame, setBillingSame] = useState(true);
   const [form, setForm]               = useState({
     firstName: '', email: '', phone: '', address: '', address2: '', city: '', state: '', zip: '', country: 'India', addressType: 'Home'
   });
@@ -117,6 +322,10 @@ const CheckoutPage = () => {
   const [shippingQuoteError, setShippingQuoteError] = useState('');
   const [selectedCourierId, setSelectedCourierId] = useState('');
   const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
+  const [shippingMethod, setShippingMethod] = useState('custom');
+  const [customDeliveryRate, setCustomDeliveryRate] = useState(null);
+  const [customDeliveryLoading, setCustomDeliveryLoading] = useState(false);
+  const [customDeliveryError, setCustomDeliveryError] = useState('');
 
   const [buyNowItem, setBuyNowItem] = useState(null);
 
@@ -178,11 +387,13 @@ const CheckoutPage = () => {
         };
         setSavedAddresses([newForm]);
         setForm(newForm);
+        setBilling(newForm);
         setShowAddressForm(false);
       } else {
         setSavedAddresses(parsed);
         if (parsed.length > 0) {
           setForm(parsed[0]);
+          setBilling(parsed[0]);
           setShowAddressForm(false);
         } else {
           setShowAddressForm(true);
@@ -225,20 +436,35 @@ const CheckoutPage = () => {
 
   const selectedBillingAddress = billingSame || !user ? form : billing;
   const billingAddressReady = Boolean(
-    (billingSame || !user || savedAddresses.includes(billing))
-    && selectedBillingAddress?.firstName?.trim()
+    (billingSame || !user || savedAddresses.includes(billing) || Boolean(billing?.address && billing?.zip))
+    && (selectedBillingAddress?.firstName?.trim() || selectedBillingAddress?.name?.trim())
     && selectedBillingAddress?.address?.trim()
     && selectedBillingAddress?.city?.trim()
     && selectedBillingAddress?.state?.trim()
+    && INDIAN_STATES.some(s => s.toLowerCase() === selectedBillingAddress.state.trim().toLowerCase())
     && /^\d{6}$/.test(String(selectedBillingAddress?.zip || '').trim())
     && selectedBillingAddress?.country?.trim()
     && String(selectedBillingAddress?.phone || '').replace(/\D/g, '').length >= 7
   );
 
   const { subtotal, savings } = buyNowItem ? calculateCartTotals([buyNowItem]) : getCartTotals();
-  const quoteIsCurrent    = shippingQuote?.pincode === form.zip;
-  const selectedCourier  = quoteIsCurrent ? shippingQuote?.couriers?.find(courier => String(courier.courierId) === String(selectedCourierId)) : null;
-  const shipping          = selectedCourier ? Number(selectedCourier.rate) : 0;
+  const isCustomDelivery  = shippingMethod === 'custom';
+  const customDeliveryCharge = customDeliveryRate ? Number(customDeliveryRate.totalDeliveryCharge) : 0;
+
+  const quoteIsCurrent    = isCustomDelivery
+    ? Boolean(customDeliveryRate && form.state && customDeliveryRate.state?.toLowerCase() === form.state.trim().toLowerCase())
+    : Boolean(shippingQuote?.pincode && String(shippingQuote.pincode).trim() === String(form.zip || '').trim());
+
+  const selectedCourier  = isCustomDelivery
+    ? (customDeliveryRate ? {
+        courierId: 'custom',
+        courierName: `Custom Delivery (${customDeliveryRate.state})`,
+        rate: customDeliveryCharge,
+        estimatedDeliveryDays: '3-5 Business Days',
+      } : null)
+    : (quoteIsCurrent ? shippingQuote?.couriers?.find(courier => String(courier.courierId) === String(selectedCourierId)) : null);
+
+  const shipping          = isCustomDelivery ? customDeliveryCharge : (selectedCourier ? Number(selectedCourier.rate) : 0);
   // Billing's franchise_price_final is already the tax-inclusive storefront price.
   const tax               = 0;
   const total             = subtotal + shipping;
@@ -248,6 +474,22 @@ const CheckoutPage = () => {
   const payDisabled = placing || orderItems.length === 0 || !quoteIsCurrent || !selectedCourier || !billingAddressReady;
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
+
+  // ── Sync Shipping Method from Site Settings ───────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/site-settings/public`)
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled && data && data.shipping_method) {
+          setShippingMethod(data.shipping_method);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load shipping settings:', err);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Restore form data saved before login redirect ──────────────────────
   useEffect(() => {
@@ -268,6 +510,61 @@ const CheckoutPage = () => {
   useEffect(() => { loadRazorpayScript(); }, []);
 
   useEffect(() => {
+    if (shippingMethod !== 'custom') {
+      setCustomDeliveryRate(null);
+      setCustomDeliveryError('');
+      return undefined;
+    }
+
+    const stateToUse = (form.state || '').trim();
+    const matchedState = INDIAN_STATES.find(s => s.toLowerCase() === stateToUse.toLowerCase());
+    if (!stateToUse || !matchedState) {
+      setCustomDeliveryRate(null);
+      setCustomDeliveryError('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    setCustomDeliveryLoading(true);
+    setCustomDeliveryError('');
+
+    const weight = Math.max(0.5, Number(shipmentWeightKg) || 0.5);
+    const url = `${API_BASE_URL}/delivery-zones/calculate?state=${encodeURIComponent(matchedState)}&weightKg=${weight}`;
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled) {
+          const rateData = (data && data.success) ? (data.data || data) : null;
+          if (rateData && Number.isFinite(Number(rateData.totalDeliveryCharge))) {
+            setCustomDeliveryRate(rateData);
+            setCustomDeliveryError('');
+          } else {
+            setCustomDeliveryRate(null);
+            setCustomDeliveryError(data?.message || 'Delivery not available for selected state.');
+          }
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setCustomDeliveryRate(null);
+          setCustomDeliveryError(err.message || 'Could not calculate delivery rate.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCustomDeliveryLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [shippingMethod, form.state, shipmentWeightKg]);
+
+  useEffect(() => {
+    if (shippingMethod !== 'shiprocket') {
+      setShippingQuote(null);
+      setSelectedCourierId('');
+      setShippingQuoteError('');
+      return undefined;
+    }
     const pincode = form.zip.trim();
     if (!/^\d{6}$/.test(pincode)) {
       setShippingQuote(null);
@@ -306,7 +603,7 @@ const CheckoutPage = () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [form.zip, shipmentWeightKg]);
+  }, [shippingMethod, form.zip, shipmentWeightKg]);
 
   
   const handleInlineLogin = async (e) => {
@@ -332,6 +629,7 @@ const CheckoutPage = () => {
     if (!form.address?.trim())   errs.address   = 'Street address is required';
     if (!form.city?.trim())      errs.city      = 'City is required';
     if (!form.state?.trim())     errs.state     = 'State is required';
+    else if (!INDIAN_STATES.some(s => s.toLowerCase() === form.state.trim().toLowerCase())) errs.state = 'Please select a valid state from the list';
     if (!form.zip?.trim())       errs.zip       = 'PIN code is required';
     if (!billingAddressReady) errs.billingAddress = 'Select a complete billing address or choose “Billing same as shipping”.';
     return errs;
@@ -349,9 +647,16 @@ const CheckoutPage = () => {
     setFormErrors({});
     setPlaceError('');
 
-    if (!quoteIsCurrent || !selectedCourier) {
-      setPlaceError(shippingQuoteError || 'Choose a Shiprocket courier before continuing.');
-      return;
+    if (isCustomDelivery) {
+      if (!quoteIsCurrent || !customDeliveryRate) {
+        setPlaceError(customDeliveryError || 'Please select a valid delivery state to calculate shipping charges.');
+        return;
+      }
+    } else {
+      if (!quoteIsCurrent || !selectedCourier) {
+        setPlaceError(shippingQuoteError || 'Choose a Shiprocket courier before continuing.');
+        return;
+      }
     }
 
     // ── Login check after form validation ──────────────────────────────
@@ -428,7 +733,7 @@ const CheckoutPage = () => {
         customer_email: form.email.trim(),
         source: 'Website',
         entry_mode: 'Manual',
-        price_type: 'MRP',
+        price_type: 'Franchise',
         payment_mode: 'Online',
         has_gst: false,
         bill_discount_amount: 0,
@@ -442,16 +747,16 @@ const CheckoutPage = () => {
       };
       const createdPayment = await razorpayApi.createOrder({
         amount: Number(total.toFixed(2)),
-        courierId: selectedCourier.courierId,
+        courierId: isCustomDelivery ? 'custom' : selectedCourier.courierId,
         billingAddress: {
-          name: selectedBillingAddress.firstName.trim(),
-          phone: selectedBillingAddress.phone.trim(),
-          address: selectedBillingAddress.address.trim(),
+          name: String(selectedBillingAddress?.firstName || selectedBillingAddress?.name || form.firstName || '').trim(),
+          phone: String(selectedBillingAddress?.phone || form.phone || '').trim(),
+          address: String(selectedBillingAddress?.address || form.address || '').trim(),
           address2: String(selectedBillingAddress.address2 || '').trim(),
-          city: selectedBillingAddress.city.trim(),
-          state: selectedBillingAddress.state.trim(),
-          zip: String(selectedBillingAddress.zip).trim(),
-          country: selectedBillingAddress.country.trim(),
+          city: String(selectedBillingAddress?.city || form.city || '').trim(),
+          state: String(selectedBillingAddress?.state || form.state || '').trim(),
+          zip: String(selectedBillingAddress?.zip || form.zip || '').trim(),
+          country: String(selectedBillingAddress?.country || form.country || 'India').trim(),
         },
         billingPayload,
       });
@@ -527,10 +832,10 @@ const CheckoutPage = () => {
             payment_id: paymentResponse.razorpay_payment_id,
             razorpay_order_id: paymentResponse.razorpay_order_id || '',
             razorpay_signature: paymentResponse.razorpay_signature || '',
-            courier_id: selectedCourierId,
-            courier_name: selectedCourier?.courierName || '',
-            courier_rate: Number(selectedCourier?.rate || 0),
-            courier_estimated_delivery_days: selectedCourier?.estimatedDeliveryDays || selectedCourier?.etd || '',
+            courier_id: isCustomDelivery ? 'custom' : (selectedCourier?.courierId || selectedCourierId),
+            courier_name: isCustomDelivery ? `Custom Delivery (${customDeliveryRate?.state || form.state})` : (selectedCourier?.courierName || ''),
+            courier_rate: shipping,
+            courier_estimated_delivery_days: isCustomDelivery ? '3-5 Business Days' : (selectedCourier?.estimatedDeliveryDays || selectedCourier?.etd || ''),
             items: checkoutItems.map(i => ({
               product_id: i.productId, billingProductId: i.billingProductId, variantId: i.variantId, billingVariantId: i.billingVariantId, size: i.size, color: i.color, fabric: i.fabric, name: i.variant ? `${i.name} (${i.variant})` : i.name,
               weight: i.variant || null,
@@ -1326,9 +1631,16 @@ const CheckoutPage = () => {
                           onChange={e => { setForm({ ...form, city: e.target.value }); setFormErrors(p => ({ ...p, city: '' })); }} />
                       </div>
                       <div className="col-md-6">
-                        <Field label="STATE *" placeholder="State"
-                          value={form.state} error={formErrors.state}
-                          onChange={e => { setForm({ ...form, state: e.target.value }); setFormErrors(p => ({ ...p, state: '' })); }} />
+                        <StateAutocompleteField
+                          label="STATE *"
+                          value={form.state}
+                          error={formErrors.state}
+                          placeholder="Select or type state"
+                          onChange={val => {
+                            setForm(f => ({ ...f, state: val }));
+                            setFormErrors(p => ({ ...p, state: '' }));
+                          }}
+                        />
                       </div>
                     </div>
 
@@ -1535,29 +1847,35 @@ const CheckoutPage = () => {
                           <span style={{ color: '#6B6B8A' }}>Shipping</span>
                           <span
                             onClick={() => {
-                              if (quoteIsCurrent && shippingQuote?.couriers?.length > 0) {
+                              if (!isCustomDelivery && quoteIsCurrent && shippingQuote?.couriers?.length > 0) {
                                 setIsCourierModalOpen(true);
                               }
                             }}
                             style={{
-                              color: selectedCourier ? BRAND : '#8FA88A',
+                              color: (isCustomDelivery ? customDeliveryRate : selectedCourier) ? BRAND : '#8FA88A',
                               fontFamily: F.main,
                               fontSize: 12,
                               letterSpacing: 1,
-                              cursor: quoteIsCurrent && shippingQuote?.couriers?.length > 0 ? 'pointer' : 'default',
+                              cursor: !isCustomDelivery && quoteIsCurrent && shippingQuote?.couriers?.length > 0 ? 'pointer' : 'default',
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 6,
                             }}
-                            title={quoteIsCurrent && shippingQuote?.couriers?.length > 0 ? "Click to change courier" : ""}
+                            title={!isCustomDelivery && quoteIsCurrent && shippingQuote?.couriers?.length > 0 ? "Click to change courier" : ""}
                           >
-                            {selectedCourier ? `₹${shipping.toFixed(2)}` : (shippingQuoteError || (quoteIsCurrent ? 'Choose a courier' : 'Enter PIN code for quote'))}
-                            {quoteIsCurrent && shippingQuote?.couriers?.length > 0 && (
+                            {isCustomDelivery ? (
+                              customDeliveryLoading
+                                ? 'Calculating…'
+                                : (customDeliveryRate ? `₹${shipping.toFixed(2)}` : (customDeliveryError || (form.state ? 'Unavailable' : 'Select State')))
+                            ) : (
+                              selectedCourier ? `₹${shipping.toFixed(2)}` : (shippingQuoteError || (quoteIsCurrent ? 'Choose a courier' : 'Enter PIN code for quote'))
+                            )}
+                            {!isCustomDelivery && quoteIsCurrent && shippingQuote?.couriers?.length > 0 && (
                               <i className="fa-solid fa-pen-to-square" style={{ fontSize: 11, color: BRAND }} />
                             )}
                           </span>
                         </div>
-                        {quoteIsCurrent && shippingQuote.couriers?.length > 0 && (
+                        {!isCustomDelivery && quoteIsCurrent && shippingQuote?.couriers?.length > 0 && (
                           <div className="ck-courier-box">
                             <div className="ck-courier-section-header">
                               <span className="ck-courier-section-label">DELIVERY PARTNER</span>

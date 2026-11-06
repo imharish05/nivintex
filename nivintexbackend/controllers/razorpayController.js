@@ -16,8 +16,9 @@ exports.createOrder = async (req, res) => {
     try {
         const { amount, courierId, billingPayload } = req.body;
         const amountValue = Number(amount);
-        const selectedCourierId = Number(courierId);
-        if (!Number.isFinite(amountValue) || amountValue <= 0 || !Number.isInteger(selectedCourierId) || selectedCourierId <= 0) {
+        const isCustomDelivery = !courierId || courierId === 'custom' || courierId === 'custom_delivery' || courierId === 0 || courierId === '0';
+        const selectedCourierId = isCustomDelivery ? 0 : Number(courierId);
+        if (!Number.isFinite(amountValue) || amountValue <= 0 || (!isCustomDelivery && (!Number.isInteger(selectedCourierId) || selectedCourierId <= 0))) {
             return res.status(400).json({ success: false, message: 'A valid payment amount is required.' });
         }
 
@@ -27,14 +28,14 @@ exports.createOrder = async (req, res) => {
         const customerPhone = String(billingPayload?.customer_phone || '').trim();
         const customerEmail = String(billingPayload?.customer_email || '').trim();
         const phoneDigits = customerPhone.replace(/\D/g, '');
-        const billingAddressPhoneDigits = String(billingAddress?.phone || '').replace(/\D/g, '');
+        const billingAddressPhoneDigits = String(billingAddress?.phone || customerPhone || '').replace(/\D/g, '');
         const billingAddressComplete = Boolean(
-            String(billingAddress?.name || '').trim()
+            String(billingAddress?.name || billingAddress?.firstName || customerName || '').trim()
             && String(billingAddress?.address || '').trim()
             && String(billingAddress?.city || '').trim()
             && String(billingAddress?.state || '').trim()
-            && /^\d{6}$/.test(String(billingAddress?.zip || '').trim())
-            && String(billingAddress?.country || '').trim()
+            && /^\d{6}$/.test(String(billingAddress?.zip || billingAddress?.postcode || billingAddress?.pincode || '').trim())
+            && String(billingAddress?.country || 'India').trim()
             && billingAddressPhoneDigits.length >= 7
             && billingAddressPhoneDigits.length <= 15
         );
@@ -43,10 +44,13 @@ exports.createOrder = async (req, res) => {
             || !billingAddressComplete
             || billingPayload?.source !== 'Website'
             || billingPayload?.entry_mode !== 'Manual'
-            || billingPayload?.price_type !== 'MRP'
+            || (!['franchise', 'mrp'].includes(String(billingPayload?.price_type || '').toLowerCase()))
             || billingPayload?.payment_mode !== 'Online'
-            || billingPayload?.has_gst !== false
-            || Number(billingPayload?.bill_discount_amount) !== 0
+            || typeof billingPayload?.has_gst !== 'boolean'
+            || (typeof billingPayload?.has_gst !== 'boolean')
+            || !Number.isFinite(Number(billingPayload?.bill_discount_amount))
+            || Number(billingPayload?.bill_discount_amount) < 0
+            || billingItems.some(item => Number(item?.discount_amount ?? 0) !== 0)
             || !Number.isFinite(Number(billingPayload?.paid_amount))
             || Number(billingPayload?.paid_amount) <= 0
             || !Array.isArray(billingItems) || billingItems.length === 0) {
@@ -71,7 +75,7 @@ exports.createOrder = async (req, res) => {
 
         let stockCheck;
         try {
-            stockCheck = await assertBillingStock(billingItems);
+            stockCheck = await assertBillingStock(billingItems, { locationId: billingPayload.franchise_location_id });
             orderFlowLog.logResponse(`${flowId} stock check`, 200, stockCheck);
         } catch (stockError) {
             const stockErrorCode = stockError.code || (stockError.status === 409 ? 'INSUFFICIENT_BILLING_STOCK'
@@ -102,10 +106,10 @@ exports.createOrder = async (req, res) => {
         const razorpay = getRazorpay();
 
         const options = {
-            amount: Math.round(amount * 100),
+            amount: Math.round(amountValue * 100),
             currency: 'INR',
             receipt: `receipt_${Date.now()}`,
-            notes: { courier_id: String(selectedCourierId) },
+            notes: { courier_id: isCustomDelivery ? 'custom' : String(selectedCourierId) },
         };
 
         orderFlowLog.logRequest(`${flowId} Razorpay order`, 'POST', 'Razorpay SDK orders.create', options);
@@ -136,7 +140,10 @@ exports.createOrder = async (req, res) => {
 
 exports.verifyRazorpayOrder = async (razorpayOrderId, amount, courierId) => {
     const order = await getRazorpay().orders.fetch(String(razorpayOrderId));
-    const courierMatches = !order.notes?.courier_id || String(order.notes.courier_id) === String(courierId);
+    const isCustom = !courierId || courierId === 'custom' || courierId === 'custom_delivery' || courierId === 0 || courierId === '0';
+    const expectedCourier = isCustom ? 'custom' : String(courierId);
+    const orderNoteCourier = order.notes?.courier_id ? String(order.notes.courier_id) : '';
+    const courierMatches = !orderNoteCourier || orderNoteCourier === expectedCourier || (isCustom && (orderNoteCourier === 'custom' || orderNoteCourier === '0'));
     return Number(order.amount) === Math.round(Number(amount) * 100)
         && String(order.currency || '').toUpperCase() === 'INR'
         && courierMatches;

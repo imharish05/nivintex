@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Login from './components/Login/Login';
 import Sidebar from './components/Sidebar/Sidebar';
@@ -19,6 +19,7 @@ import Banners from './components/Banners/Banners';
 import OfferBanners from './components/OfferBanners/OfferBanners';
 import Combos from './components/Combos/Combos';
 import Toast from './components/Toast/Toast';
+import ConfirmToast from './components/Toast/ConfirmToast';
 import './styles/global.css';
 import Swal from 'sweetalert2';
 import LiveProducts from './components/LiveProducts/LiveProducts';
@@ -27,6 +28,7 @@ import PromoBar from './components/Promobar/Promobar';
 import SaleManager from './components/SaleManager/SaleManager'; 
 import FranchiseLogin from './components/Franchise/FranchiseLogin';
 import FranchiseDashboard from './components/Franchise/FranchiseDashboard';
+import Deliveryzones from './components/Deliveryzones/Deliveryzones';
 const PAGE_CONFIG = {
   dashboard:          { title: 'Dashboard' },
   combos:             { title: 'Combos Management' },
@@ -45,6 +47,7 @@ const PAGE_CONFIG = {
   orders_shipped:     { title: 'Shipped Orders' },
   orders_delivery:    { title: 'Out for Delivery' },
   orders_delivered:   { title: 'Delivered Orders' },
+  'delivery-zones':   { title: 'Delivery Zones' },
   contacts:           { title: 'Contact Requests' },
   banners:            { title: 'Banners' },
   'offer-banners':    { title: 'Offer Banners' },
@@ -54,7 +57,7 @@ const PAGE_CONFIG = {
   'promo-bar':        { title: 'Promo Bar' },
 };
 
-function AdminLayoutWrapper({ handleLogout, showToast, toast }) {
+function AdminLayoutWrapper({ handleLogout, showToast, toast, confirmRequest, onConfirmResolve }) {
   const location = useLocation();
   const currentPath = location.pathname.split('/')[1] || 'dashboard';
   const cfg = PAGE_CONFIG[currentPath] || PAGE_CONFIG.dashboard;
@@ -74,7 +77,9 @@ function AdminLayoutWrapper({ handleLogout, showToast, toast }) {
 
             <Route path="/products"           element={<Products      showToast={showToast} />} />
             <Route path="/variants"           element={<VariantsPage  showToast={showToast} />} />
+            {/* Stock page is temporarily hidden; keep its route definition for re-enabling later.
             <Route path="/stock"              element={<Stock         showToast={showToast} />} />
+            */}
             <Route path="/customers"          element={<Customers     showToast={showToast} />} />
             <Route path="/reviews"            element={<Reviews       showToast={showToast} />} />
             <Route path="/coupons"            element={<Coupons       showToast={showToast} />} />
@@ -90,6 +95,7 @@ function AdminLayoutWrapper({ handleLogout, showToast, toast }) {
             <Route path="/orders_shipped"     element={<Orders showToast={showToast} status="shipped" />} />
             <Route path="/orders_delivery"    element={<Orders showToast={showToast} status="out_for_delivery" />} />
             <Route path="/orders_delivered"   element={<Orders showToast={showToast} status="delivered" />} />
+            <Route path="/delivery-zones"     element={<Deliveryzones showToast={showToast} />} />
 
             <Route path="/contacts"           element={<AdminContactManager showToast={showToast} />} />
             <Route path="/promo-bar" element={<PromoBar showToast={showToast} />} />
@@ -100,6 +106,7 @@ function AdminLayoutWrapper({ handleLogout, showToast, toast }) {
       </main>
 
       <Toast show={toast.show} title={toast.title} msg={toast.msg} />
+      <ConfirmToast request={confirmRequest} onResolve={onConfirmResolve} />
     </div>
   );
 }
@@ -108,6 +115,25 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [toast, setToast] = useState({ show: false, title: '', msg: '' });
+  const toastTimerRef = useRef(null);
+  const [confirmRequest, setConfirmRequest] = useState(null);
+  const confirmRequestRef = useRef(null);
+
+  useEffect(() => {
+    const handleConfirmRequest = (event) => {
+      confirmRequestRef.current?.resolve(false);
+      confirmRequestRef.current = event.detail;
+      setConfirmRequest(event.detail);
+    };
+    window.addEventListener('admin-confirm-toast', handleConfirmRequest);
+    return () => {
+      window.removeEventListener('admin-confirm-toast', handleConfirmRequest);
+      confirmRequestRef.current?.resolve(false);
+      confirmRequestRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(toastTimerRef.current), []);
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
@@ -145,7 +171,14 @@ export default function App() {
 
   const showToast = (title, msg = '') => {
     setToast({ show: true, title, msg });
-    setTimeout(() => setToast({ show: false, title: '', msg: '' }), 2800);
+    window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast({ show: false, title: '', msg: '' }), 2800);
+  };
+
+  const resolveConfirmToast = (confirmed) => {
+    confirmRequestRef.current?.resolve(confirmed);
+    confirmRequestRef.current = null;
+    setConfirmRequest(null);
   };
 
   const handleLogout = () => {
@@ -192,7 +225,7 @@ export default function App() {
         <Route
           path="/*"
           element={isAdminLoggedIn
-            ? <AdminLayoutWrapper handleLogout={handleLogout} showToast={showToast} toast={toast} />
+            ? <AdminLayoutWrapper handleLogout={handleLogout} showToast={showToast} toast={toast} confirmRequest={confirmRequest} onConfirmResolve={resolveConfirmToast} />
             : <Navigate to="/login" />}
         />
       </Routes>

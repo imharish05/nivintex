@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useRef } from 'react';
 import Footer from '../../components/Footer';
 import { useShop } from '../../context/ShopContext';
-import { billingCatalogApi, productApi, productSpecificationApi, sizeChartApi, reviewApi, getImageUrl, slugifyProductName } from '../../utils/api';
+import { billingCatalogApi, productApi, productSpecificationApi, sizeChartApi, reviewApi, couponApi, getImageUrl, slugifyProductName } from '../../utils/api';
 import SizeChartModal from '../../components/SizeChartModal';
 import defaultLogo from '../../assets/img/logo2.png';
 import { ProductDetailsSkeleton } from '../../components/Skeleton';
@@ -18,6 +18,11 @@ const ACCENT = '#A2C579';
 const F = {
   main: "'Josefin Sans', 'Century Gothic', sans-serif",
   sub:  "'Raleway', 'Josefin Sans', sans-serif",
+};
+
+const isAdminUploadedProductImage = value => {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  return /(?:^|\/)uploads\/(?:prod|gal)-[^/?#]+(?:[?#].*)?$/i.test(value.trim().replace(/\\/g, '/'));
 };
 
 
@@ -95,6 +100,7 @@ const ProductDetailsPage = () => {
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [loading, setLoading]                 = useState(true);
   const [addedToCart, setAddedToCart]         = useState(false);
+  const [addingToCart, setAddingToCart]       = useState(false);
   const [showSticky, setShowSticky]           = useState(false);
   const [hoveredThumb, setHoveredThumb]       = useState(null);
   const [showReviewForm, setShowReviewForm]   = useState(false);
@@ -105,10 +111,22 @@ const ProductDetailsPage = () => {
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewError, setReviewError]         = useState('');
   const [reviews, setReviews]                 = useState([]);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
   const [customSpecifications, setCustomSpecifications] = useState([]);
   const [sizeChart, setSizeChart] = useState(null);
   const [showSizeChart, setShowSizeChart] = useState(false);
   const addToCartRef                          = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    couponApi.getAvailable()
+      .then(data => { if (active) setAvailableCoupons(Array.isArray(data) ? data : []); })
+      .catch(error => {
+        console.error('Failed to load available coupons:', error);
+        if (active) setAvailableCoupons([]);
+      });
+    return () => { active = false; };
+  }, []);
 
   const { addToCart, toggleWishlist, isWishlisted, user } = useShop();
 
@@ -118,17 +136,26 @@ const ProductDetailsPage = () => {
     if (!slug && !stored) { setLoading(false); return; }
     try {
       const parsed = stored ? JSON.parse(stored) : null;
-      const loadProduct = slug ? productApi.getBySlug(slug) : parsed?.id ? productApi.getById(parsed.id) : Promise.resolve(parsed);
+      const loadProduct = slug ? productApi.getBySlugFast(slug) : parsed?.id ? productApi.getById(parsed.id) : Promise.resolve(parsed);
       if (!loadProduct) { setLoading(false); return; }
       loadProduct
-        .then(async data => {
+        .then(data => {
           if (!data) throw new Error('Product not found.');
           if (!data.id) { setProduct(data); return; }
-          // Use the Billing product-details endpoint for current, authoritative stock.
-          try {
-            const billingProductId = data.billingProductId || data.billing_product_id;
-            if (!billingProductId) throw new Error('This product is missing its Billing product ID.');
-            const response = await billingCatalogApi.getProductDetails(billingProductId);
+
+          // Show the product immediately; purchase stays disabled until Billing
+          // confirms live stock in the background.
+          const billingProductId = data.billingProductId || data.billing_product_id;
+          data.Variants = (data.Variants || []).map(variant => ({ ...variant, stock: 0, billingStockVerified: false, billingStockLoading: Boolean(billingProductId) }));
+          data.stock = 0;
+          data.billingStockVerified = false;
+          data.billingStockLoading = Boolean(billingProductId);
+          setProduct({ ...data });
+
+          if (billingProductId) Promise.all([
+              billingCatalogApi.getProductDetails(billingProductId),
+              billingCatalogApi.getLocationStocksByVariant(null),
+          ]).then(([response, centralStockByVariant]) => {
             const billingProduct = Array.isArray(response) ? response[0] : response;
             const billingVariants = billingProduct?.variants || billingProduct?.product_variants || billingProduct?.product_varients || [];
             if (!Array.isArray(billingVariants) || billingVariants.length === 0) throw new Error('Billing returned no variants for this product.');
@@ -138,24 +165,21 @@ const ProductDetailsPage = () => {
             const localVariants = Array.isArray(data.Variants) ? data.Variants : [];
             const getBillingMatch = variant => billingById.get(String(variant.billingVariantId || variant.billing_variant_id || ''))
               || billingByCode.get(String(variant.variant_code || variant.sku || '').toLowerCase());
-            const getAvailable = variant => {
-              if (variant?.in_stock === false || variant?.in_stock === 0 || ['false', '0', 'no', 'out of stock'].includes(String(variant?.in_stock ?? '').trim().toLowerCase())) return 0;
-              const raw = variant?.available_stock ?? variant?.available_quantity ?? variant?.available_qty
-                ?? variant?.quantity_available ?? variant?.qty_available ?? variant?.current_stock ?? variant?.stock_qty ?? variant?.stock_quantity ?? variant?.qty ?? variant?.on_hand ?? variant?.balance_quantity
-                ?? variant?.quantity ?? variant?.stock ?? variant?.total_stock;
-              const quantity = Number(raw);
-              return raw !== undefined && raw !== null && raw !== '' && Number.isFinite(quantity) && quantity >= 0 ? Math.floor(quantity) : null;
-            };
             const getSyncedStock = variant => {
-              const detailQuantity = getAvailable(variant);
-              return { quantity: detailQuantity ?? 0, verified: detailQuantity !== null };
+              const variantId = variant?.id ?? variant?.product_variant_id ?? variant?.product_varient_id;
+              const variantCode = String(variant?.variant_code || variant?.sku || '').trim().toLowerCase();
+              const codeKey = variantCode ? `code:${variantCode}` : null;
+              const quantity = codeKey && centralStockByVariant?.has(codeKey)
+                ? centralStockByVariant.get(codeKey)
+                : variantId == null ? null : centralStockByVariant?.get(String(variantId));
+              return { quantity: quantity ?? 0, verified: quantity !== null && quantity !== undefined };
             };
 
-            data.Variants = localVariants.length
+            const liveVariants = localVariants.length
               ? localVariants.map(local => {
                   const current = getBillingMatch(local);
                   const liveStock = current ? getSyncedStock(current) : { quantity: 0, verified: false };
-                  return { ...local, stock: liveStock.quantity, billingVariantId: local.billingVariantId || local.billing_variant_id || current?.id || null, billingStockVerified: liveStock.verified };
+                  return { ...local, stock: liveStock.quantity, billingVariantId: local.billingVariantId || local.billing_variant_id || current?.id || null, billingStockVerified: liveStock.verified, billingStockLoading: false };
                 })
               : billingVariants.map(current => {
                   const liveStock = getSyncedStock(current);
@@ -165,34 +189,42 @@ const ProductDetailsPage = () => {
                     billingVariantId: current.id,
                     stock: liveStock.quantity,
                     billingStockVerified: liveStock.verified,
+                    billingStockLoading: false,
                     franchise_price_final: current.franchise_price_final ?? current.prices?.franchise ?? null,
                     size: current.size || '',
                     color: current.color || '',
                   };
                 });
-            const vSizes = [...new Set(data.Variants.map(variant => variant.size).filter(Boolean))];
-            const vColors = [...new Set(data.Variants.map(variant => variant.color).filter(Boolean))];
-            if (vSizes.length) data.sizes = vSizes;
-            if (vColors.length) data.colors = vColors;
-            data.stock = data.Variants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0);
-            data.billingStockVerified = data.Variants.length > 0 && data.Variants.every(variant => variant.billingStockVerified);
-            data.billingStockError = data.billingStockVerified ? '' : 'Billing did not confirm stock for every variant. Refresh before purchasing.';
-          } catch (err) {
+            const vSizes = [...new Set(liveVariants.map(variant => variant.size).filter(Boolean))];
+            const vColors = [...new Set(liveVariants.map(variant => variant.color).filter(Boolean))];
+            setProduct(current => current && String(current.id) === String(data.id) ? {
+              ...current,
+              Variants: liveVariants,
+              ...(vSizes.length ? { sizes: vSizes } : {}),
+              ...(vColors.length ? { colors: vColors } : {}),
+              stock: liveVariants.reduce((sum, variant) => sum + Number(variant.stock || 0), 0),
+              billingStockVerified: liveVariants.length > 0 && liveVariants.every(variant => variant.billingStockVerified),
+              billingStockLoading: false,
+            } : current);
+          }).catch(err => {
             console.error('Failed to load current Billing product stock:', err);
-            data.Variants = (data.Variants || []).map(variant => ({ ...variant, stock: 0, billingStockVerified: false }));
-            data.stock = 0;
-            data.billingStockVerified = false;
-            data.billingStockError = 'Live stock could not be verified with Billing. Refresh the page before trying again.';
-          }
-          
-          setProduct(data);
+            setProduct(current => current && String(current.id) === String(data.id)
+              ? {
+                  ...current,
+                  billingStockLoading: false,
+                  Variants: (current.Variants || []).map(variant => ({ ...variant, billingStockLoading: false })),
+                  billingStockError: 'Live stock could not be verified with Billing.',
+                }
+              : current);
+          });
+
           productSpecificationApi.getByProduct(data.id)
             .then(setCustomSpecifications)
             .catch(error => { console.error('Failed to load product specifications:', error); setCustomSpecifications([]); });
           sizeChartApi.getForProduct(data.id)
             .then(setSizeChart)
             .catch(error => { console.error('Failed to load size chart:', error); setSizeChart(null); });
-          productApi.getAll()
+          productApi.getAllFast()
             .then(all => {
               if (data.categoryId) {
                 setRelatedProducts(all.filter(p => p.categoryId === data.categoryId && p.id !== data.id).slice(0, 8));
@@ -259,35 +291,45 @@ const ProductDetailsPage = () => {
   const selectedVariantFinal = Number(selectedVariant?.franchise_price_final);
   const productFinal = [product?.franchise_price_final, product?.salesPrice, product?.mrp].map(Number).find(price => Number.isFinite(price) && price > 0) || 0;
   const salesPrice   = selectedVariantFinal > 0 ? selectedVariantFinal : productFinal;
+  const productGstType = product?.mrpGstType || product?.mrp_gst_type || 'With GST';
+  const productHasInclusiveGst = String(productGstType).toLowerCase() !== 'without gst';
   const mrp          = selectedVariant ? Number(selectedVariant.mrp || 0) : Number(product?.mrp || 0);
   const showOldPrice = mrp > 0 && mrp > salesPrice;
   const categoryName = product?.Category?.name   || product?.SubCategory?.name || '';
   const brandName    = product?.Brand?.brandName  || '';
   const stock        = selectedVariant ? Number(selectedVariant.stock || 0) : Number(product?.stock || 0);
-  const inStock      = stock > 0;
+  const stockVerified = selectedVariant ? Boolean(selectedVariant.billingStockVerified) : Boolean(product?.billingStockVerified);
+  const stockLoading = selectedVariant ? Boolean(selectedVariant.billingStockLoading) : Boolean(product?.billingStockLoading);
+  const inStock      = stockVerified && stock > 0;
   const shortDesc    = product?.shortDescription  || '';
   const longDesc     = product?.longDescription   || '';
 
   const allImages = [];
-  const variantImages = (selectedVariant?.images && Array.isArray(selectedVariant.images) && selectedVariant.images.length > 0)
+  const rawVariantImages = (selectedVariant?.images && Array.isArray(selectedVariant.images) && selectedVariant.images.length > 0)
     ? selectedVariant.images
     : (selectedVariant?.image ? [selectedVariant.image] : []);
+  const variantImages = rawVariantImages.filter(isAdminUploadedProductImage);
+  const productMainImage = isAdminUploadedProductImage(product?.image) ? product.image : null;
 
   if (variantImages.length > 0) {
     variantImages.forEach(url => allImages.push({ url }));
-  } else if (product?.image) {
-    allImages.push({ url: product.image });
+  } else if (productMainImage) {
+    allImages.push({ url: productMainImage });
   }
   
   if (product?.Images?.length) {
     product.Images.forEach(img => { 
-      if (img.url !== product.image && !variantImages.includes(img.url)) {
+      if (isAdminUploadedProductImage(img.url) && img.url !== productMainImage && !variantImages.includes(img.url)) {
         allImages.push({ url: img.url }); 
       }
     });
   }
   
   const currentImgSrc = allImages[selectedImgIdx] ? getImageUrl(allImages[selectedImgIdx].url) : null;
+
+  useEffect(() => {
+    setQty(current => Math.min(Math.max(1, current), stock > 0 ? stock : 1));
+  }, [selectedVariant, stock]);
 
   useEffect(() => {
     if (!showImageModal) return undefined;
@@ -324,35 +366,42 @@ const ProductDetailsPage = () => {
   const selectedVariantSize = selectedVariant?.size || selectedSize;
   const selectedVariantColour = selectedVariant?.color || selectedColour;
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
+    if (addingToCart || !inStock || qty > stock) return;
     const parts = [];
     if (selectedColour) parts.push(selectedColour);
     if (selectedSize) parts.push(selectedSize);
     if (selectedFabric) parts.push(selectedFabric);
     const subtitle = parts.join(' - ') || categoryName;
     
-    addToCart({
+    setAddingToCart(true);
+    const added = await addToCart({
       id: product?.id || productName,
       productId: product?.id,
       variantId: selectedVariant?.id,
       billingVariantId: selectedVariant?.billingVariantId,
       name: productName,
       price: salesPrice,
+      mrpGstType: productGstType,
       subtitle: subtitle,
       image: currentImgSrc,
       qty: qty,
-      shippingWeightKg: selectedVariant?.weight || product?.shippingWeightKg || product?.weight || null,
+      shippingWeightKg: product?.shippingWeightKg || null,
       shippingLengthCm: product?.shippingLengthCm || null,
       shippingWidthCm: product?.shippingWidthCm || null,
       shippingHeightCm: product?.shippingHeightCm || null,
       isBuyOneGetOne: !!product?.isBuyOneGetOne,
     });
     
-    setAddedToCart(true);
-    setTimeout(() => setAddedToCart(false), 2000);
+    setAddingToCart(false);
+    if (added) {
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+    }
   };
 
   const handleBuyNow = () => {
+    if (!inStock || qty > stock) return;
     const parts = [];
     if (selectedColour) parts.push(selectedColour);
     if (selectedSize) parts.push(selectedSize);
@@ -366,11 +415,12 @@ const ProductDetailsPage = () => {
       billingVariantId: selectedVariant?.billingVariantId,
       name: productName,
       price: salesPrice,
+      mrpGstType: productGstType,
       subtitle: subtitle,
       image: currentImgSrc,
       img: currentImgSrc,
       qty: qty,
-      shippingWeightKg: selectedVariant?.weight || product?.shippingWeightKg || product?.weight || null,
+      shippingWeightKg: product?.shippingWeightKg || null,
       shippingLengthCm: product?.shippingLengthCm || null,
       shippingWidthCm: product?.shippingWidthCm || null,
       shippingHeightCm: product?.shippingHeightCm || null,
@@ -457,6 +507,8 @@ const ProductDetailsPage = () => {
         }
         .pdp-action-btn-primary:hover:not(:disabled) {
           transform: translateY(-1px);
+          color: #ffffff !important;
+          filter: brightness(1.08);
         }
         .pdp-action-btn-outline {
           flex: 1;
@@ -476,9 +528,17 @@ const ProductDetailsPage = () => {
           min-height: 44px;
         }
         .pdp-action-btn-outline:hover:not(:disabled) {
-          background: ${BRAND};
-          color: #fff;
+          background: ${BRAND} !important;
+          color: #ffffff !important;
+          border-color: ${BRAND} !important;
           transform: translateY(-1px);
+        }
+        .pdp-action-btn-outline:disabled {
+          border-color: #ccc !important;
+          color: #888 !important;
+          opacity: 0.5 !important;
+          cursor: not-allowed !important;
+          background: #FAF8F4 !important;
         }
         .pdp-zoom-backdrop {
           position: fixed; inset: 0; z-index: 2000;
@@ -714,7 +774,7 @@ const ProductDetailsPage = () => {
                 )}
 
                 <p style={{ fontFamily: F.sub, fontSize: 11, color: '#888', marginBottom: 12, fontWeight: 200, letterSpacing: 0.5 }}>
-                  Tax included. <a href="#" style={{ color: GOLD }}>Shipping</a> calculated at checkout.
+                  {productHasInclusiveGst ? '5% GST added at checkout. ' : ''}Shipping calculated at checkout.
                 </p>
 
                 {/* Size selector */}
@@ -776,26 +836,37 @@ const ProductDetailsPage = () => {
                 <div style={{ marginBottom: 12 }} ref={addToCartRef}>
                   <p style={{ fontFamily: F.main, fontSize: 9, fontWeight: 400, color: BRAND, marginBottom: 8, letterSpacing: 2.5, textTransform: 'uppercase' }}>Quantity</p>
                   <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${BORDER}`, overflow: 'hidden', width: 'fit-content', background: 'transparent', borderRadius: 4 }}>
-                    <button onClick={() => setQty(q => Math.max(1, q - 1))}
-                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                    <button type="button" onClick={() => setQty(q => Math.max(1, q - 1))} disabled={!inStock || qty <= 1}
+                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: !inStock || qty <= 1 ? 'not-allowed' : 'pointer', opacity: !inStock || qty <= 1 ? 0.45 : 1, fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
                     <span style={{ width: 42, textAlign: 'center', fontFamily: F.main, fontWeight: 400, color: BRAND, fontSize: 13, letterSpacing: 1 }}>{qty}</span>
-                    <button onClick={() => setQty(q => Math.min(stock || 99, q + 1))}
-                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                    <button type="button" onClick={() => setQty(q => Math.min(stock, q + 1))} disabled={!inStock || qty >= stock}
+                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: !inStock || qty >= stock ? 'not-allowed' : 'pointer', opacity: !inStock || qty >= stock ? 0.45 : 1, fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                   </div>
-                  {product.billingStockError && <p role="status" style={{ color: '#a33a2b', fontSize: 12, margin: '8px 0 0' }}>{product.billingStockError}</p>}
+                  {stockLoading && <p role="status" aria-live="polite" style={{ color: '#64748b', fontSize: 12, margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: 7 }}><i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />Checking availability…</p>}
+                  {stockVerified && stock <= 0 && <p role="status" style={{ color: '#a33a2b', fontSize: 12, margin: '8px 0 0' }}>This varient is out of stock</p>}
                 </div>
 
                 {/* Add to Cart + Buy Now + Wishlist */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-                  <button onClick={handleAddToCart} disabled={!inStock}
+                  <button onClick={handleAddToCart} disabled={!inStock || addingToCart}
                     className="pdp-action-btn-primary"
                     style={{
                       background: addedToCart ? GOLD : inStock ? BRAND : '#ccc',
                       color: '#fff',
-                      cursor: inStock ? 'pointer' : 'not-allowed',
+                      cursor: inStock && !addingToCart ? 'pointer' : 'not-allowed',
                       borderRadius: 8,
                     }}>
-                    {addedToCart ? '✓ Added' : 'Add to Cart'}
+                    {addingToCart ? (
+                      <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} />Adding...</>
+                    ) : addedToCart ? (
+                      '✓ Added'
+                    ) : stockLoading ? (
+                      'Checking...'
+                    ) : !inStock ? (
+                      'Out of Stock'
+                    ) : (
+                      'Add to Cart'
+                    )}
                   </button>
                   <button onClick={handleBuyNow} disabled={!inStock}
                     className="pdp-action-btn-outline"
@@ -820,7 +891,7 @@ const ProductDetailsPage = () => {
                 </div>
 
                 {/* Feature pills */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 12, borderTop: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`, padding: '8px 0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 12, borderTop: `1px solid ${BORDER}`, padding: '8px 0' }}>
                   <FeaturePill icon="fa-solid fa-wind"    label="Breathable" />
                   <FeaturePill icon="fa-solid fa-gem"     label="Premium Fabric" />
                   <FeaturePill icon="fa-solid fa-shirt"   label="Everyday Wear" />
@@ -831,17 +902,25 @@ const ProductDetailsPage = () => {
 
                 {/* Accordions */}
                 <div style={{ marginBottom: 12 }}>
-                  <Accordion label="Offers">
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 0',
-                    }}>
-                      <i className="fa-solid fa-tag" style={{ color: '#2E7D32', fontSize: 13 }} />
-                      <span style={{ fontFamily: F.sub, fontSize: 13, color: '#2C3E2B' }}>
-                        Use code <strong style={{ fontWeight: 700, color: BRAND, letterSpacing: '0.5px' }}>FIRST5</strong> to get 5% off your first purchase.
-                      </span>
+                  {availableCoupons.length > 0 && <Accordion label="Offers">
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {availableCoupons.map(coupon => {
+                        const discount = coupon.type === 'percent'
+                          ? `${Number(coupon.value)}% off${coupon.max_discount ? ` (up to ₹${Number(coupon.max_discount).toLocaleString('en-IN')})` : ''}`
+                          : `₹${Number(coupon.value).toLocaleString('en-IN')} off`;
+                        const minimum = Number(coupon.min_order) > 0
+                          ? ` on orders above ₹${Number(coupon.min_order).toLocaleString('en-IN')}`
+                          : '';
+                        return <div key={coupon.code} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0' }}>
+                          <i className="fa-solid fa-tag" style={{ color: '#2E7D32', fontSize: 13, marginTop: 3 }} />
+                          <span style={{ fontFamily: F.sub, fontSize: 13, color: '#2C3E2B' }}>
+                            Use code <strong style={{ fontWeight: 700, color: BRAND, letterSpacing: '0.5px' }}>{coupon.code}</strong> to get {discount}{minimum}.
+                            {coupon.description && <span style={{ display: 'block', marginTop: 2, color: '#64748b' }}>{coupon.description}</span>}
+                          </span>
+                        </div>;
+                      })}
                     </div>
-                  </Accordion>
+                  </Accordion>}
 
                   <Accordion label="Specifications" defaultOpen={true}>
                     {(() => {
@@ -963,7 +1042,7 @@ const ProductDetailsPage = () => {
                       display: 'flex', flexDirection: 'column', gap: 8,
                       padding: '8px 0',
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#3A483E' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#3A483E', fontFamily: F.sub, lineHeight: 1.6 }}>
                         <i className="fa-solid fa-truck" style={{ color: GOLD, fontSize: 13 }} />
                         <span>Standard delivery: 3–5 business days</span>
                       </div>
@@ -971,10 +1050,10 @@ const ProductDetailsPage = () => {
                         <i className="fa-solid fa-bolt" style={{ color: GOLD, fontSize: 13 }} />
                         <span>Express delivery available at checkout</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#3A483E' }}>
+                      {/* <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#3A483E' }}>
                         <i className="fa-solid fa-gift" style={{ color: GOLD, fontSize: 13 }} />
                         <span>Free shipping on orders above ₹999</span>
-                      </div>
+                      </div> */}
                     </div>
                   </Accordion>
 
@@ -1201,7 +1280,9 @@ const ProductDetailsPage = () => {
                             <i key={i} className={i < r.rating ? "fa-solid fa-star" : "fa-regular fa-star"} />
                           ))}
                         </div>
-                        <span style={{ fontSize: 11, color: '#999' }}>{new Date(r.createdAt).toLocaleDateString()}</span>
+                        <span style={{ fontSize: 11, color: '#999' }}>
+                          Reviewed on {new Date(r.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </span>
                       </div>
                       <div style={{ fontWeight: 600, fontSize: 13, color: '#333', marginBottom: 4 }}>
                         {r.name || 'Customer'} {r.verifiedPurchase && <span style={{ color: '#10B981', fontSize: 10, marginLeft: 6, fontWeight: 400 }}>✓ Verified</span>}

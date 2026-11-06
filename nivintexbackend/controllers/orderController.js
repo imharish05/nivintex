@@ -2,6 +2,7 @@ const Order     = require('../models/Order');
 const OrderItem = require('../models/OrderItem');
 const Product   = require('../models/Product');
 const ProductVariant = require('../models/ProductVariant');
+const UserLogin = require('../models/UserLogin');
 const Cart      = require('../models/Cart');
 const sequelize = require('../config/db');
 const axios = require('axios');
@@ -13,6 +14,12 @@ const { makeBillingCreatePayload, configuredStockLocationId } = require('../serv
 const billingSyncService = require('../services/billingSyncService');
 const orderFlowLog = require('../utils/orderFlowLogger');
 const { billingApiBaseUrl } = require('../config/serviceUrls');
+
+const billingInvoiceHeaders = () => ({
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    ...(process.env.BILLING_API_TOKEN ? { Authorization: `Bearer ${process.env.BILLING_API_TOKEN}` } : {}),
+});
 
 // A successful Billing invoice is the inventory source of truth. Refresh the
 // complete local Billing product catalog immediately so product prices and
@@ -70,6 +77,8 @@ const createOrder = async (req, res) => {
             courier_rate,
             courier_estimated_delivery_days
         } = req.body;
+
+        const isCustomCourier = !courier_id || courier_id === 'custom' || courier_id === 'custom_delivery' || courier_id === 0 || courier_id === '0';
 
         // Paid online orders must carry a valid Razorpay signature before stock is
         // decremented or an external shipment can be created.
@@ -199,34 +208,33 @@ const createOrder = async (req, res) => {
         }));
         const gstRates = [...new Set(billingItems.map(item => Number(item.gst_percent)))];
         const hasMixedGst = gstRates.length > 1;
-        const hasGst = false;
+        const hasGst = billingItems.some(item => Number(item.gst_percent) > 0);
         const checkoutSubtotal = Number(subtotal) || 0;
-        const checkoutDiscount = Number(discount) || 0;
-        const checkoutTotal = Number(total) || 0;
+        const checkoutBillingDiscount = Math.max(0, Number(req.body.billing_discount_amount ?? discount) || 0);
         const checkoutTax = Number(tax) || 0;
         const billingPayload = {
             bill_number: '',
             franchise_location_id: configuredStockLocationId(),
-            price_type: 'MRP',
+            price_type: 'Franchise',
             payment_mode: 'Online',
-            has_gst: false,
+            has_gst: hasGst,
             customer_id: '',
             customer_name: String(customer_name),
-            customer_phone: String(customer_phone || ''),
+            customer_phone: String((parseJson(billing_address)?.phone) || customer_phone || ''),
             customer_email: String(customer_email || ''),
             billing_address: addressText(billing_address),
             shipping_address: addressText(shipping_address),
             source: 'Website',
             entry_mode: 'Manual',
             items: billingItems,
-            bill_discount_amount: checkoutDiscount,
-            // Billing receives the product amount only; keep delivery locally
-            // for order/admin records until its inclusion in Billing is confirmed.
-            paid_amount: payment_status === 'paid' ? checkoutSubtotal : 0,
-            subtotal: checkoutSubtotal,
+            // All coupon and offer reductions are sent as one bill-level
+            // discount; every invoice item keeps discount_amount at zero.
+            bill_discount_amount: checkoutBillingDiscount,
+            paid_amount: payment_status === 'paid' ? Math.max(0, checkoutSubtotal - checkoutBillingDiscount + checkoutTax) : 0,
+            subtotal: Math.max(0, checkoutSubtotal - checkoutBillingDiscount),
             gst_amount: checkoutTax,
             delivery_charge: Number(delivery_charge) || 0,
-            total: checkoutSubtotal,
+            total: Math.max(0, checkoutSubtotal - checkoutBillingDiscount + checkoutTax),
             balance: payment_status === 'paid' ? 0 : Math.max(0, checkoutSubtotal - (Number(req.body.paid_amount) || 0)),
             submission_action: 'complete',
         };
@@ -315,11 +323,11 @@ const createOrder = async (req, res) => {
                 billing_sync_status: payment_status === 'paid' ? 'pending' : 'not_applicable',
                 billing_sync_error: null,
                 billing_stock_sync_status: payment_status === 'paid' ? 'pending' : 'not_applicable',
-                shiprocket_requested_courier_id: courier_id ? String(courier_id) : null,
-                shiprocket_requested_courier_name: courier_name || null,
+                shiprocket_requested_courier_id: isCustomCourier ? null : (courier_id ? String(courier_id) : null),
+                shiprocket_requested_courier_name: isCustomCourier ? (courier_name || 'Custom Delivery') : (courier_name || null),
                 shiprocket_requested_rate: Number.isFinite(Number(courier_rate)) ? Number(courier_rate) : (Number(delivery_charge) || 0),
                 shiprocket_estimated_delivery_days: courier_estimated_delivery_days ? String(courier_estimated_delivery_days) : null,
-                shiprocket_booking_status: courier_id ? 'pending' : 'not_requested',
+                shiprocket_booking_status: isCustomCourier ? 'custom_delivery' : (courier_id ? 'pending' : 'not_requested'),
                 payment_id,
                 razorpay_order_id,
                 razorpay_signature,
@@ -340,10 +348,10 @@ const createOrder = async (req, res) => {
                     quantity:   Math.max(1, parseInt(item.quantity, 10) || 1),
                     image:      item.image || item.img || null,
                     weight:     item.weight || null,
-                    shipping_weight_kg: item.shippingWeightKg || null,
-                    shipping_length_cm: item.shippingLengthCm || null,
-                    shipping_width_cm: item.shippingWidthCm || null,
-                    shipping_height_cm: item.shippingHeightCm || null,
+                    shipping_weight_kg: item.shippingWeightKg ?? item.shipping_weight_kg ?? null,
+                    shipping_length_cm: item.shippingLengthCm ?? item.shipping_length_cm ?? null,
+                    shipping_width_cm: item.shippingWidthCm ?? item.shipping_width_cm ?? null,
+                    shipping_height_cm: item.shippingHeightCm ?? item.shipping_height_cm ?? null,
                 })),
                 { transaction }
             );
@@ -401,17 +409,17 @@ const createOrder = async (req, res) => {
                     });
                     const billingBase = billingApiBaseUrl();
                     const billingUrl = `${billingBase}/billings`;
-                    orderFlowLog.logRequest(`${flowId} Billing invoice`, 'POST', billingUrl, billingRequestPayload);
+                    orderFlowLog.logBillingRequest(`${flowId} Billing invoice`, 'POST', billingUrl, billingRequestPayload);
                     const response = await billingRequestManager.request({
                         method: 'POST', label: '/billings',
                         execute: () => axios.post(billingUrl, billingRequestPayload, {
-                            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                            headers: billingInvoiceHeaders(),
                             timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
                             maxRedirects: 0,
                         }),
                     });
                     billingResponse = response.data;
-                    orderFlowLog.logResponse(`${flowId} Billing invoice`, response.status, response.data);
+                    orderFlowLog.logBillingResponse(`${flowId} Billing invoice`, response.status, response.data);
                     if (response.data?.success === false || response.data?.status === false || Number(response.data?.status) >= 400) {
                         const rejection = new Error(response.data?.message || 'Billing rejected the invoice request.');
                         rejection.billingRejected = true;
@@ -440,9 +448,9 @@ const createOrder = async (req, res) => {
                         billing_stock_synced_at: billingStockSyncStatus === 'synced' ? new Date() : null,
                     });
                 } catch (billingError) {
-                    if (billingError.response) orderFlowLog.logFailure(`${flowId} Billing invoice`, billingError);
-                    else if (billingResponse !== null) orderFlowLog.logResponse(`${flowId} Billing invoice`, 'REJECTED', billingResponse);
-                    else orderFlowLog.logFailure(`${flowId} Billing invoice`, billingError);
+                    if (billingError.response) orderFlowLog.logBillingFailure(`${flowId} Billing invoice`, billingError);
+                    else if (billingResponse !== null) orderFlowLog.logBillingResponse(`${flowId} Billing invoice`, 'REJECTED', billingResponse);
+                    else orderFlowLog.logBillingFailure(`${flowId} Billing invoice`, billingError);
                     billingResponse = billingError.response?.data ?? billingResponse ?? null;
                     billingSyncError = billingError.response?.status
                         ? `Billing invoice request returned HTTP ${billingError.response.status}: ${billingError.response.data?.message || billingError.message}${Number(billingError.response.status) >= 500 ? ' Check Billing before retrying because invoice creation may have completed.' : ''}`
@@ -541,9 +549,9 @@ const createOrder = async (req, res) => {
 
             let shipment = null;
             let shipmentWarning = null;
-            if (payment_status === 'paid' && courier_id && billingSyncStatus !== 'synced') {
+            if (payment_status === 'paid' && !isCustomCourier && courier_id && billingSyncStatus !== 'synced') {
                 shipmentWarning = 'Shipment booking is paused until Billing confirms the invoice and stock decrement.';
-            } else if (payment_status === 'paid' && courier_id) {
+            } else if (payment_status === 'paid' && !isCustomCourier && courier_id) {
                 try {
                     const shipmentOrder = await Order.findByPk(order.id, {
                         include: [{ model: OrderItem, as: 'OrderItems' }],
@@ -552,9 +560,17 @@ const createOrder = async (req, res) => {
                     const address = parseJson(shipmentOrder.shipping_address) || parseJson(shipmentOrder.billing_address) || {};
                     const destination = String(address.zip || address.postcode || '').trim();
                     if (!/^\d{6}$/.test(destination)) throw new Error('Order needs a valid shipping PIN code before Shiprocket booking.');
-                    const shipmentWeight = shipmentOrder.OrderItems.reduce((sum, item) => sum + Number(item.shipping_weight_kg || 0) * Math.max(1, Number(item.quantity) || 1), 0);
-                    const available = await shiprocket.getAvailableCouriers({ deliveryPostcode: destination, weightKg: shipmentWeight });
-                    const selectedCourier = available.couriers.find(candidate => candidate.courierId === Number(courier_id));
+                    const packageMetrics = shiprocket.getPackageMetrics(shipmentOrder.OrderItems);
+                    const available = await shiprocket.getAvailableCouriers({
+                        deliveryPostcode: destination,
+                        weightKg: packageMetrics.totalWeight,
+                        lengthCm: packageMetrics.length,
+                        widthCm: packageMetrics.width,
+                        heightCm: packageMetrics.height,
+                        declaredValue: Math.max(0, (Number(order.total) || 0) - (Number(order.delivery_charge) || 0)),
+                    });
+                    const selectedCourier = available.couriers.find(candidate => Number(candidate.courierId) === Number(courier_id)) || available.couriers[0];
+                    const courierToBookId = Number(selectedCourier?.courierId || courier_id);
                     if (!selectedCourier) throw new Error('The selected Shiprocket courier is no longer available for this shipment.');
                     await order.update({
                         shiprocket_requested_courier_name: selectedCourier.courierName,
@@ -562,7 +578,7 @@ const createOrder = async (req, res) => {
                         shiprocket_estimated_delivery_days: selectedCourier.estimatedDeliveryDays || selectedCourier.etd || null,
                         shiprocket_booking_status: 'booking',
                     });
-                    const booked = await shiprocket.bookShipment({ order: shipmentOrder, courierId: Number(courier_id) });
+                    const booked = await shiprocket.bookShipment({ order: shipmentOrder, courierId: courierToBookId });
                     const courierName = booked.courierName || selectedCourier.courierName;
                     await shipmentOrder.update({
                         awb_code: booked.awbCode,
@@ -599,6 +615,10 @@ const createOrder = async (req, res) => {
 
 const buildBillingPayload = async order => {
     const savedPayload = parseJson(order.billing_payload) || {};
+    const checkoutUser = order.customer_id ? await UserLogin.findByPk(order.customer_id, { attributes: ['phone'] }) : null;
+    const customerPhone = [checkoutUser?.phone, parseJson(order.billing_address)?.phone, order.customer_phone, savedPayload.customer_phone]
+        .map(value => String(value || '').trim())
+        .find(value => value && value.replace(/\D/g, '') !== '1234567890') || '';
     const orderItems = await OrderItem.findAll({ where: { orderId: order.id } });
     const fallbackItems = await Promise.all(orderItems.map(async item => {
         const [variant, product] = await Promise.all([
@@ -614,8 +634,6 @@ const buildBillingPayload = async order => {
             gst_percent: gstLabel.includes('without') ? 0 : Number(order.billing_gst_percent ?? 5),
         };
     }));
-    const allowedPriceTypes = ['MRP', 'Retail', 'Wholesale'];
-    const savedPriceType = allowedPriceTypes.includes(savedPayload.price_type) ? savedPayload.price_type : null;
     const mergedItems = Array.isArray(savedPayload.items) && savedPayload.items.length
         ? savedPayload.items.map((item, index) => ({
             ...fallbackItems[index],
@@ -629,17 +647,17 @@ const buildBillingPayload = async order => {
         ...savedPayload,
         bill_number: savedPayload.bill_number || '',
         franchise_location_id: savedPayload.franchise_location_id ?? order.billing_stock_location_id ?? configuredStockLocationId(),
-        price_type: savedPriceType || (allowedPriceTypes.includes(order.billing_price_type) ? order.billing_price_type : 'MRP'),
+        price_type: 'Franchise',
         payment_mode: savedPayload.payment_mode || order.billing_payment_mode || 'Online',
-        has_gst: savedPayload.has_gst ?? (order.billing_has_gst ? 1 : 0),
+        has_gst: mergedItems.some(item => Number(item.gst_percent) > 0),
         customer_name: savedPayload.customer_name || order.customer_name || '',
-        customer_phone: savedPayload.customer_phone || order.customer_phone || '',
+        customer_phone: customerPhone,
         customer_email: savedPayload.customer_email || order.customer_email || '',
-        billing_address: savedPayload.billing_address || addressText(order.billing_address),
-        shipping_address: savedPayload.shipping_address || addressText(order.shipping_address),
+        billing_address: addressText(savedPayload.billing_address || order.billing_address, order.customer_name),
+        shipping_address: addressText(savedPayload.shipping_address || order.shipping_address, order.customer_name),
         items: mergedItems,
         bill_discount_amount: savedPayload.bill_discount_amount ?? (Number(order.discount) || 0),
-        subtotal: savedPayload.subtotal ?? (Number(order.subtotal) || 0),
+        subtotal: savedPayload.subtotal ?? Math.max(0, (Number(order.subtotal) || 0) - (Number(order.tax) || 0)),
         gst_amount: savedPayload.gst_amount ?? (Number(order.tax) || 0),
         delivery_charge: savedPayload.delivery_charge ?? (Number(order.delivery_charge) || 0),
         paid_amount: savedPayload.paid_amount ?? (Number(order.billing_paid_amount ?? order.total) || 0),
@@ -676,15 +694,17 @@ const updateBillingPayload = async (req, res) => {
         for (const key of editableText) {
             if (submitted[key] !== undefined) next[key] = String(submitted[key] || '').trim();
         }
-        if (submitted.price_type !== undefined) {
-            if (!['MRP', 'Retail', 'Wholesale'].includes(String(submitted.price_type))) return res.status(400).json({ success: false, message: 'Unsupported Billing price_type.' });
-            next.price_type = String(submitted.price_type);
-        }
+        next.price_type = 'Franchise';
         next.franchise_location_id = current.franchise_location_id ?? configuredStockLocationId();
         const submittedItems = (current.items || []).map(item => ({ ...item }));
         if (submitted.has_gst !== undefined) {
-            next.has_gst = submitted.has_gst ? 1 : 0;
-            next.items = submittedItems.map(item => ({ ...item, gst_percent: next.has_gst ? 5 : 0 }));
+            const requestedHasGst = submitted.has_gst === true || submitted.has_gst === 1 || submitted.has_gst === '1';
+            const productGst = new Map(submittedItems.map(item => [String(item.product_variant_id), Number(item.gst_percent) > 0]));
+            next.items = submittedItems.map(item => ({
+                ...item,
+                gst_percent: productGst.get(String(item.product_variant_id)) ? 5 : 0,
+            }));
+            next.has_gst = next.items.some(item => Number(item.gst_percent) > 0) && requestedHasGst ? 1 : 0;
         } else {
             next.items = submittedItems;
         }
@@ -730,17 +750,17 @@ const retryBillingInvoice = async (req, res) => {
         await order.update({ billing_sync_status: 'pending', billing_sync_error: null });
         const billingBase = billingApiBaseUrl();
         const billingUrl = `${billingBase}/billings`;
-        orderFlowLog.logRequest(`order-${order.id} Billing invoice retry`, 'POST', billingUrl, billingRequestPayload);
+        orderFlowLog.logBillingRequest(`order-${order.id} Billing invoice retry`, 'POST', billingUrl, billingRequestPayload);
         const response = await billingRequestManager.request({
             method: 'POST', label: '/billings',
             execute: () => axios.post(billingUrl, billingRequestPayload, {
-                headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                headers: billingInvoiceHeaders(),
                 timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
                 maxRedirects: 0,
             }),
         });
         billingResponse = response.data;
-        orderFlowLog.logResponse(`order-${order.id} Billing invoice retry`, response.status, response.data);
+        orderFlowLog.logBillingResponse(`order-${order.id} Billing invoice retry`, response.status, response.data);
         if (response.data?.success === false || response.data?.status === false || Number(response.data?.status) >= 400) {
             const rejection = new Error(response.data?.message || 'Billing rejected the invoice request.');
             rejection.billingRejected = true;
@@ -771,9 +791,9 @@ const retryBillingInvoice = async (req, res) => {
         });
         return res.json({ success: true, orderId: order.id, billingSyncStatus: 'synced', billingStockSyncStatus: stockSyncStatus, stockCheckedAt: stockCheck.checkedAt });
     } catch (error) {
-        if (error.response) orderFlowLog.logFailure(`order-${order.id} Billing invoice retry`, error);
-        else if (billingResponse !== null) orderFlowLog.logResponse(`order-${order.id} Billing invoice retry`, 'REJECTED', billingResponse);
-        else orderFlowLog.logFailure(`order-${order.id} Billing invoice retry`, error);
+        if (error.response) orderFlowLog.logBillingFailure(`order-${order.id} Billing invoice retry`, error);
+        else if (billingResponse !== null) orderFlowLog.logBillingResponse(`order-${order.id} Billing invoice retry`, 'REJECTED', billingResponse);
+        else orderFlowLog.logBillingFailure(`order-${order.id} Billing invoice retry`, error);
         const message = error.response?.status
             ? `Billing invoice request returned HTTP ${error.response.status}: ${error.response.data?.message || error.message}`
             : error.message || 'Could not retry the Billing invoice.';
@@ -810,9 +830,15 @@ function parseJson(value) {
     try { return JSON.parse(value); } catch (_) { return null; }
 }
 
-function addressText(value) {
+function addressText(value, customerName = '') {
     const parsed = parseJson(value);
-    if (!parsed || typeof parsed !== 'object') return String(value || '');
+    if (!parsed || typeof parsed !== 'object') {
+        const text = String(value || '').trim();
+        const prefix = String(customerName || '').trim();
+        return prefix && text.slice(0, prefix.length).toLowerCase() === prefix.toLowerCase()
+            ? text.slice(prefix.length).replace(/^\s*,\s*/, '').trim()
+            : text;
+    }
     return [
         parsed.address || parsed.address1,
         parsed.address2,
@@ -843,7 +869,11 @@ const getAllOrders = async (req, res) => {
                 include: [{
                     model:      Product,
                     as:         'Product',
-                    attributes: ['id', 'productName', 'image'],
+                    attributes: ['id', 'productName', 'image', 'mrpGstType', 'isBuyOneGetOne', 'product_code', 'barcode', 'billingProductId'],
+                }, {
+                    model: ProductVariant,
+                    as: 'Variant',
+                    attributes: ['id', 'sku', 'variant_code', 'billingVariantId', 'size', 'color', 'fabric', 'weight', 'volume', 'nos', 'billingData'],
                 }],
             }],
             order: [['createdAt', 'DESC']]
@@ -869,7 +899,11 @@ const getCustomerOrders = async (req, res) => {
                 include: [{
                     model:      Product,
                     as:         'Product',
-                    attributes: ['id', 'productName', 'image'],
+                    attributes: ['id', 'productName', 'image', 'mrpGstType', 'isBuyOneGetOne', 'product_code', 'barcode', 'billingProductId'],
+                }, {
+                    model: ProductVariant,
+                    as: 'Variant',
+                    attributes: ['id', 'sku', 'variant_code', 'billingVariantId', 'size', 'color', 'fabric', 'weight', 'volume', 'nos', 'billingData'],
                 }],
             }],
             order: [['createdAt', 'DESC']]

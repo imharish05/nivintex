@@ -4,6 +4,7 @@ import ImageUploadPreview from '../common/ImageUploadPreview';
 import CharWordCounter from '../common/CharWordCounter';
 import { validateFields, isOverLimit } from '../../utils/textValidation';
 import { getImageUrl } from '../../api';
+import { confirmToast } from '../../utils/confirmToast';
 
 const API = process.env.REACT_APP_API_URL;
 const pillClass = { Active: 'pill-active', Inactive: 'pill-inactive' };
@@ -24,17 +25,22 @@ export default function Banners({ showToast }) {
   });
   const [imageFile, setImageFile] = useState(null);
   const [existingImage, setExistingImage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => { fetchBanners(); }, []);
 
   const fetchBanners = () => {
     fetch(`${API}/banners`)
-      .then(r => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(data => setRows(data))
       .catch(() => showToast('Load Failed', 'Could not load banners.'));
   };
 
   const closeForm = () => {
+    setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
     setFormData({
@@ -69,13 +75,25 @@ export default function Banners({ showToast }) {
     e.preventDefault();
     const isRequired = formData.section === 'new_arrivals' || formData.section === 'best_sellers';
 
+    const isNewArrivalsOrBestSellers = formData.section === 'new_arrivals' || formData.section === 'best_sellers';
+
     // Character and word limit validations
-    const validationError = validateFields([
-      { value: formData.title, fieldName: 'Title', required: isRequired, maxChars: 60, maxWords: 10 },
-      { value: formData.subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 80, maxWords: 15 },
-      { value: formData.content, fieldName: 'Content / Description', maxChars: 250, maxWords: 40 },
+    const fieldsToValidate = [
+      { value: formData.title, fieldName: 'Title', required: isRequired, maxChars: 40, maxWords: 6 },
+      { value: formData.subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 50, maxWords: 8 },
       { value: formData.link, fieldName: 'Link/URL', required: isRequired, maxChars: 255 },
-    ]);
+    ];
+
+    if (!isNewArrivalsOrBestSellers) {
+      fieldsToValidate.push({
+        value: formData.content,
+        fieldName: 'Content / Description',
+        maxChars: 150,
+        maxWords: 25,
+      });
+    }
+
+    const validationError = validateFields(fieldsToValidate);
     if (validationError) {
       showToast('Validation Error', validationError);
       return;
@@ -95,13 +113,14 @@ export default function Banners({ showToast }) {
     const data = new FormData();
     data.append('title',     formData.title);
     data.append('subtitle',  formData.subtitle);
-    data.append('content',   formData.content);
+    data.append('content',   isNewArrivalsOrBestSellers ? '' : formData.content);
     data.append('link',      formData.link);
     data.append('sortOrder', formData.sortOrder);
     data.append('status',    formData.status);
     data.append('section',   formData.section);
     if (imageFile) data.append('image', imageFile);
 
+    setIsSubmitting(true);
     const method = editingId ? 'PUT' : 'POST';
     const url    = editingId ? `${API}/banners/update/${editingId}` : `${API}/banners/add`;
 
@@ -122,7 +141,7 @@ export default function Banners({ showToast }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this banner?')) return;
+    if (!(await confirmToast('Delete this banner?', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/banners/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -215,7 +234,7 @@ export default function Banners({ showToast }) {
                   Title {isReq && <span style={{ color: 'red' }}>*</span>}
                 </label>
                 <input
-                  className={`km-input ${isOverLimit(formData.title, { maxChars: 60, maxWords: 10 }) ? 'km-input-error' : ''}`}
+                  className={`km-input ${isOverLimit(formData.title, { maxChars: 40, maxWords: 6 }) ? 'km-input-error' : ''}`}
                   type="text"
                   placeholder="e.g. New Arrivals"
                   required={isReq}
@@ -224,8 +243,8 @@ export default function Banners({ showToast }) {
                 />
                 <CharWordCounter
                   value={formData.title}
-                  maxChars={60}
-                  maxWords={10}
+                  maxChars={40}
+                  maxWords={6}
                   hint="Short, catchy headline"
                 />
               </div>
@@ -235,7 +254,7 @@ export default function Banners({ showToast }) {
                   Subtitle {isReq && <span style={{ color: 'red' }}>*</span>}
                 </label>
                 <input
-                  className={`km-input ${isOverLimit(formData.subtitle, { maxChars: 80, maxWords: 15 }) ? 'km-input-error' : ''}`}
+                  className={`km-input ${isOverLimit(formData.subtitle, { maxChars: 50, maxWords: 8 }) ? 'km-input-error' : ''}`}
                   type="text"
                   placeholder="e.g. Fresh Styles"
                   required={isReq}
@@ -244,28 +263,30 @@ export default function Banners({ showToast }) {
                 />
                 <CharWordCounter
                   value={formData.subtitle}
-                  maxChars={80}
-                  maxWords={15}
+                  maxChars={50}
+                  maxWords={8}
                   hint="Supporting subheading"
                 />
               </div>
 
-              <div className="km-field km-field-full">
-                <label className="km-label">Content / Description</label>
-                <textarea
-                  className={`km-input ${isOverLimit(formData.content, { maxChars: 250, maxWords: 40 }) ? 'km-input-error' : ''}`}
-                  style={{ minHeight: '60px', resize: 'vertical', fontFamily: 'inherit' }}
-                  placeholder="e.g. Discover your next favourite look"
-                  value={formData.content}
-                  onChange={e => setFormData({ ...formData, content: e.target.value })}
-                />
-                <CharWordCounter
-                  value={formData.content}
-                  maxChars={250}
-                  maxWords={40}
-                  hint="Banner promotional copy or description"
-                />
-              </div>
+              {formData.section !== 'new_arrivals' && formData.section !== 'best_sellers' && (
+                <div className="km-field km-field-full">
+                  <label className="km-label">Content / Description</label>
+                  <textarea
+                    className={`km-input ${isOverLimit(formData.content, { maxChars: 150, maxWords: 25 }) ? 'km-input-error' : ''}`}
+                    style={{ minHeight: '60px', resize: 'vertical', fontFamily: 'inherit' }}
+                    placeholder="e.g. Discover your next favourite look"
+                    value={formData.content}
+                    onChange={e => setFormData({ ...formData, content: e.target.value })}
+                  />
+                  <CharWordCounter
+                    value={formData.content}
+                    maxChars={150}
+                    maxWords={25}
+                    hint="Banner promotional copy or description"
+                  />
+                </div>
+              )}
 
               <div className="km-field">
                 <label className="km-label">
@@ -308,8 +329,13 @@ export default function Banners({ showToast }) {
                 </select>
               </div>
 
-              <button type="submit" className="km-btn-submit">
-                {editingId ? 'Update Banner' : 'Save Banner'}
+              <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
+                {isSubmitting && <span className="km-btn-spinner" />}
+                <span>
+                  {isSubmitting
+                    ? (editingId ? 'Updating Banner...' : 'Saving Banner...')
+                    : (editingId ? 'Update Banner' : 'Save Banner')}
+                </span>
               </button>
             </form>
           </div>

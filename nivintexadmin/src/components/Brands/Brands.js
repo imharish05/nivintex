@@ -4,6 +4,7 @@ import ImageUploadPreview from '../common/ImageUploadPreview';
 import CharWordCounter from '../common/CharWordCounter';
 import { validateFields, isOverLimit } from '../../utils/textValidation';
 import { getImageUrl } from '../../api';
+import { confirmToast } from '../../utils/confirmToast';
 
 const API = process.env.REACT_APP_API_URL;
 const pillClass = { Active: 'pill-active', Inactive: 'pill-inactive' };
@@ -16,6 +17,7 @@ export default function Brands({ showToast }) {
   const [formData, setFormData] = useState({ brandName: '', status: 'Active' });
   const [logoFile, setLogoFile] = useState(null);
   const [existingLogo, setExistingLogo] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => { fetchBrands(); }, []);
 
@@ -28,6 +30,7 @@ export default function Brands({ showToast }) {
   };
 
   const closeForm = () => {
+    setIsSubmitting(false);
     setShowForm(false); setEditingId(null);
     setFormData({ brandName: '', status: 'Active' }); setLogoFile(null);
     setExistingLogo(null);
@@ -67,11 +70,11 @@ export default function Brands({ showToast }) {
         const err = await res.json();
         showToast('Failed', err.error || 'Operation could not be completed.');
       }
-    } catch { showToast('Server Error', 'Something went wrong. Try again.'); }
+    } catch { showToast('Server Error', 'Something went wrong. Try again.'); } finally { setIsSubmitting(false); }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this brand?')) return;
+    if (!(await confirmToast('Delete this brand?', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/brands/${id}`, { method: 'DELETE' });
       if (res.ok) { setRows(prev => prev.filter(r => r.id !== id)); showToast('Deleted!', 'Brand removed successfully.'); }
@@ -134,8 +137,13 @@ export default function Brands({ showToast }) {
                 previewMaxHeight={100}
               />
 
-              <button type="submit" className="km-btn-submit">
-                {editingId ? 'Update Brand' : 'Save Brand'}
+              <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
+                {isSubmitting && <span className="km-btn-spinner" />}
+                <span>
+                  {isSubmitting
+                    ? (editingId ? 'Updating Brand...' : 'Saving Brand...')
+                    : (editingId ? 'Update Brand' : 'Save Brand')}
+                </span>
               </button>
             </form>
           </div>

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
+import { confirmToast } from '../../utils/confirmToast';
 
 const API = process.env.REACT_APP_API_URL;
 
@@ -8,9 +9,10 @@ export default function Coupons({ showToast }) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     code: '', type: 'percent', value: '',
-    min_order: '', max_discount: '', expires_at: '', is_active: true
+    min_order: '', max_discount: '', max_uses_per_user: '', expires_at: '', is_active: true
   });
 
   useEffect(() => { fetchCoupons(); }, []);
@@ -36,6 +38,7 @@ export default function Coupons({ showToast }) {
       value: c.value,
       min_order: c.min_order,
       max_discount: c.max_discount || '',
+      max_uses_per_user: c.max_uses_per_user || '',
       expires_at: c.expires_at ? c.expires_at.split('T')[0] : '',
       is_active: c.is_active
     });
@@ -44,6 +47,7 @@ export default function Coupons({ showToast }) {
   };
 
   const resetForm = () => {
+    setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
     setFormData({
@@ -52,6 +56,7 @@ export default function Coupons({ showToast }) {
       value: '',
       min_order: '',
       max_discount: '',
+      max_uses_per_user: '',
       expires_at: '',
       is_active: true
     });
@@ -63,6 +68,8 @@ export default function Coupons({ showToast }) {
     const value = Number(formData.value);
     const minOrder = Number(formData.min_order || 0);
     const maxDiscount = Number(formData.max_discount || 0);
+    const perPersonLimitInput = String(formData.max_uses_per_user ?? '').trim();
+    const maxUsesPerUser = perPersonLimitInput === '' ? null : Number(perPersonLimitInput);
 
     // ───── BASIC VALIDATION ─────
     if (!formData.code.trim()) {
@@ -71,6 +78,10 @@ export default function Coupons({ showToast }) {
 
     if (value <= 0) {
       return showToast('Error', 'Discount value must be greater than 0');
+    }
+
+    if (maxUsesPerUser !== null && (!Number.isInteger(maxUsesPerUser) || maxUsesPerUser < 1)) {
+      return showToast('Error', 'Per-person limit must be a whole number greater than 0');
     }
 
     // ❌ REMOVED 100% LIMIT (as per your request)
@@ -129,6 +140,7 @@ export default function Coupons({ showToast }) {
         body: JSON.stringify({
           ...formData,
           max_discount: formData.max_discount || null,
+          max_uses_per_user: maxUsesPerUser,
           expires_at: formData.expires_at || null
         })
       });
@@ -147,7 +159,7 @@ export default function Coupons({ showToast }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete coupon?')) return;
+    if (!(await confirmToast('Delete coupon?', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/coupons/admin/delete/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -285,6 +297,26 @@ export default function Coupons({ showToast }) {
                 />
               </div>
 
+              <div className="km-field">
+                <label className="km-label" htmlFor="max_uses_per_user">Limit per person</label>
+                <input
+                  className="km-input"
+                  id="max_uses_per_user"
+                  name="max_uses_per_user"
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="numeric"
+                  placeholder="Unlimited"
+                  value={formData.max_uses_per_user}
+                  onChange={handleChange}
+                  aria-describedby="per-person-limit-help"
+                />
+                <small id="per-person-limit-help">
+                  Leave blank for unlimited. For example, 2 allows each customer to use this coupon twice.
+                </small>
+              </div>
+
               <div className="km-field km-field-checkbox">
                 <label className="km-checkbox-label">
                   <input
@@ -297,8 +329,13 @@ export default function Coupons({ showToast }) {
                 </label>
               </div>
 
-              <button type="submit" className="km-btn-submit">
-                {editingId ? 'Update Coupon' : 'Save Coupon'}
+              <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
+                {isSubmitting && <span className="km-btn-spinner" />}
+                <span>
+                  {isSubmitting
+                    ? (editingId ? 'Updating Coupon...' : 'Saving Coupon...')
+                    : (editingId ? 'Update Coupon' : 'Save Coupon')}
+                </span>
               </button>
               <button type="button" className="km-btn-cancel" onClick={resetForm}>
                 Cancel
@@ -312,7 +349,7 @@ export default function Coupons({ showToast }) {
         <p className="km-loading">Loading...</p>
       ) : (
         <DataTable
-          columns={['Code', 'Discount', 'Min Order', 'Max Cap', 'Expiry', 'Status', 'Actions']}
+          columns={['Code', 'Discount', 'Min Order', 'Max Cap', 'Per Person', 'Expiry', 'Status', 'Actions']}
           initialRows={rows}
           renderRow={(row) => (
             <tr key={row.id}>
@@ -320,6 +357,7 @@ export default function Coupons({ showToast }) {
               <td><strong>{row.type === 'percent' ? `${row.value}%` : `₹${row.value}`}</strong></td>
               <td>₹{row.min_order}</td>
               <td>{row.type === 'percent' && row.max_discount ? `₹${row.max_discount}` : '—'}</td>
+              <td>{row.max_uses_per_user ? `${row.max_uses_per_user} time(s)` : 'Unlimited'}</td>
               <td className="td-muted">
                 {row.expires_at ? new Date(row.expires_at).toLocaleDateString('en-IN') : 'No Expiry'}
               </td>

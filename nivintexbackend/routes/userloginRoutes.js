@@ -64,7 +64,7 @@ router.post('/login', async (req, res) => {
 
 // ─────────────────────────────────────────────
 // PUT /api/user/update-profile
-// Updates username, email, and/or phone
+// Updates username (Full Name), email, and/or phone
 // ─────────────────────────────────────────────
 router.put('/update-profile', async (req, res) => {
   try {
@@ -73,28 +73,25 @@ router.put('/update-profile', async (req, res) => {
 
     const numericId = parseInt(id, 10);
 
-    // Check if username or email is already taken by another user
-    if (username || email) {
-      const conditions = [];
-      if (username) conditions.push({ username });
-      if (email)    conditions.push({ email });
-
+    // Only email must be unique across accounts
+    if (email) {
+      const trimmedEmail = email.trim().toLowerCase();
       const conflict = await UserLogin.findOne({
         where: {
-          [Op.and]: [
-            { id: { [Op.ne]: numericId } },
-            { [Op.or]: conditions }
-          ]
+          id: { [Op.ne]: numericId },
+          email: trimmedEmail
         }
       });
 
-      if (conflict) return res.status(400).json({ error: 'Username or Email already taken!' });
+      if (conflict) {
+        return res.status(400).json({ error: 'This email is already in use by another account.' });
+      }
     }
 
     const updateData = {};
-    if (username)            updateData.username = username;
-    if (email)               updateData.email    = email;
-    if (phone !== undefined) updateData.phone    = phone || null;
+    if (username)            updateData.username = username.trim();
+    if (email)               updateData.email    = email.trim().toLowerCase();
+    if (phone !== undefined) updateData.phone    = phone ? phone.trim() : null;
 
     await UserLogin.update(updateData, { where: { id: numericId } });
 
@@ -107,6 +104,9 @@ router.put('/update-profile', async (req, res) => {
 
     res.json({ message: 'Profile updated successfully!', user: updatedUser });
   } catch (err) {
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'This email is already registered to another account.' });
+    }
     console.error('Update profile error:', err.message);
     res.status(500).json({ error: err.message });
   }

@@ -20,11 +20,12 @@ const F = {
 const C = {
   brand:   '#0f5447',
   gold:    '#C9933A',
+  goldText:'#8A5B16',
   bg:      '#EAF0E2',
   border:  '#EAE4D6',
   surface: '#FFFFFF',
-  muted:   '#6B6B8A',
-  text:    '#2C3E2B',
+  muted:   '#52615B',
+  text:    '#20332C',
 };
 
 const styles = `
@@ -39,20 +40,31 @@ const styles = `
   .nv-content {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 16px 3rem;
+    padding: 18px 16px 3rem;
   }
+
+  .nv-breadcrumb {
+    display: flex; align-items: center; gap: 12px;
+    margin: 0 0 18px; color: ${C.muted};
+    font-family: ${F.sub}; font-size: 17px; letter-spacing: .4px;
+  }
+  .nv-breadcrumb a { color: ${C.brand}; text-decoration: none; font-weight: 600; }
+  .nv-breadcrumb a:hover { color: ${C.goldText}; text-decoration: underline; }
+  .nv-breadcrumb [aria-current="page"] { color: ${C.text}; font-weight: 600; }
 
   /* ── Hero ── */
   .nv-hero {
     background: ${C.brand};
-    border-radius: 0px;
+    border-radius: 14px;
     overflow: hidden;
-    margin-bottom: 2rem;
+    margin-bottom: 3rem;
     position: relative;
     min-height: 520px;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+    justify-content: center;
+    isolation: isolate;
+    box-shadow: 0 18px 44px rgba(15, 54, 43, .15);
   }
   .nv-hero-img {
     position: absolute;
@@ -68,19 +80,25 @@ const styles = `
     inset: 0;
     background: linear-gradient(
       to bottom,
-      rgba(15, 84, 71, 0.15) 0%,
-      rgba(15, 84, 71, 0.3) 35%,
-      rgba(15, 84, 71, 0.75) 68%,
-      rgba(15, 84, 71, 0.95) 100%
+      rgba(9, 35, 29, 0.25) 0%,
+      rgba(9, 35, 29, 0.38) 38%,
+      rgba(9, 35, 29, 0.76) 100%
     );
   }
   .nv-hero-content {
     position: relative;
     z-index: 2;
-    padding: 2.5rem 2rem 2.5rem;
-    margin-top: 0;
+    width: min(100% - 32px, 720px);
+    margin: 0 auto;
+    padding: 3rem 2rem;
     text-align: center;
   }
+  .nv-hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    margin-bottom: 18px; color: #F2D39B;
+    font: 600 10px ${F.main}; letter-spacing: 3px; text-transform: uppercase;
+  }
+  .nv-hero-eyebrow::before, .nv-hero-eyebrow::after { content: ''; width: 26px; height: 1px; background: ${C.gold}; }
   .nv-logo {
     font-family: ${F.main};
     font-size: clamp(22px, 6vw, 38px); font-weight: 200;
@@ -92,7 +110,7 @@ const styles = `
     font-family: ${F.sub};
     font-weight: 200; font-size: clamp(9px, 2.2vw, 11px);
     letter-spacing: clamp(2px, 1.2vw, 6px); text-transform: uppercase;
-    color: rgba(249,246,240,0.65); margin-top: 8px;
+    color: rgba(255,255,255,0.9); margin-top: 12px;
   }
   .nv-divider {
     width: 32px; height: 1px;
@@ -102,7 +120,7 @@ const styles = `
   .nv-hero-desc {
     font-family: ${F.sub};
     font-weight: 200; font-style: italic;
-    color: rgba(249,246,240,0.85); font-size: 14px;
+    color: #fff; font-size: 15px;
     max-width: 450px; margin: 0 auto; line-height: 1.9;
     letter-spacing: 0.5px;
   }
@@ -115,7 +133,7 @@ const styles = `
     letter-spacing: 6px; text-transform: uppercase;
     text-align: center;
   }
-  .nv-section-title span { color: ${C.gold}; }
+  .nv-section-title span { color: ${C.goldText}; }
   .nv-section-sub {
     text-align: center;
     color: ${C.muted};
@@ -128,7 +146,7 @@ const styles = `
   }
   .nv-section-label {
     font-size: 10px; font-weight: 400;
-    color: ${C.gold};
+    color: ${C.goldText};
     letter-spacing: 3px; text-transform: uppercase;
     font-family: ${F.main};
     margin-bottom: 16px;
@@ -274,7 +292,7 @@ const styles = `
   .nv-val-label {
     font-family: ${F.main};
     font-size: 10px; font-weight: 400;
-    letter-spacing: 2.5px; color: ${C.gold};
+    letter-spacing: 2.5px; color: ${C.goldText};
     text-transform: uppercase; margin-bottom: 8px;
   }
   .nv-val-text {
@@ -395,7 +413,7 @@ const styles = `
   .nv-testi-author {
     font-family: ${F.main};
     font-size: 9px; letter-spacing: 2.5px;
-    color: ${C.gold}; font-weight: 400;
+    color: ${C.goldText}; font-weight: 600;
     text-transform: uppercase;
   }
 
@@ -437,10 +455,11 @@ const styles = `
     .nv-values { grid-template-columns: repeat(2, 1fr); }
     .nv-testimonials { grid-template-columns: 1fr; }
     .nv-category-showcase { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-    .nv-page-top-gap { height: 16px; }
+    .nv-content { padding-top: 12px; }
+    .nv-page-top-gap { height: 0; }
     .nv-franchise-features { grid-template-columns: 1fr; }
-    .nv-hero { min-height: 480px; }
-    .nv-hero-img { height: 100%; }
+    .nv-hero { min-height: 460px; }
+    .nv-hero-img { height: 100%; object-position: center 12%; }
     .nv-hero-content { margin-top: 0; padding: 2rem 1.2rem 2rem; }
     .nv-story-img-wrap { height: 280px; }
     .nv-category-img { height: 200px; }
@@ -450,7 +469,7 @@ const styles = `
     .nv-values { grid-template-columns: 1fr; }
     .nv-promise { padding: 1.8rem 1rem; }
     .nv-franchise { padding: 2rem 1rem; }
-    .nv-hero { min-height: 460px; }
+    .nv-hero { min-height: 430px; border-radius: 10px; }
     .nv-hero-content { padding: 1.5rem 1rem 1.5rem; }
   }
 `;
@@ -539,6 +558,11 @@ export default function AboutPage() {
         <div className="nv-page-top-gap"></div>
 
         <div className="nv-content">
+          <nav className="nv-breadcrumb" aria-label="Breadcrumb">
+            <a href="/">Home</a>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">About</span>
+          </nav>
 
           {/* ── Hero ── */}
           <Anim>
@@ -546,6 +570,7 @@ export default function AboutPage() {
               <img src={heroImg} alt="Fashion Aura" className="nv-hero-img" />
               <div className="nv-hero-overlay" />
               <div className="nv-hero-content">
+                <div className="nv-hero-eyebrow">Our story, our craft</div>
                 <div className="nv-logo"><span>F</span>ASHION AURA</div>
                 <div className="nv-tagline">Elegance in Every Thread</div>
                 <div className="nv-divider" />

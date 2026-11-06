@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { confirmToast } from '../utils/confirmToast';
 
 const KM = {
   orange: '#A2C579', orangeLight: '#e8f5f0',
@@ -108,9 +109,9 @@ export default function SmartUnitSelector({ value, onChange }) {
     removeUnitFromType(typeName, unit);
   };
 
-  const handleDeleteType = (e, typeName) => {
+  const handleDeleteType = async (e, typeName) => {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${typeName}" type?`)) return;
+    if (!(await confirmToast(`Delete "${typeName}" type?`, 'Delete'))) return;
     deleteCustomType(typeName);
     if (openType === typeName) setOpenType(null);
   };

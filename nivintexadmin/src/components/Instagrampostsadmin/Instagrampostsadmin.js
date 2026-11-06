@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
+import { confirmToast } from '../../utils/confirmToast';
 
 const API = process.env.REACT_APP_API_URL;
 const pillClass = { Active: 'pill-active', Inactive: 'pill-inactive' };
@@ -26,7 +27,8 @@ export default function InstagramPosts({ showToast }) {
 
   const [mediaFile, setMediaFile]   = useState(null);   // File object
   const [previewUrl, setPreviewUrl] = useState(null);   // object URL or existing URL
-  const [previewType, setPreviewType] = useState('image'); // 'image' | 'video'
+  const [previewType, setPreviewType] = useState('image');
+  const [isSubmitting, setIsSubmitting] = useState(false); // 'image' | 'video'
 
   useEffect(() => { fetchPosts(); }, []);
 
@@ -39,6 +41,7 @@ export default function InstagramPosts({ showToast }) {
   };
 
   const closeForm = () => {
+    setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
     setFormData({ label: '', tag: '', postUrl: '', sortOrder: 1, status: 'Active' });
@@ -118,7 +121,7 @@ export default function InstagramPosts({ showToast }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this Instagram post?')) return;
+    if (!(await confirmToast('Delete this Instagram post?', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/instagram-posts/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -253,8 +256,13 @@ export default function InstagramPosts({ showToast }) {
                 )}
               </div>
 
-              <button type="submit" className="km-btn-submit">
-                {editingId ? 'Update Post' : 'Save Post'}
+              <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
+                {isSubmitting && <span className="km-btn-spinner" />}
+                <span>
+                  {isSubmitting
+                    ? (editingId ? 'Updating Post...' : 'Saving Post...')
+                    : (editingId ? 'Update Post' : 'Save Post')}
+                </span>
               </button>
             </form>
           </div>

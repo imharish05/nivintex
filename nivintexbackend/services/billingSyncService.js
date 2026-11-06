@@ -4,6 +4,7 @@ const sequelize = require('../config/db');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
 const ProductVariant = require('../models/ProductVariant');
+const ProductImage = require('../models/ProductImage');
 const Franchise = require('../models/Franchise');
 const SubCategory = require('../models/SubCategory');
 const { billingRequestManager } = require('./billingRequestManager');
@@ -48,19 +49,34 @@ function numberOrNull(value) {
 }
 
 function variantStatus(value) {
-  return String(value || 'Active').toLowerCase() === 'inactive' ? 'Inactive' : 'Active';
+  return ['inactive', 'disabled', '0', 'false', 'no'].includes(String(value ?? 'Active').trim().toLowerCase())
+    ? 'Inactive'
+    : 'Active';
 }
 
 function localUploadPath(value) {
-  return typeof value === 'string' && /^uploads\/prod-[^/\\]+$/i.test(value.replace(/\\/g, '/'))
+  return typeof value === 'string' && /^uploads\/(?:prod|gal)-[^/\\]+$/i.test(value.replace(/\\/g, '/'))
     ? value.replace(/\\/g, '/')
     : null;
 }
 
 function imageUrl(value) {
   if (!value) return null;
+  if (typeof value === 'object') value = value.url || value.image_url || value.image || value.path || value.src;
+  if (!value || typeof value !== 'string') return null;
   if (/^https?:\/\//i.test(value)) return value;
   return `${billingAssetBaseUrl()}/${String(value).replace(/^\/+/, '')}`;
+}
+
+function detailProduct(payload) {
+  const candidates = [payload?.product_details, payload?.product, payload?.products,
+    payload?.data?.product_details, payload?.data?.product, payload?.data?.products,
+    payload?.data?.data, payload?.data, payload];
+  for (const candidate of candidates) {
+    const product = Array.isArray(candidate) ? candidate[0] : candidate;
+    if (product && typeof product === 'object' && (product.id != null || product.product_id != null)) return product;
+  }
+  return null;
 }
 
 function apiClient() {
@@ -72,9 +88,10 @@ function apiClient() {
 
 async function fetchPayloads(productsOnly = false) {
   const client = apiClient();
-  const requestGet = (path, params = {}) => billingRequestManager.request({
+  const requestGet = (path, params = {}, { fresh = false } = {}) => billingRequestManager.request({
     method: 'GET',
     key: `GET:${client.defaults.baseURL}${path}${Object.keys(params).length ? `?${Object.keys(params).sort().map(key => `${key}=${String(params[key])}`).join('&')}` : ''}`,
+    bypassCache: fresh,
     label: path,
     execute: () => client.get(path, Object.keys(params).length ? { params } : undefined),
   });
@@ -83,21 +100,22 @@ async function fetchPayloads(productsOnly = false) {
     subcategories: '/subcategory',
     products: '/products',
     productVariants: '/product_varients',
-    variants: '/varients',
     stocks: '/stocks',
     franchises: '/franchises',
   };
   const paths = productsOnly
-    ? { categories: allPaths.categories, subcategories: allPaths.subcategories, products: allPaths.products, productVariants: allPaths.productVariants, variants: allPaths.variants, stocks: allPaths.stocks }
+    ? { categories: allPaths.categories, subcategories: allPaths.subcategories, products: allPaths.products, productVariants: allPaths.productVariants, stocks: allPaths.stocks }
     : allPaths;
   const fetchAllProductPages = async () => {
-    const firstResponse = await requestGet(allPaths.products);
+    // A product refresh must read Billing directly. Cached GET data can bring
+    // deleted products back into the local catalog during reconciliation.
+    const firstResponse = await requestGet(allPaths.products, {}, { fresh: true });
     const firstPayload = firstResponse.data;
     const lastPage = Math.max(1, Number(firstPayload?.meta?.last_page ?? firstPayload?.data?.meta?.last_page ?? 1) || 1);
     if (lastPage <= 1) return firstPayload;
     const pages = [];
     for (let page = 2; page <= lastPage; page += 1) {
-      const response = await requestGet(allPaths.products, { page });
+      const response = await requestGet(allPaths.products, { page }, { fresh: true });
       pages.push(response.data);
     }
     const firstProducts = collection(firstPayload, 'products');
@@ -126,20 +144,44 @@ async function fetchPayloads(productsOnly = false) {
       throw new Error(`Billing sync failed at ${path} (HTTP ${error.response?.status || 'network error'}). ${error.response?.data?.message || error.message || 'Check API access and response format.'}`);
     }
   }
-  return Object.fromEntries(entries);
+  const payloads = Object.fromEntries(entries);
+  if (!productsOnly) {
+    const productRows = new Map();
+    for (const product of [...collection(payloads.products, 'products'), ...collection(payloads.productVariants, 'product_varients')]) {
+      const id = idOf(product.id ?? product.product_id);
+      if (id) productRows.set(id, product);
+    }
+    const detailsById = {};
+    const delayMs = Math.max(0, Number(process.env.BILLING_API_PRODUCT_DETAILS_DELAY_MS) || 250);
+    let index = 0;
+    for (const id of productRows.keys()) {
+      if (index > 0 && delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
+      const response = await requestGet(`/product_details/${encodeURIComponent(id)}`);
+      if (response.data?.status && Number(response.data.status) >= 400) {
+        throw new Error(`Billing API /product_details/${id} returned status ${response.data.status}.`);
+      }
+      const product = detailProduct(response.data);
+      if (!product) throw new Error(`Billing API /product_details/${id} returned no product record.`);
+      detailsById[idOf(product.id ?? product.product_id) || id] = product;
+      index += 1;
+    }
+    payloads.productDetails = detailsById;
+  }
+  return payloads;
 }
 
 function buildProducts(payloads) {
   const baseProducts = collection(payloads.products, 'products');
   const detailedProducts = collection(payloads.productVariants, 'product_varients');
   const byId = new Map();
-  for (const product of [...baseProducts, ...detailedProducts]) {
+  const individualDetails = Object.values(payloads.productDetails || {});
+  for (const product of [...baseProducts, ...detailedProducts, ...individualDetails]) {
     const key = idOf(product.id);
     if (!key) continue;
     byId.set(key, { ...(byId.get(key) || {}), ...product });
   }
 
-  const flatVariants = collection(payloads.variants, 'product_varients');
+  const flatVariants = [];
   const variantsByProduct = new Map();
   for (const variant of flatVariants) {
     const productId = idOf(variant.product_id ?? variant.productId);
@@ -149,8 +191,12 @@ function buildProducts(payloads) {
   }
 
   const stockByVariant = new Map();
+  const stockByVariantCode = new Map();
   for (const stock of collection(payloads.stocks, 'stocks')) {
-    const variantId = idOf(stock.product_variant_id ?? stock.product_varient_id ?? stock.variant_id ?? stock.productVariantId ?? stock.id);
+    // The live /stocks contract exposes `id` as the Billing variant ID, but
+    // don't rely on that undocumented equivalence. Match by its stable SKU/code
+    // below unless the response explicitly names a variant ID.
+    const variantId = idOf(stock.product_variant_id ?? stock.product_varient_id ?? stock.variant_id ?? stock.productVariantId);
     const markedOutOfStock = stock.in_stock === false || stock.in_stock === 0
       || ['false', '0', 'no', 'out of stock'].includes(String(stock.in_stock ?? '').trim().toLowerCase());
     const stockQuantity = markedOutOfStock
@@ -158,6 +204,8 @@ function buildProducts(payloads) {
       : numberOrNull(stock.available_stock ?? stock.available_quantity ?? stock.available_qty ?? stock.quantity_available
         ?? stock.qty_available ?? stock.current_stock ?? stock.stock_qty ?? stock.quantity ?? stock.stock ?? stock.total_stock);
     if (variantId && stockQuantity !== null) stockByVariant.set(variantId, stockQuantity);
+    const code = String(stock.variant_code || stock.sku || '').trim().toLowerCase();
+    if (code && stockQuantity !== null) stockByVariantCode.set(code, stockQuantity);
   }
 
   return [...byId.entries()].map(([id, product]) => {
@@ -170,10 +218,13 @@ function buildProducts(payloads) {
     }
     const variants = [...merged.values()].map(variant => {
       const variantId = idOf(variant.id);
-      const stock = variantId && stockByVariant.has(variantId)
-        ? stockByVariant.get(variantId)
-        : numberOrNull(variant.available_stock ?? variant.available_quantity ?? variant.available_qty ?? variant.quantity_available
-          ?? variant.qty_available ?? variant.current_stock ?? variant.stock_qty ?? variant.quantity ?? variant.stock ?? variant.total_stock);
+      const variantCode = String(variant.variant_code || variant.sku || '').trim().toLowerCase();
+      const stock = stockByVariantCode.has(variantCode)
+        ? stockByVariantCode.get(variantCode)
+        : variantId && stockByVariant.has(variantId)
+          ? stockByVariant.get(variantId)
+          : numberOrNull(variant.available_stock ?? variant.available_quantity ?? variant.available_qty ?? variant.quantity_available
+            ?? variant.qty_available ?? variant.current_stock ?? variant.stock_qty ?? variant.quantity ?? variant.stock ?? variant.total_stock);
       return { ...variant, _availableQuantity: Math.max(0, Math.floor(stock ?? 0)) };
     });
     return { ...product, id, variants };
@@ -206,14 +257,17 @@ async function syncAll(productsOnly = false) {
       throw new Error('Billing sync did not receive valid product and product variant collections; local catalog was left unchanged.');
     }
     const franchises = productsOnly ? [] : collection(payloads.franchises, 'franchises');
-    const result = { categories: 0, subcategories: 0, products: 0, variants: 0, productsDeactivated: 0, variantsDeactivated: 0, franchises: 0 };
+    const categorySnapshotAvailable = hasCollection(payloads.categories, 'category');
+    const subcategorySnapshotAvailable = hasCollection(payloads.subcategories, 'subcategory');
+    const result = { categories: 0, categoriesDeactivated: 0, subcategories: 0, subcategoriesDeactivated: 0, products: 0, variants: 0, productsDeactivated: 0, variantsDeactivated: 0, franchises: 0 };
     const stockWarning = payloads.stocks?.__warning;
     if (stockWarning) result.warnings = [stockWarning];
 
     await sequelize.transaction(async transaction => {
       const categoryMap = new Map();
+      const seenBillingCategoryIds = new Set();
       for (const source of categories) {
-        const billingId = idOf(source.id);
+        const billingId = idOf(source.id ?? source.category_id ?? source.categoryId);
         const name = source.name || source.category_name || source.categoryName;
         if (!billingId || !name) continue;
         let target = await Category.findOne({ where: { billingCategoryId: billingId }, transaction });
@@ -226,34 +280,72 @@ async function syncAll(productsOnly = false) {
           name,
           code_prefix: source.code_prefix || null,
           image: imageUrl(source.image),
-          status: source.status || 'Active',
+          status: variantStatus(source.status ?? source.is_active ?? source.isActive ?? source.active),
           billingCategoryId: billingId,
         };
         syncStep = `saving category ${billingId}`;
         if (target) await target.update(values, { transaction });
         else target = await Category.create(values, { transaction });
         categoryMap.set(billingId, target.id);
+        seenBillingCategoryIds.add(billingId);
         result.categories += 1;
       }
 
+      if (categorySnapshotAvailable) {
+        const localCategories = await Category.findAll({
+          where: { billingCategoryId: { [Op.ne]: null } },
+          attributes: ['id', 'billingCategoryId', 'status'],
+          transaction,
+        });
+        const removedCategoryIds = localCategories
+          .filter(category => !seenBillingCategoryIds.has(idOf(category.billingCategoryId)) && category.status !== 'Inactive')
+          .map(category => category.id);
+        if (removedCategoryIds.length) {
+          const [deactivated] = await Category.update({ status: 'Inactive' }, {
+            where: { id: { [Op.in]: removedCategoryIds } }, transaction,
+          });
+          result.categoriesDeactivated = deactivated;
+        }
+      }
+
       const subcategoryMap = new Map();
+      const billingSubcategoryIds = new Set();
       const billingCategoryIdsByLocalId = new Map([...categoryMap.entries()].map(([billingId, localId]) => [localId, billingId]));
       for (const source of subcategories) {
-        const billingId = idOf(source.id);
+        const billingId = idOf(source.id ?? source.subcategory_id ?? source.subcategoryId);
         const name = source.name || source.subcategory_name || source.sub_category_name || source.subcategoryName;
         if (!billingId || !name) continue;
         const rawCategoryId = billingReferenceId(source.category_id ?? source.categoryId ?? source.cat_id ?? source.category);
         const rawCategoryName = source.category_name ?? source.categoryName ?? source.category?.name ?? source.Category?.name;
-        const billingCategoryId = idOf(rawCategoryId) || idOf(categories.find(category => String(category.name || category.category_name || category.categoryName || '').trim().toLowerCase() === String(rawCategoryName || '').trim().toLowerCase())?.id);
+        const matchedCategory = categories.find(category => String(category.name || category.category_name || category.categoryName || '').trim().toLowerCase() === String(rawCategoryName || '').trim().toLowerCase());
+        const billingCategoryId = idOf(rawCategoryId) || idOf(matchedCategory?.id ?? matchedCategory?.category_id ?? matchedCategory?.categoryId);
         const categoryId = billingCategoryId ? categoryMap.get(billingCategoryId) : null;
         if (!categoryId) continue;
         let target = await SubCategory.findOne({ where: { billingSubcategoryId: billingId }, transaction });
         if (!target) target = await SubCategory.findOne({ where: { categoryId, name }, transaction });
-        const values = { name, categoryId, status: source.status || 'Active', billingSubcategoryId: billingId };
+        const values = { name, categoryId, status: variantStatus(source.status ?? source.is_active ?? source.isActive ?? source.active), billingSubcategoryId: billingId };
         if (target) await target.update(values, { transaction });
         else target = await SubCategory.create(values, { transaction });
         subcategoryMap.set(billingId, target.id);
+        billingSubcategoryIds.add(billingId);
         result.subcategories += 1;
+      }
+
+      if (categorySnapshotAvailable && subcategorySnapshotAvailable) {
+        const localSubcategories = await SubCategory.findAll({
+          where: { billingSubcategoryId: { [Op.ne]: null } },
+          attributes: ['id', 'billingSubcategoryId', 'status'],
+          transaction,
+        });
+        const removedSubcategoryIds = localSubcategories
+          .filter(subcategory => !billingSubcategoryIds.has(idOf(subcategory.billingSubcategoryId)) && subcategory.status !== 'Inactive')
+          .map(subcategory => subcategory.id);
+        if (removedSubcategoryIds.length) {
+          const [deactivated] = await SubCategory.update({ status: 'Inactive' }, {
+            where: { id: { [Op.in]: removedSubcategoryIds } }, transaction,
+          });
+          result.subcategoriesDeactivated = deactivated;
+        }
       }
 
       for (const source of products) {
@@ -272,25 +364,33 @@ async function syncAll(productsOnly = false) {
         const billingCategoryId = idOf(billingReferenceId(source.category_id ?? source.categoryId ?? source.category));
         const variants = source.variants || [];
         const salePrice = numberOrNull(source.franchise_price_final ?? source.prices?.franchise);
+        const retailPrice = numberOrNull(source.retail_price ?? source.prices?.retail);
+        const listedMrp = numberOrNull(source.mrp ?? source.prices?.mrp);
+        // Billing owns catalog data, not storefront photography. Product images
+        // remain sourced from Admin uploads; keep only our local upload paths.
+        const productMainImage = localUploadPath(target?.image);
         const productValues = {
           billingProductId: billingId,
-          categoryId: billingCategoryId ? (categoryMap.get(billingCategoryId) || target?.categoryId || null) : null,
+          categoryId: billingCategoryId
+            ? (categoryMap.get(billingCategoryId) || (categorySnapshotAvailable ? null : target?.categoryId || null))
+            : null,
           // Billing subcategory IDs belong to another database. Keep them in a
           // separate column and retain only a valid local subcategory FK here.
           billingSubcategoryId: idOf(billingReferenceId(source.subcategory_id ?? source.subcategoryId ?? source.subcategory)),
           subCategoryId: subcategoryMap.get(idOf(billingReferenceId(source.subcategory_id ?? source.subcategoryId ?? source.subcategory)))
-            || (target?.subCategoryId && billingCategoryIdsByLocalId.get(target.categoryId) === billingCategoryId ? target.subCategoryId : null),
+            || (!subcategorySnapshotAvailable && target?.subCategoryId && billingCategoryIdsByLocalId.get(target.categoryId) === billingCategoryId ? target.subCategoryId : null),
           productName: source.name,
           product_code: productCode,
           hsn_code: source.hsn_code || null,
           barcode: source.barcode || null,
           barcode_image: imageUrl(source.barcode_image),
-          mrp: salePrice ?? 0,
+          mrp: listedMrp > 0 ? listedMrp : retailPrice ?? salePrice ?? 0,
           salesPrice: salePrice ?? 0,
           franchise_price_final: salePrice,
-          mrpGstType: source.mrp_gst_type || source.franchise_gst_type || target?.mrpGstType || null,
-          // Product images belong to this storefront; never replace them with Billing images.
-          image: localUploadPath(target?.image),
+          // GST inclusion is a storefront/Admin setting. Billing catalog refreshes
+          // must not reset the value selected in Admin.
+          mrpGstType: target?.mrpGstType || 'With GST',
+          image: productMainImage,
           shortDescription: source.description || target?.shortDescription || null,
           longDescription: source.description || target?.longDescription || null,
           status: source.status || 'Active',
@@ -300,6 +400,15 @@ async function syncAll(productsOnly = false) {
         if (target) await target.update(productValues, { transaction });
         else target = await Product.create(productValues, { transaction });
         result.products += 1;
+
+        const existingImages = await ProductImage.findAll({ where: { productId: target.id }, transaction });
+        const nonAdminImages = existingImages.filter(image => !localUploadPath(image.url));
+        if (nonAdminImages.length) {
+          await ProductImage.destroy({
+            where: { id: { [Op.in]: nonAdminImages.map(image => image.id) } },
+            transaction,
+          });
+        }
 
         for (const sourceVariant of variants) {
           const variantBillingId = idOf(sourceVariant.id);
@@ -312,6 +421,10 @@ async function syncAll(productsOnly = false) {
               transaction,
             });
           }
+          const retainedVariantImages = (Array.isArray(variant?.images) ? variant.images : (variant?.image ? [variant.image] : []))
+            .map(localUploadPath)
+            .filter(Boolean);
+          const variantImages = [...new Set(retainedVariantImages)];
           const variantValues = {
             billingVariantId: variantBillingId,
             billingData: {
@@ -330,17 +443,17 @@ async function syncAll(productsOnly = false) {
             weight: sourceVariant.weight || null,
             volume: sourceVariant.volume || null,
             nos: sourceVariant.nos || null,
-            mrp: numberOrNull(sourceVariant.franchise_price_final ?? sourceVariant.prices?.franchise) ?? salePrice ?? 0,
+            mrp: numberOrNull(sourceVariant.mrp ?? sourceVariant.prices?.mrp) ?? listedMrp ?? retailPrice ?? salePrice ?? 0,
             salesPrice: numberOrNull(sourceVariant.franchise_price_final ?? sourceVariant.prices?.franchise) ?? salePrice ?? 0,
             franchise_price_final: numberOrNull(sourceVariant.franchise_price_final ?? sourceVariant.prices?.franchise) ?? salePrice,
             stock: sourceVariant._availableQuantity,
-            // Variant images are also uploaded and managed locally in this app.
-            image: localUploadPath(variant?.image),
-            wholesale_price: numberOrNull(sourceVariant.wholesale_price),
+            image: variantImages[0] || null,
+            images: variantImages,
+            wholesale_price: numberOrNull(sourceVariant.wholesale_price ?? sourceVariant.prices?.wholesale),
             wholesale_discount_type: sourceVariant.wholesale_discount_type || null,
             wholesale_discount_value: numberOrNull(sourceVariant.wholesale_discount_value),
             wholesale_final_price: numberOrNull(sourceVariant.wholesale_final_price),
-            retail_price: numberOrNull(sourceVariant.retail_price),
+            retail_price: numberOrNull(sourceVariant.retail_price ?? sourceVariant.prices?.retail),
             retail_discount_type: sourceVariant.retail_discount_type || null,
             retail_discount_value: numberOrNull(sourceVariant.retail_discount_value),
             retail_final_price: numberOrNull(sourceVariant.retail_final_price),

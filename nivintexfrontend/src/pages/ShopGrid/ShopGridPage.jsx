@@ -26,7 +26,8 @@ const billingAvailableStock = variant => {
 const syncProductsWithBillingStock = (products, billingProducts, stockByVariant = null) => {
   const productRows = Array.isArray(billingProducts) ? billingProducts : [];
   const billingVariants = productRows.flatMap(row => row?.variants || row?.product_variants || row?.product_varients || []);
-  const variantsById = new Map(billingVariants.map(variant => [String(variant.id ?? variant.product_variant_id ?? variant.variant_id), variant]));
+    const variantsById = new Map(billingVariants.map(variant => [String(variant.id ?? variant.product_variant_id ?? variant.variant_id), variant]));
+    const variantsByCode = new Map(billingVariants.flatMap(variant => [variant.variant_code, variant.sku, variant.barcode].filter(Boolean).map(code => [String(code).toLowerCase(), variant])));
   const billingProductsById = new Map(productRows.map(row => [String(row.id ?? row.product_id), row]));
 
   return products.map(product => {
@@ -35,8 +36,10 @@ const syncProductsWithBillingStock = (products, billingProducts, stockByVariant 
     const localVariants = product.Variants || product.variants || [];
     const sourceVariants = localVariants.length ? localVariants : (billingProduct?.variants || billingProduct?.product_variants || billingProduct?.product_varients || []);
     const mappedVariants = sourceVariants.map(local => {
-      const billingId = local.billingVariantId || local.billing_variant_id || local.id;
-      const live = variantsById.get(String(billingId));
+      const billingId = local.billingVariantId || local.billing_variant_id;
+      const live = variantsById.get(String(billingId || ''))
+        || variantsByCode.get(String(local.variant_code || local.sku || local.barcode || '').toLowerCase())
+        || (!billingId && !local.variant_code && !local.sku && local.id ? variantsById.get(String(local.id)) : null);
       const listQuantity = billingAvailableStock(live);
       const hasStockRow = stockByVariant?.has(String(billingId));
       const dedicatedQuantity = stockByVariant === null ? null : hasStockRow ? stockByVariant.get(String(billingId)) : 0;
@@ -102,14 +105,14 @@ const SidebarThumb = ({ src, alt, active }) => {
 };
 
 // ── Stars ────────────────────────────────────────────────────────
-const Stars = ({ filled = 4 }) => (
-  <div className="star">
-    {[...Array(5)].map((_, i) => (
+const Stars = ({ filled = 0, count = 0 }) => (
+  <div className="star" aria-label={count > 0 ? `Rated ${filled} out of 5 from ${count} reviews` : 'No reviews yet'}>
+    {count > 0 ? [...Array(5)].map((_, i) => (
       <i key={i}
         className={i < filled ? 'fa-solid fa-star' : 'fa-regular fa-star'}
         style={{ color: ACCENT, fontSize: '12px' }}
       />
-    ))}
+    )) : <span style={{ color: '#777', fontFamily: F.sub, fontSize: 11 }}>No reviews yet</span>}
   </div>
 );
 
@@ -141,7 +144,7 @@ const qvStyles = `
     border-radius: 16px;
     width: 90%;
     max-width: 900px;
-    max-height: 85vh;
+    max-height: 90vh;
     overflow-y: auto;
     border: 1px solid #E0E8D8;
     position: relative;
@@ -238,6 +241,13 @@ const qvStyles = `
     border-color: #0f5447;
     color: #0f5447;
   }
+  .qv-size-pill:disabled, .qv-color-pill:disabled, .qv-fabric-pill:disabled {
+    color: #aaa;
+    background: #f5f5f5;
+    border-color: #e6e6e6;
+    text-decoration: line-through;
+    cursor: not-allowed;
+  }
   .custom-range-slider::-webkit-slider-thumb {
     appearance: none;
     pointer-events: auto;
@@ -263,9 +273,9 @@ const qvStyles = `
   }
   @media (max-width: 768px) {
     .qv-content {
-      padding: 20px 16px;
-      width: 95%;
-      max-height: 90vh;
+      padding: 28px 18px 18px;
+      width: min(95%, 520px);
+      max-height: 92vh;
       border-radius: 12px;
     }
     .qv-close-btn {
@@ -315,14 +325,19 @@ export default function ShopGridPage({ saleOnly = false }) {
     const params = new URLSearchParams(window.location.search);
     return params.get('search') || params.get('q') || sessionStorage.getItem('shopSearchQuery') || '';
   });
+  const initialSort = new URLSearchParams(window.location.search).get('sort') || 'default';
+  const [sortBy, setSortBy] = useState(initialSort);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const q = params.get('search') || params.get('q') || sessionStorage.getItem('shopSearchQuery') || '';
+    const requestedSort = params.get('sort') || 'default';
+    setSortBy(requestedSort);
     if (q !== searchTerm) {
       setSearchTerm(q);
       setPage(1);
     }
+    if (requestedSort !== sortBy) setPage(1);
   }, [location.search]);
 
   const goToProduct = (product) => {
@@ -331,7 +346,6 @@ export default function ShopGridPage({ saleOnly = false }) {
   };
 
   const [activeTab, setActiveTab]         = useState('grid');
-  const [sortBy, setSortBy]               = useState('default');
   const [priceMin, setPriceMin]           = useState(0);
   const [priceMax, setPriceMax]           = useState(10000);
   const [showFullDesc, setShowFullDesc]   = useState(false);
@@ -365,6 +379,7 @@ export default function ShopGridPage({ saleOnly = false }) {
   const [combosLoading, setCombosLoading]             = useState(false);
   const [selectedComboRootId, setSelectedComboRootId] = useState('all');
   const [addedCombosFeedback, setAddedCombosFeedback] = useState({});
+  const [addingProductId, setAddingProductId] = useState(null);
 
   const { addToCart, toggleWishlist: ctxToggleWishlist, isWishlisted, showToast } = useShop();
 
@@ -374,6 +389,19 @@ export default function ShopGridPage({ saleOnly = false }) {
   const [qvColor, setQvColor]                   = useState('');
   const [qvFabric, setQvFabric]                 = useState('');
   const [qvImgIdx, setQvImgIdx]                 = useState(0);
+  const [qvQty, setQvQty]                       = useState(1);
+  const [qvVariantImgIdx, setQvVariantImgIdx]   = useState(0);
+  const [addedCartSelection, setAddedCartSelection] = useState(null);
+  const scrollToProductListing = () => {
+    const listing = document.getElementById('shop-product-listing');
+    if (!listing) return;
+    const top = listing.getBoundingClientRect().top + window.scrollY - 100;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  };
+  const changePage = (nextPage) => {
+    setPage(nextPage);
+    requestAnimationFrame(scrollToProductListing);
+  };
 
   const handleOpenQuickView = (p) => {
     setQuickViewProduct(p);
@@ -386,12 +414,16 @@ export default function ShopGridPage({ saleOnly = false }) {
       }
       return [];
     };
+    const variants = p.Variants || p.variants || [];
+    const firstAvailable = variants.find(variant => variant.billingStockVerified && Number(variant.stock) > 0) || variants[0];
     const szs = parseField(p.sizes);
     const cls = parseField(p.colors);
     const fbs = parseField(p.fabrics);
-    setQvSize(szs.length > 0 ? szs[0] : '');
-    setQvColor(cls.length > 0 ? cls[0] : '');
-    setQvFabric(fbs.length > 0 ? fbs[0] : '');
+    setQvSize(firstAvailable?.size || (szs.length ? szs[0] : ''));
+    setQvColor(firstAvailable?.color || (cls.length ? cls[0] : ''));
+    setQvFabric(firstAvailable?.fabric || (fbs.length ? fbs[0] : ''));
+    setQvQty(1);
+    setQvVariantImgIdx(0);
   };
 
   const addComboToCart = async (childCombo) => {
@@ -463,7 +495,14 @@ export default function ShopGridPage({ saleOnly = false }) {
             .filter(price => Number.isFinite(price) && price > 0);
           const salesPrice = validVariantFinals.length ? Math.min(...validVariantFinals) : productFinal;
           const mrp = salesPrice;
-          return { ...p, franchise_price_final: salesPrice, mrp, salesPrice };
+          return {
+            ...p,
+            franchise_price_final: salesPrice,
+            mrp,
+            salesPrice,
+            billingStockVerified: true,
+            Variants: (p.Variants || []).map(v => ({ ...v, billingStockVerified: true }))
+          };
         });
         // Render the local catalog immediately; live Billing lookups can be slow.
         setProducts(processed);
@@ -666,6 +705,10 @@ export default function ShopGridPage({ saleOnly = false }) {
   if (sortBy === 'price-desc') filtered = [...filtered].sort((a, b) => Number(b.franchise_price_final ?? b.salesPrice ?? b.mrp ?? 0) - Number(a.franchise_price_final ?? a.salesPrice ?? a.mrp ?? 0));
   if (sortBy === 'name')       filtered = [...filtered].sort((a, b) => (a.productName || '').localeCompare(b.productName || ''));
   if (sortBy === 'newest')     filtered = [...filtered].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  if (sortBy === 'best-sellers') filtered = filtered.filter(product => product.isBestSeller === true || product.isBestSeller === 1 || product.isBestSeller === 'true');
+  if (sortBy === 'new-arrivals') filtered = filtered
+    .filter(product => product.isNewArrival === true || product.isNewArrival === 1 || product.isNewArrival === 'true')
+    .sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0));
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paginated  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -732,7 +775,12 @@ export default function ShopGridPage({ saleOnly = false }) {
     return categories.find(c => String(c.id) === String(p.categoryId || p.category_id))?.name || '';
   };
 
-  const getAvgRating = (p) => Math.round(Number(p.avgRating || p.rating || 4));
+  const getReviewSummary = (p) => {
+    const reviews = Array.isArray(p.Reviews) ? p.Reviews : Array.isArray(p.reviews) ? p.reviews : [];
+    const count = Number(p.reviewCount ?? p.review_count ?? p.reviewsCount ?? reviews.length) || 0;
+    const average = Number(p.avgRating ?? p.avg_rating ?? p.rating ?? 0) || 0;
+    return { count, average: Math.round(average) };
+  };
 
   // ── Calculate active children combos for storefront ─────────────
   const activeRoots = storefrontCombos.filter(root =>
@@ -1075,16 +1123,16 @@ export default function ShopGridPage({ saleOnly = false }) {
       <div className="mouse-cursor cursor-inner" />
 
       {/* ── Page Header / Banner ─────────────────────────────────── */}
-      <div className="shop-page-header" style={{ background: '#F4F8F0', padding: '70px 0 40px' }}>
+      <div className="shop-page-header" style={{ background: '#F4F8F0', padding: '24px 0 28px' }}>
         <div className="container-fluid shop-page-container">
-          <p style={{ fontSize: 14, color: '#4a5a44', marginBottom: 8, fontFamily: F.sub, letterSpacing: '1px' }}>
+          <p style={{ fontSize: 14, color: '#4a5a44', margin: '0 0 10px', fontFamily: F.sub, letterSpacing: '1px', lineHeight: 1.4 }}>
            <span style={{ color: ACCENT, fontWeight: 700, cursor: 'pointer' }} onClick={() => navigate('/home')}>Home</span> &nbsp;/&nbsp; {saleOnly ? (saleViewMode === 'combos' ? 'Combo Deals' : 'Sale') : (activeCategoryObj ? activeCategoryObj.name : 'Shop')}
           </p>
-          <h1 style={{ fontFamily: F.main, fontWeight: 400, fontSize: 'clamp(24px, 5vw, 44px)', color: BRAND, marginBottom: 16, letterSpacing: 2 }}>
+          <h1 style={{ fontFamily: F.main, fontWeight: 400, fontSize: 'clamp(24px, 5vw, 44px)', color: BRAND, margin: '0 0 8px', letterSpacing: 2, lineHeight: 1.15 }}>
             {saleOnly ? (saleViewMode === 'combos' ? 'Combo Deals' : 'Sale Collection') : (activeSubCategoryObj?.name || (activeCategoryObj ? activeCategoryObj.name : 'FASHION AURA'))}
           </h1>
           <p style={{ 
-            fontSize: 17, color: '#4a5a44', maxWidth: 800, lineHeight: 1.8, fontFamily: F.sub, fontWeight: 300,
+            fontSize: 17, color: '#4a5a44', maxWidth: 800, lineHeight: 1.6, fontFamily: F.sub, fontWeight: 300,
             display: showFullDesc ? 'block' : '-webkit-box', WebkitLineClamp: showFullDesc ? 'unset' : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', margin: 0 
           }}>
             {saleOnly ? (
@@ -1115,9 +1163,14 @@ export default function ShopGridPage({ saleOnly = false }) {
               )
             )}
           </p>
-          {activeCategoryObj && !activeCategoryObj.description && !saleOnly && (
-             <p onClick={() => setShowFullDesc(!showFullDesc)} style={{ fontSize: 15, textDecoration: 'underline', cursor: 'pointer', fontFamily: F.sub, marginTop: 10, color: BRAND }}>{showFullDesc ? 'Show less' : 'Show more'}</p>
-          )}
+          <button
+            type="button"
+            aria-expanded={showFullDesc}
+            onClick={() => setShowFullDesc(current => !current)}
+            style={{ display: 'block', border: 0, padding: 0, background: 'none', fontSize: 14, textDecoration: 'underline', cursor: 'pointer', fontFamily: F.sub, margin: '4px 0 0', color: BRAND }}
+          >
+            {showFullDesc ? 'Show less' : 'Show more'}
+          </button>
         </div>
       </div>
 
@@ -1138,7 +1191,7 @@ export default function ShopGridPage({ saleOnly = false }) {
 
               {/* ── Active Filters ── */}
               {(selectedSizes.length > 0 || priceMin > 0 || priceMax < (maxComputedValue || 1) || activeCategoryId !== 'all' || Boolean(searchTerm) || (saleOnly && selectedComboRootId !== 'all')) && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+                <div className="shop-active-filters" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginBottom: 24 }}>
                   {searchTerm && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0f5447', padding: '6px 14px', borderRadius: 20, fontSize: 13, color: '#ffffff', fontFamily: F.sub }}>
                       <span>Search: <strong>"{searchTerm}"</strong></span>
@@ -1282,6 +1335,8 @@ export default function ShopGridPage({ saleOnly = false }) {
                       <option value="price-desc">Price: High to Low</option>
                       <option value="name">Name: A to Z</option>
                       <option value="newest">Newest First</option>
+                      <option value="best-sellers">Best Sellers</option>
+                      <option value="new-arrivals">New Arrivals</option>
                     </select>
                   </div>
                 </div>
@@ -1313,7 +1368,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                   </button>
                 </div>
               ) : (
-                <div className={activeTab === 'grid' ? 'row g-3' : ''}>
+                <div id="shop-product-listing" className={activeTab === 'grid' ? 'row g-3' : ''}>
                   {saleViewMode === 'combos' ? (
                     paginatedChildren.map((child) => {
                       const childImgSrc = child.image ? getImageUrl(child.image) : null;
@@ -1488,8 +1543,9 @@ export default function ShopGridPage({ saleOnly = false }) {
                       const price    = formatPrice(p);
                       const oldPrice = formatOldPrice(p);
                       const catName  = getCategoryName(p);
-                      const rating   = getAvgRating(p);
-                      const wished   = isWishlisted(p.id);
+                      const ratingSummary = getReviewSummary(p);
+                      const wishlistVariant = (p.Variants || p.variants || [])[0] || null;
+                      const wished   = isWishlisted(p.id, wishlistVariant?.id || null);
                       const mrp      = Number(p.mrp        ?? 0);
                       const sale     = Number(p.franchise_price_final ?? p.salesPrice ?? mrp);
                       const discount = mrp > sale ? Math.round(((mrp - sale) / mrp) * 100) : 0;
@@ -1509,7 +1565,12 @@ export default function ShopGridPage({ saleOnly = false }) {
                       const wishItem = {
                         id:       p.id,
                         name:     p.productName,
-                        price:    Number(p.franchise_price_final ?? p.salesPrice ?? p.mrp ?? 0),
+                        price:    Number(wishlistVariant?.franchise_price_final ?? p.franchise_price_final ?? p.salesPrice ?? p.mrp ?? 0),
+                        variantId: wishlistVariant?.id || null,
+                        billingVariantId: wishlistVariant?.billingVariantId || wishlistVariant?.billing_variant_id || null,
+                        size: wishlistVariant?.size || '',
+                        color: wishlistVariant?.color || '',
+                        fabric: wishlistVariant?.fabric || '',
                         subtitle: catName,
                         image:    imgSrc,
                         isBuyOneGetOne: !!p.isBuyOneGetOne,
@@ -1566,15 +1627,15 @@ export default function ShopGridPage({ saleOnly = false }) {
                                 </button>
                                 <button
                                   className="product-action-btn"
-                                  onClick={(e) => { e.stopPropagation(); if (p.billingStockVerified && p.stock > 0) addToCart({ ...cartItem, qty: 1 }); }}
-                                  disabled={!p.billingStockVerified || p.stock <= 0}
+                                  onClick={(e) => { e.stopPropagation(); if (!p.billingStockVerified || p.stock <= 0) return; handleOpenQuickView(p); }}
+                                  disabled={!p.billingStockVerified || p.stock <= 0 || addingProductId === p.id}
                                   aria-label={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
-                                  title={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
+                                  title={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : (p.Variants || []).length > 1 ? 'Choose size and options' : 'Choose options and add to cart'}
                                   style={{ opacity: !p.billingStockVerified || p.stock <= 0 ? 0.45 : 1, cursor: !p.billingStockVerified || p.stock <= 0 ? 'not-allowed' : 'pointer' }}
                                   onMouseEnter={e => { e.currentTarget.style.background = BRAND; e.currentTarget.style.color = '#fff'; }}
                                   onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#333'; }}
                                 >
-                                  <i className="fa-solid fa-cart-plus" style={{ fontSize: 15 }} />
+                                  <i className={`fa-solid ${addingProductId === p.id ? 'fa-spinner fa-spin' : 'fa-cart-plus'}`} style={{ fontSize: 15 }} />
                                 </button>
                               </div>
                             </div>
@@ -1599,6 +1660,13 @@ export default function ShopGridPage({ saleOnly = false }) {
                               >
                                 {p.productName}
                               </h5>
+
+          {(p.Variants || []).length > 0 && (
+                                <button type="button" onClick={e => { e.stopPropagation(); handleOpenQuickView(p); }} style={{ border: 0, background: 'transparent', color: ACCENT, padding: 0, margin: '0 0 8px', fontFamily: F.sub, fontSize: 12, textAlign: 'left', cursor: 'pointer' }}>
+                                  <i className="fa-solid fa-layer-group" style={{ marginRight: 6 }} />
+                                  {(p.Variants || []).length === 1 ? '1 option available' : `Choose from ${(p.Variants || []).length} options`}
+                                </button>
+                              )}
 
                               {p.shortDescription && (
                                 <p
@@ -1680,10 +1748,10 @@ export default function ShopGridPage({ saleOnly = false }) {
                                 <i className={wished ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{ fontSize: 14 }} />
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); if (p.billingStockVerified && p.stock > 0) addToCart({ ...cartItem, qty: 1 }); }}
-                                disabled={!p.billingStockVerified || p.stock <= 0}
+                                onClick={(e) => { e.stopPropagation(); if (!p.billingStockVerified || p.stock <= 0) return; handleOpenQuickView(p); }}
+                                disabled={!p.billingStockVerified || p.stock <= 0 || addingProductId === p.id}
                                 aria-label={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
-                                title={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
+                                title={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : (p.Variants || []).length > 1 ? 'Choose size and options' : 'Choose options and add to cart'}
                                 style={{
                                   width: 32, height: 32, borderRadius: '50%', background: '#F4F8F0', color: BRAND, border: 'none',
                                   opacity: !p.billingStockVerified || p.stock <= 0 ? 0.45 : 1,
@@ -1693,7 +1761,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                                 onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.background = '#EAF0E2'; }}
                                 onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = '#F4F8F0'; }}
                               >
-                                <i className="fa-solid fa-cart-plus" style={{ fontSize: 14 }} />
+                                <i className={`fa-solid ${addingProductId === p.id ? 'fa-spinner fa-spin' : 'fa-cart-plus'}`} style={{ fontSize: 14 }} />
                               </button>
                             </div>
                           </div>
@@ -1707,17 +1775,17 @@ export default function ShopGridPage({ saleOnly = false }) {
               {/* Pagination */}
               {(saleViewMode === 'combos' ? totalComboPages : totalPages) > 1 && (
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 40 }}>
-                  <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  <button onClick={() => changePage(Math.max(1, page - 1))} disabled={page === 1}
                     style={{ width: 38, height: 38, border: '1px solid #E0E8D8', borderRadius: 8, background: page === 1 ? '#F4F8F0' : '#fff', color: page === 1 ? '#ccc' : BRAND, cursor: page === 1 ? 'default' : 'pointer', fontSize: 14 }}>
                     <i className="fa-solid fa-chevron-left" />
                   </button>
                   {[...Array(saleViewMode === 'combos' ? totalComboPages : totalPages)].map((_, i) => (
-                    <button key={i} onClick={() => setPage(i + 1)}
+                    <button key={i} onClick={() => changePage(i + 1)}
                       style={{ width: 38, height: 38, border: `1px solid ${page === i + 1 ? BRAND : '#E0E8D8'}`, borderRadius: 8, background: page === i + 1 ? BRAND : '#fff', color: page === i + 1 ? '#fff' : '#4a5a44', cursor: 'pointer', fontWeight: page === i + 1 ? 700 : 400, fontFamily: F.sub }}>
                       {i + 1}
                     </button>
                   ))}
-                  <button onClick={() => setPage(p => Math.min(saleViewMode === 'combos' ? totalComboPages : totalPages, p + 1))} disabled={page === (saleViewMode === 'combos' ? totalComboPages : totalPages)}
+                  <button onClick={() => changePage(Math.min(saleViewMode === 'combos' ? totalComboPages : totalPages, page + 1))} disabled={page === (saleViewMode === 'combos' ? totalComboPages : totalPages)}
                     style={{ width: 38, height: 38, border: '1px solid #E0E8D8', borderRadius: 8, background: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? '#F4F8F0' : '#fff', color: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? '#ccc' : BRAND, cursor: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? 'default' : 'pointer', fontSize: 14 }}>
                     <i className="fa-solid fa-chevron-right" />
                   </button>
@@ -1737,6 +1805,13 @@ export default function ShopGridPage({ saleOnly = false }) {
               <h5 style={{ margin: 0, color: BRAND, fontFamily: F.main, fontSize: 14, letterSpacing: '2px', textTransform: 'uppercase', fontWeight: 600 }}>
                 Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
               </h5>
+
+                            {(p.Variants || []).length > 0 && (
+                              <button type="button" onClick={e => { e.stopPropagation(); handleOpenQuickView(p); }} style={{ border: 0, background: 'transparent', color: ACCENT, padding: 0, margin: '0 0 8px', fontFamily: F.sub, fontSize: 12, cursor: 'pointer' }}>
+                                <i className="fa-solid fa-layer-group" style={{ marginRight: 6 }} />
+                                {(p.Variants || []).length === 1 ? '1 option available' : `Choose from ${(p.Variants || []).length} options`}
+                              </button>
+                            )}
               <button onClick={() => setMobileFiltersOpen(false)} style={{ background: 'none', border: 'none', fontSize: 18, color: BRAND, cursor: 'pointer', padding: 4 }}>
                 <i className="fa-solid fa-xmark" />
               </button>
@@ -1764,6 +1839,7 @@ export default function ShopGridPage({ saleOnly = false }) {
       {/* ── Quick View Modal ── */}
       {quickViewProduct && (() => {
         const p = quickViewProduct;
+        const ratingSummary = getReviewSummary(p);
         const parseField = (val) => {
           if (!val) return [];
           if (Array.isArray(val)) return val;
@@ -1784,22 +1860,43 @@ export default function ShopGridPage({ saleOnly = false }) {
           });
         }
         
-        const selectedVariant = (p.Variants || p.variants || []).find(v => 
+        const allVariants = p.Variants || p.variants || [];
+        const selectedVariant = allVariants.find(v => 
           (!qvSize || v.size === qvSize) && 
           (!qvColor || v.color === qvColor) && 
           (!qvFabric || v.fabric === qvFabric)
-        );
+        ) || (allVariants.length === 1 ? allVariants[0] : null);
+        const selectionKey = `${p.id}:${selectedVariant?.id || selectedVariant?.billingVariantId || `${qvSize}|${qvColor}|${qvFabric}`}`;
+        const isAddedToCart = addedCartSelection === selectionKey;
         const selectedVariantStock = selectedVariant ? Number(selectedVariant.stock) : Number(p.stock);
         const selectedVariantStockVerified = selectedVariant ? selectedVariant.billingStockVerified : p.billingStockVerified;
+        const variantValue = (variant, key) => String(variant?.[key] || '').trim();
+        const availableForValue = (key, value) => allVariants.some(variant =>
+          variantValue(variant, key) === String(value || '').trim()
+          && (!qvSize || key === 'size' || variantValue(variant, 'size') === qvSize)
+          && (!qvColor || key === 'color' || variantValue(variant, 'color') === qvColor)
+          && (!qvFabric || key === 'fabric' || variantValue(variant, 'fabric') === qvFabric)
+          && variant.billingStockVerified && Number(variant.stock) > 0
+        );
+        const availableSizes = [...new Set(allVariants.map(variant => variant.size).filter(Boolean))];
+        const availableColors = [...new Set(allVariants.map(variant => variant.color).filter(Boolean))];
+        const availableFabrics = [...new Set(allVariants.map(variant => variant.fabric).filter(Boolean))];
         
-        const currentQvImg = (selectedVariant?.image)
-          ? getImageUrl(selectedVariant.image)
-          : (qvImages[qvImgIdx] ? getImageUrl(qvImages[qvImgIdx]) : null);
+        const variantImages = [...new Set([...allVariants.flatMap(variant => {
+          const images = Array.isArray(variant.images) ? variant.images : typeof variant.images === 'string'
+            ? (() => { try { const parsed = JSON.parse(variant.images); return Array.isArray(parsed) ? parsed : []; } catch { return []; } })()
+            : [];
+          return [variant.image, ...images].filter(Boolean);
+        }), selectedVariant?.image].map(image => typeof image === 'string' ? image : image?.url || image?.path).filter(Boolean))];
+        const galleryImages = [...new Set([...qvImages, ...variantImages])];
+        const currentQvImg = qvVariantImgIdx > 0 && variantImages[qvVariantImgIdx - 1]
+          ? getImageUrl(variantImages[qvVariantImgIdx - 1])
+          : (selectedVariant?.image ? getImageUrl(selectedVariant.image) : qvImages[qvImgIdx] ? getImageUrl(qvImages[qvImgIdx]) : null);
         const variantFinal = Number(selectedVariant?.franchise_price_final);
         const salePrice = variantFinal > 0 ? variantFinal : Number(p.franchise_price_final || p.salesPrice || 0);
         const mrpPrice = Number(p.mrp || 0);
         const discount = mrpPrice > salePrice ? Math.round(((mrpPrice - salePrice) / mrpPrice) * 100) : 0;
-        const wished = isWishlisted(p.id);
+        const wished = isWishlisted(p.id, selectedVariant?.id || null);
         const catName = getCategoryName(p);
         
         // Item structures for Cart & Wishlist
@@ -1808,13 +1905,14 @@ export default function ShopGridPage({ saleOnly = false }) {
           name: p.productName,
           price: salePrice,
           variantId: selectedVariant?.id || null,
-          billingVariantId: selectedVariant?.billingVariantId || null,
+          billingVariantId: selectedVariant?.billingVariantId || selectedVariant?.billing_variant_id || null,
           billingProductId: p.billingProductId || p.billing_product_id || null,
           subtitle: catName,
           image: p.image ? getImageUrl(p.image) : null,
           size: qvSize,
           color: qvColor,
           fabric: qvFabric,
+          qty: qvQty,
           isBuyOneGetOne: !!p.isBuyOneGetOne,
         };
         
@@ -1822,14 +1920,19 @@ export default function ShopGridPage({ saleOnly = false }) {
           id: p.id,
           name: p.productName,
           price: salePrice,
+          variantId: selectedVariant?.id || null,
+          billingVariantId: selectedVariant?.billingVariantId || selectedVariant?.billing_variant_id || null,
           subtitle: catName,
           image: p.image ? getImageUrl(p.image) : null,
+          size: qvSize,
+          color: qvColor,
+          fabric: qvFabric,
           isBuyOneGetOne: !!p.isBuyOneGetOne,
         };
 
         return (
           <div className="qv-overlay" onClick={() => setQuickViewProduct(null)}>
-            <div className="qv-content" onClick={e => e.stopPropagation()}>
+            <div className="qv-content qv-picker-content" onClick={e => e.stopPropagation()}>
               <button className="qv-close-btn" onClick={() => setQuickViewProduct(null)}>
                 <i className="fa-solid fa-xmark" />
               </button>
@@ -1845,18 +1948,32 @@ export default function ShopGridPage({ saleOnly = false }) {
                     )}
                   </div>
                   
-                  {/* Thumbnails */}
-                  {qvImages.length > 1 && (
-                    <div className="d-flex gap-2 flex-wrap">
-                      {qvImages.map((img, idx) => (
-                        <img
-                          key={idx}
-                          src={getImageUrl(img)}
-                          alt=""
-                          className={`qv-thumb${qvImgIdx === idx ? ' active' : ''}`}
-                          onClick={() => setQvImgIdx(idx)}
-                        />
-                      ))}
+                  {/* Product and variant images */}
+                  {galleryImages.length > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+                      <button type="button" aria-label="Scroll images left" onClick={e => e.currentTarget.nextElementSibling.scrollBy({ left: -180, behavior: 'smooth' })} style={{ flex: '0 0 30px', height: 34, border: '1px solid #E0E8D8', borderRadius: 6, background: '#fff', color: BRAND }}>
+                        <i className="fa-solid fa-chevron-left" />
+                      </button>
+                      <div className="qv-gallery-carousel" style={{ display: 'flex', gap: 8, overflowX: 'auto', scrollBehavior: 'smooth', scrollbarWidth: 'thin', flex: 1, minWidth: 0, padding: '2px 0 8px' }}>
+                        {galleryImages.map((img, idx) => {
+                          const isVariantImage = idx >= qvImages.length;
+                          const variantIndex = idx - qvImages.length;
+                          const active = isVariantImage
+                            ? qvVariantImgIdx === variantIndex + 1
+                            : qvVariantImgIdx === 0 && qvImgIdx === idx;
+                          return (
+                            <button type="button" key={`${img}-${idx}`} aria-label={`Show product image ${idx + 1}`} onClick={() => {
+                              if (isVariantImage) setQvVariantImgIdx(variantIndex + 1);
+                              else { setQvVariantImgIdx(0); setQvImgIdx(idx); }
+                            }} style={{ padding: 0, border: `2px solid ${active ? ACCENT : '#E0E8D8'}`, borderRadius: 7, overflow: 'hidden', background: '#fff', cursor: 'pointer', flex: '0 0 60px', height: 68 }}>
+                              <img src={getImageUrl(img)} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button type="button" aria-label="Scroll images right" onClick={e => e.currentTarget.previousElementSibling.scrollBy({ left: 180, behavior: 'smooth' })} style={{ flex: '0 0 30px', height: 34, border: '1px solid #E0E8D8', borderRadius: 6, background: '#fff', color: BRAND }}>
+                        <i className="fa-solid fa-chevron-right" />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1878,10 +1995,12 @@ export default function ShopGridPage({ saleOnly = false }) {
                       {p.productName}
                     </h3>
                     
-                    {/* Rating */}
-                    <div style={{ marginBottom: 16 }}>
-                      <Stars filled={getAvgRating(p)} />
-                    </div>
+                    {/* Hide ratings until the product has at least one review. */}
+                    {ratingSummary.count > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <Stars filled={ratingSummary.average} count={ratingSummary.count} />
+                      </div>
+                    )}
                     
                     {/* Pricing */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -1914,12 +2033,12 @@ export default function ShopGridPage({ saleOnly = false }) {
                     )}
                     
                     {/* Options: Sizes */}
-                    {sizes.length > 0 && (
+                    {availableSizes.length > 0 && (
                       <div style={{ marginBottom: 16 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: BRAND, display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '1px', fontFamily: F.main }}>Size</span>
                         <div className="d-flex gap-2 flex-wrap">
-                          {sizes.map(s => (
-                            <button key={s} className={`qv-size-pill${qvSize === s ? ' active' : ''}`} onClick={() => setQvSize(s)}>
+                          {availableSizes.map(s => (
+                            <button key={s} disabled={!availableForValue('size', s)} className={`qv-size-pill${qvSize === s ? ' active' : ''}`} onClick={() => setQvSize(s)}>
                               {s}
                             </button>
                           ))}
@@ -1928,12 +2047,12 @@ export default function ShopGridPage({ saleOnly = false }) {
                     )}
 
                     {/* Options: Colors */}
-                    {colors.length > 0 && (
+                    {availableColors.length > 0 && (
                       <div style={{ marginBottom: 16 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: BRAND, display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '1px', fontFamily: F.main }}>Color</span>
                         <div className="d-flex gap-2 flex-wrap">
-                          {colors.map(c => (
-                            <button key={c} className={`qv-color-pill${qvColor === c ? ' active' : ''}`} onClick={() => setQvColor(c)}>
+                          {availableColors.map(c => (
+                            <button key={c} disabled={!availableForValue('color', c)} className={`qv-color-pill${qvColor === c ? ' active' : ''}`} onClick={() => setQvColor(c)}>
                               {c}
                             </button>
                           ))}
@@ -1942,12 +2061,12 @@ export default function ShopGridPage({ saleOnly = false }) {
                     )}
 
                     {/* Options: Fabrics */}
-                    {fabrics.length > 0 && (
+                    {availableFabrics.length > 0 && (
                       <div style={{ marginBottom: 20 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: BRAND, display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '1px', fontFamily: F.main }}>Fabric</span>
                         <div className="d-flex gap-2 flex-wrap">
-                          {fabrics.map(f => (
-                            <button key={f} className={`qv-fabric-pill${qvFabric === f ? ' active' : ''}`} onClick={() => setQvFabric(f)}>
+                          {availableFabrics.map(f => (
+                            <button key={f} disabled={!availableForValue('fabric', f)} className={`qv-fabric-pill${qvFabric === f ? ' active' : ''}`} onClick={() => setQvFabric(f)}>
                               {f}
                             </button>
                           ))}
@@ -1958,20 +2077,38 @@ export default function ShopGridPage({ saleOnly = false }) {
                   
                   {/* Actions */}
                   <div style={{ borderTop: '1px solid #E0E8D8', paddingTop: 20, marginTop: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, color: !selectedVariantStockVerified ? '#9a6b24' : selectedVariantStock > 0 ? '#4a5a44' : '#c00', fontFamily: F.sub, fontSize: 13 }}>
+                      <i className={`fa-solid ${!selectedVariantStockVerified ? 'fa-circle-exclamation' : selectedVariantStock > 0 ? 'fa-circle-check' : 'fa-circle-xmark'}`} />
+                      {!selectedVariantStockVerified ? 'Availability is being checked' : selectedVariantStock > 0 ? `Available now${selectedVariantStock <= 5 ? ` · only ${selectedVariantStock} left` : ''}` : 'This option is out of stock'}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                      <span style={{ fontFamily: F.sub, fontSize: 13, color: BRAND }}>Quantity</span>
+                      <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #D6D6D6' }}>
+                        <button type="button" aria-label="Decrease quantity" onClick={() => setQvQty(value => Math.max(1, value - 1))} style={{ width: 34, height: 34, background: '#fff', border: 0, fontSize: 18 }}>−</button>
+                        <span style={{ minWidth: 28, textAlign: 'center', fontFamily: F.main }}>{qvQty}</span>
+                        <button type="button" aria-label="Increase quantity" onClick={() => setQvQty(value => Math.min(selectedVariantStock || 1, value + 1))} style={{ width: 34, height: 34, background: '#fff', border: 0, fontSize: 18 }}>+</button>
+                      </div>
+                    </div>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                       <button
-                        onClick={() => { addToCart(cartItem); setQuickViewProduct(null); }}
-                        disabled={!selectedVariantStockVerified || selectedVariantStock <= 0}
+                        onClick={async () => {
+                          if (isAddedToCart) { navigate('/cart'); setQuickViewProduct(null); return; }
+                          if (addingProductId === quickViewProduct.id) return;
+                          setAddingProductId(quickViewProduct.id);
+                          try { const added = await addToCart(cartItem); if (added) setAddedCartSelection(selectionKey); }
+                          finally { setAddingProductId(null); }
+                        }}
+                        disabled={!isAddedToCart && (!selectedVariantStockVerified || selectedVariantStock <= 0 || !selectedVariant || qvQty > selectedVariantStock || addingProductId === quickViewProduct.id)}
                         onMouseEnter={e => { if (selectedVariantStockVerified && selectedVariantStock > 0) e.currentTarget.style.background = '#0b3a31'; }}
                         onMouseLeave={e => { if (selectedVariantStockVerified && selectedVariantStock > 0) e.currentTarget.style.background = ACCENT; }}
                         style={{
                           flex: 1,
                           padding: '12px 24px',
-                          background: selectedVariantStockVerified && selectedVariantStock > 0 ? ACCENT : '#ccc',
+                          background: isAddedToCart ? '#2F684E' : selectedVariantStockVerified && selectedVariantStock > 0 ? ACCENT : '#ccc',
                           color: '#fff',
                           border: 'none',
                           borderRadius: 8,
-                          cursor: selectedVariantStockVerified && selectedVariantStock > 0 ? 'pointer' : 'not-allowed',
+                          cursor: isAddedToCart || (selectedVariantStockVerified && selectedVariantStock > 0 && addingProductId !== quickViewProduct.id) ? 'pointer' : 'not-allowed',
                           fontSize: 13,
                           fontWeight: 600,
                           fontFamily: F.main,
@@ -1980,8 +2117,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                           transition: 'background 0.2s'
                         }}
                       >
-                        <i className="fa-solid fa-cart-shopping" style={{ marginRight: 8 }} />
-                        {!selectedVariantStockVerified ? 'Stock Unavailable' : selectedVariantStock > 0 ? 'Add to Cart' : 'Out of Stock'}
+                        {addingProductId === quickViewProduct.id ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} />Adding...</> : isAddedToCart ? <><i className="fa-solid fa-check" style={{ marginRight: 8 }} />Added · View Cart</> : <><i className="fa-solid fa-cart-shopping" style={{ marginRight: 8 }} />{!selectedVariantStockVerified ? 'Stock Unavailable' : selectedVariantStock > 0 ? 'Add to Cart' : 'Out of Stock'}</>}
                       </button>
                       
                       <button

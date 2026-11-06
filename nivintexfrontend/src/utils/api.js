@@ -167,7 +167,9 @@ export const categoryApi = {
       const rawImage = category.image || category.image_url || category.imageUrl || category.category_image || category.categoryImage || category.photo || null;
       return {
         ...category,
+        id: category.id ?? category.category_id ?? category.categoryId,
         name: category.name || category.category_name || category.categoryName || '',
+        status: ['inactive', 'disabled', '0', 'false', 'no'].includes(String(category.status ?? category.is_active ?? category.isActive ?? category.active ?? '').trim().toLowerCase()) ? 'Inactive' : 'Active',
         image: billingImageUrl(rawImage),
       };
     });
@@ -186,11 +188,14 @@ export const categoryApi = {
 // ─── Sub-Categories  →  /api/subcategories ───────────────────────────────────
 export const subCategoryApi = {
   getAll:       async ()      => {
-    const response = await get('/subcategories/billing');
+    const response = await request('GET', '/subcategories/billing', null);
     const candidates = [response?.subcategory, response?.data?.subcategory, response?.subcategories, response?.data, response];
     const rows = candidates.find(Array.isArray) || [];
     return rows.map(sub => ({
       ...sub,
+      id: sub.id ?? sub.subcategory_id ?? sub.subcategoryId,
+      name: sub.name || sub.subcategory_name || sub.sub_category_name || sub.subcategoryName || '',
+      status: ['inactive', 'disabled', '0', 'false', 'no'].includes(String(sub.status ?? sub.is_active ?? sub.isActive ?? sub.active ?? '').trim().toLowerCase()) ? 'Inactive' : 'Active',
       image: billingImageUrl(sub.image || sub.image_url || null),
     }));
   },
@@ -319,6 +324,7 @@ export const productApi = {
   enrichWithBillingPrices: async products => enrichProductsWithBillingPrices(products),
   getById:         async (id) => { const r = await get(`/product_details/${id}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r?.product || r))); },
   getBySlug:       async (slug) => { const r = await get(`/products/slug/${encodeURIComponent(slug)}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.product || r?.products || r))); },
+  getBySlugFast:   async (slug) => { const r = await get(`/products/slug/${encodeURIComponent(slug)}`); return mapProducts(r?.product || r?.products || r); },
   getByCategory:   async (catId) => { const r = await get(`/products/category/${catId}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r))); },
   getBySubCategory:async (subCatId) => { const r = await get(`/products/subcategory/${subCatId}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r))); },
   search:          async (query) => { const r = await get(`/products/search?q=${encodeURIComponent(query)}`); return mapProducts(await enrichProductsWithBillingPrices(mapProducts(r?.products || r))); },
@@ -376,6 +382,54 @@ export const billingCatalogApi = {
       else {
         const previous = stockByVariant.get(key);
         stockByVariant.set(key, previous === null || value === null ? null : Math.min(previous, value));
+      }
+    }
+    return stockByVariant;
+  },
+  getLocationStocksByVariant: async locationId => {
+    let response;
+    try {
+      response = await get('/billing/stocks');
+    } catch (error) {
+      if (error.status === 404) return null;
+      throw error;
+    }
+    if (Number(response?.status) === 404) return null;
+    if (Number(response?.status) >= 400) throw new Error(response.message || 'Billing stock list returned an error.');
+    const candidates = [response?.stocks, response?.data?.stocks, response?.data?.data?.stocks, response?.data, response];
+    const rows = candidates.find(Array.isArray);
+    if (!rows) throw new Error(response?.message || 'Billing returned an invalid stock list response.');
+    const expectedLocation = locationId == null || locationId === '' ? null : String(locationId);
+    const stockByVariant = new Map();
+    for (const row of rows) {
+      const hasLocation = Object.prototype.hasOwnProperty.call(row || {}, 'franchise_location_id');
+      if (hasLocation) {
+        const rowLocation = row.franchise_location_id == null || row.franchise_location_id === ''
+          ? null : String(row.franchise_location_id);
+        if (rowLocation !== expectedLocation) continue;
+      } else if (expectedLocation !== null || !row?.variant_code) {
+        continue;
+      }
+      const id = row.product_variant_id ?? row.product_varient_id ?? row.variant_id ?? row.productVariantId
+        ?? (row.variant_code ? row.id : null);
+      if (id === undefined || id === null) continue;
+      const raw = row.quantity ?? row.stock_quantity ?? row.available_quantity ?? row.available_qty;
+      const quantity = raw === null || raw === undefined || raw === '' ? null : Number(raw);
+      const available = Number.isFinite(quantity) && quantity >= 0 ? Math.floor(quantity) : null;
+      const key = String(id);
+      if (!stockByVariant.has(key)) stockByVariant.set(key, available);
+      else {
+        const previous = stockByVariant.get(key);
+        stockByVariant.set(key, previous === null || available === null ? null : Math.min(previous, available));
+      }
+      const code = String(row.variant_code || row.sku || '').trim().toLowerCase();
+      if (code) {
+        const codeKey = `code:${code}`;
+        if (!stockByVariant.has(codeKey)) stockByVariant.set(codeKey, available);
+        else {
+          const previous = stockByVariant.get(codeKey);
+          stockByVariant.set(codeKey, previous === null || available === null ? null : Math.min(previous, available));
+        }
       }
     }
     return stockByVariant;
@@ -468,8 +522,10 @@ export const returnApi = {
 // ─── Coupons  →  /api/coupons ────────────────────────────────────────────────
 export const couponApi = {
   getAll:   ()          => lGet('/coupons'),
+  getAvailable: ()      => lGet('/coupons/available'),
   getById:  (id)        => lGet(`/coupons/${id}`),
-  validate: (code)      => lPost('/coupons/validate', { code }),
+  validate: (data)      => lPost('/coupons/apply', typeof data === 'string' ? { code: data } : data),
+  apply:    (data)      => lPost('/coupons/apply', data),
   add:      (data)      => lPost('/coupons/add', data),
   update:   (id, data)  => lPut(`/coupons/update/${id}`, data),
   remove:   (id)        => lDel(`/coupons/delete/${id}`),

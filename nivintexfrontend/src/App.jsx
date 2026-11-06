@@ -11,6 +11,7 @@ import NewArrivals from './components/NewArrivals';
 import BestSeller from './components/BestSeller';
 
 import OrdersPage from './pages/Orders/OrdersPage';
+import OrderDetailsPage from './pages/Orders/OrderDetailsPage';
 import ProfilePage from './pages/Profile/ProfilePage';
 import ShopGridPage from './pages/ShopGrid/ShopGridPage';
 import ProductDetailsPage from './pages/ProductDetails/ProductDetailsPage';
@@ -103,6 +104,7 @@ function AppContent() {
         <Route path="/cart" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
         <Route path="/wishlist" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
         <Route path="/orders" element={<OrdersPage />} />
+        <Route path="/orders/:orderId" element={<OrderDetailsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/verify-otp" element={<VerifyOTPPage />} />

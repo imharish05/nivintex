@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import DataTable from '../DataTable/DataTable';
 import { categoryApi, productApi, productSpecificationApi, sizeChartApi, variantApi, getImageUrl } from '../../api';
 import defaultLogo from '../../assets/logo.png';
-import Swal from 'sweetalert2';
+import { confirmToast } from '../../utils/confirmToast';
 
 const KM = {
   orange: '#A2C579', orangeLight: '#FEF0EB',
@@ -28,22 +28,11 @@ const emptyShippingDetails = () => ({ weightKg: '', lengthCm: '', widthCm: '', h
 const DEFAULT_SHIPPING_STORAGE_KEY = 'fashionaura_default_shipping_package';
 
 const confirmSizeChartDelete = async title => {
-  const result = await Swal.fire({
-    toast: true,
-    position: 'top-end',
-    icon: 'warning',
-    title: 'Delete size chart?',
-    text: `Delete “${title}”? Assigned products will use their category chart or the default chart.`,
-    showCancelButton: true,
-    confirmButtonText: 'Delete',
-    cancelButtonText: 'Keep chart',
-    confirmButtonColor: '#b91c1c',
-    cancelButtonColor: '#0f5447',
-    background: '#131f33',
-    color: '#fff',
-    reverseButtons: true,
-  });
-  return result.isConfirmed;
+  return confirmToast(
+    `Delete “${title}”? Assigned products will use their category chart or the default chart.`,
+    'Delete',
+    'Delete size chart?'
+  );
 };
 
 const readShippingDetails = product => ({
@@ -86,11 +75,36 @@ const cloneChart = chart => {
   };
 };
 
-function VariantImageGallery({ variant, saving, onSave }) {
+function animateVariantImageReorder(container, update) {
+  const before = new Map(Array.from(container?.querySelectorAll('[data-product-sortable]') || [])
+    .map(element => [element.dataset.productSortable, element.getBoundingClientRect()]));
+  update();
+  requestAnimationFrame(() => {
+    Array.from(container?.querySelectorAll('[data-product-sortable]') || []).forEach(element => {
+      const previous = before.get(element.dataset.productSortable);
+      if (!previous) return;
+      const current = element.getBoundingClientRect();
+      const x = previous.left - current.left;
+      const y = previous.top - current.top;
+      if (!x && !y) return;
+      element.style.transition = 'none';
+      element.style.transform = `translate(${x}px, ${y}px)`;
+      element.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        element.style.transition = 'transform 180ms cubic-bezier(.2,.8,.2,1)';
+        element.style.transform = '';
+      });
+    });
+  });
+}
+
+function VariantImageGallery({ variant, saving, onChange }) {
   const currentImages = variantImageList(variant);
   const imagesKey = currentImages.join('|');
   const [keptImages, setKeptImages] = useState(currentImages);
   const [uploads, setUploads] = useState([]);
+  const [draggingImage, setDraggingImage] = useState(null);
+  const [overIndex, setOverIndex] = useState(null);
   const uploadsRef = useRef([]);
 
   useEffect(() => {
@@ -98,6 +112,8 @@ function VariantImageGallery({ variant, saving, onSave }) {
     uploadsRef.current = [];
     setKeptImages(currentImages);
     setUploads([]);
+    setDraggingImage(null);
+    setOverIndex(null);
     // Existing server images reset the editor after a successful save.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant.billingVariantId, imagesKey]);
@@ -109,15 +125,40 @@ function VariantImageGallery({ variant, saving, onSave }) {
   const addFiles = files => {
     const picked = Array.from(files || []).filter(file => file.type.startsWith('image/'));
     const added = picked.map(file => ({ file, preview: URL.createObjectURL(file) }));
-    uploadsRef.current = [...uploadsRef.current, ...added];
-    setUploads(current => [...current, ...added]);
+    const nextUploads = [...uploads, ...added];
+    uploadsRef.current = nextUploads;
+    setUploads(nextUploads);
+    if (added.length) onChange(variant, nextUploads.map(item => item.file), keptImages);
   };
 
   const removeUpload = index => {
     const item = uploads[index];
     if (item) URL.revokeObjectURL(item.preview);
-    uploadsRef.current = uploadsRef.current.filter(upload => upload !== item);
-    setUploads(current => current.filter((_, currentIndex) => currentIndex !== index));
+    const nextUploads = uploads.filter((_, currentIndex) => currentIndex !== index);
+    uploadsRef.current = nextUploads;
+    setUploads(nextUploads);
+    onChange(variant, nextUploads.map(upload => upload.file), keptImages);
+  };
+
+  const reorderImages = (type, targetIndex, container) => {
+    if (!draggingImage || draggingImage.type !== type || draggingImage.index === targetIndex) return;
+    animateVariantImageReorder(container, () => {
+    if (type === 'saved') {
+      const nextImages = [...keptImages];
+      const [image] = nextImages.splice(draggingImage.index, 1);
+      nextImages.splice(targetIndex, 0, image);
+      setKeptImages(nextImages);
+      onChange(variant, uploads.map(item => item.file), nextImages);
+    } else {
+      const nextUploads = [...uploads];
+      const [upload] = nextUploads.splice(draggingImage.index, 1);
+      nextUploads.splice(targetIndex, 0, upload);
+      uploadsRef.current = nextUploads;
+      setUploads(nextUploads);
+      onChange(variant, nextUploads.map(item => item.file), keptImages);
+    }
+    });
+    setDraggingImage(current => current ? { ...current, index: targetIndex } : current);
   };
 
   const changed = uploads.length > 0 || keptImages.length !== currentImages.length
@@ -125,17 +166,30 @@ function VariantImageGallery({ variant, saving, onSave }) {
 
   return (
     <div style={{ minWidth: 245, maxWidth: 330 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 9 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, minHeight: 58, marginBottom: 9 }}>
         {keptImages.map((image, index) => (
-          <div key={`${image}-${index}`} style={{ position: 'relative', width: 58, height: 58 }}>
+          <div data-product-sortable={`saved-${image}`} key={image} className={`product-variant-image ${draggingImage?.type === 'saved' && draggingImage.index === index ? 'is-dragging' : ''}`} style={{ position: 'relative', width: 58, height: 58, cursor: 'default', opacity: draggingImage?.type === 'saved' && draggingImage.index === index ? .65 : 1, boxShadow: overIndex === index ? '0 0 0 2px #10b981' : 'none', transition: 'opacity 120ms ease, box-shadow 120ms ease' }}
+            onDragEnter={event => { event.preventDefault(); setOverIndex(index); if (draggingImage?.type === 'saved') reorderImages('saved', index, event.currentTarget.parentElement); }}
+            onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); setDraggingImage(null); setOverIndex(null); }}
+            title="Drag to reorder">
             <img src={getImageUrl(image)} alt={`Variant ${index + 1}`} style={{ width: 58, height: 58, objectFit: 'cover', borderRadius: 7, border: `1px solid ${KM.border}` }} />
-            <button type="button" aria-label="Remove image" title="Remove image" onClick={() => setKeptImages(current => current.filter((_, itemIndex) => itemIndex !== index))}
+            <span className="product-variant-drag-handle" aria-label="Drag to reorder" title="Drag to reorder" draggable={!saving} onDragStart={event => { setDraggingImage({ type: 'saved', index }); setOverIndex(null); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setDragImage(event.currentTarget.parentElement, 29, 29); }} onDragEnd={() => { setDraggingImage(null); setOverIndex(null); }} style={{ position: 'absolute', top: 2, left: 2, padding: '0 3px', borderRadius: 3, background: '#0008', color: '#fff', fontSize: 11, cursor: 'grab' }}>⠿</span>
+            {index === 0 && <span className="product-variant-main" style={{ position: 'absolute', right: 2, bottom: 2, left: 2, borderRadius: 3, background: '#0f5447e8', color: '#fff', textAlign: 'center', fontSize: 8, fontWeight: 700 }}>Main</span>}
+            <button type="button" aria-label="Remove image" title="Remove image" disabled={saving} onClick={() => {
+              const nextImages = keptImages.filter((_, itemIndex) => itemIndex !== index);
+              setKeptImages(nextImages);
+              onChange(variant, uploads.map(item => item.file), nextImages);
+            }}
               style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, border: 'none', borderRadius: '50%', background: KM.red, color: '#fff', fontSize: 12, lineHeight: '20px', padding: 0, cursor: 'pointer' }}>×</button>
           </div>
         ))}
         {uploads.map((item, index) => (
-          <div key={item.preview} style={{ position: 'relative', width: 58, height: 58 }}>
+          <div data-product-sortable={item.preview} key={item.preview} className={`product-variant-image product-variant-image-new ${draggingImage?.type === 'new' && draggingImage.index === index ? 'is-dragging' : ''}`} style={{ position: 'relative', width: 58, height: 58, cursor: 'default', opacity: draggingImage?.type === 'new' && draggingImage.index === index ? .65 : 1, boxShadow: overIndex === index ? '0 0 0 2px #10b981' : 'none', transition: 'opacity 120ms ease, box-shadow 120ms ease' }}
+            onDragEnter={event => { event.preventDefault(); setOverIndex(index); if (draggingImage?.type === 'new') reorderImages('new', index, event.currentTarget.parentElement); }}
+            onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); setDraggingImage(null); setOverIndex(null); }}
+            title="Drag to reorder">
             <img src={item.preview} alt={`New variant image ${index + 1}`} style={{ width: 58, height: 58, objectFit: 'cover', borderRadius: 7, border: `2px solid ${KM.teal}` }} />
+            <span className="product-variant-drag-handle" aria-label="Drag to reorder" title="Drag to reorder" draggable={!saving} onDragStart={event => { setDraggingImage({ type: 'new', index }); setOverIndex(null); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setDragImage(event.currentTarget.parentElement, 29, 29); }} onDragEnd={() => { setDraggingImage(null); setOverIndex(null); }} style={{ position: 'absolute', top: 2, left: 2, padding: '0 3px', borderRadius: 3, background: '#0008', color: '#fff', fontSize: 11, cursor: 'grab' }}>⠿</span>
             <button type="button" aria-label="Remove selected image" title="Remove selected image" onClick={() => removeUpload(index)}
               style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, border: 'none', borderRadius: '50%', background: KM.blue, color: '#fff', fontSize: 12, lineHeight: '20px', padding: 0, cursor: 'pointer' }}>×</button>
             <span style={{ position: 'absolute', left: 3, bottom: 3, background: KM.teal, color: '#fff', borderRadius: 3, fontSize: 8, fontWeight: 700, padding: '2px 4px' }}>NEW</span>
@@ -146,15 +200,12 @@ function VariantImageGallery({ variant, saving, onSave }) {
       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '9px 10px', border: `1px dashed ${KM.teal}`, borderRadius: 7, background: '#F0FAFE', color: '#167F99', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
         <span style={{ fontSize: 16, lineHeight: 1 }}>＋</span>
         Add multiple images
-        <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={event => { addFiles(event.target.files); event.target.value = ''; }} />
+        <input type="file" accept="image/*" multiple disabled={saving} style={{ display: 'none' }} onChange={event => { addFiles(event.target.files); event.target.value = ''; }} />
       </label>
       <div style={{ color: KM.muted, fontSize: 10, margin: '5px 0 7px' }}>
-        {keptImages.length} saved · {uploads.length} selected · first image is the main variant image
+        {keptImages.length} saved · {uploads.length} selected · drag photos to reorder; first image is main
       </div>
-      <button type="button" className="action-btn btn-edit" disabled={!changed || saving || !variant.billingVariantId}
-        onClick={() => onSave(variant, uploads.map(item => item.file), keptImages)}>
-        {saving ? 'Saving...' : 'Save images'}
-      </button>
+      {changed && <div style={{ color: KM.teal, fontSize: 11, fontWeight: 600 }}>Image changes will save with Update Product</div>}
     </div>
   );
 }
@@ -173,6 +224,7 @@ export default function Products({ showToast }) {
   const [shippingDetails, setShippingDetails] = useState(emptyShippingDetails);
   const [defaultShippingDetails, setDefaultShippingDetails] = useState(emptyShippingDetails);
   const [variantSavingId, setVariantSavingId] = useState(null);
+  const [variantImageDrafts, setVariantImageDrafts] = useState({});
   const [specifications, setSpecifications] = useState([]);
   const [specificationsSaving, setSpecificationsSaving] = useState(false);
   const [sizeCharts, setSizeCharts] = useState([]);
@@ -226,6 +278,7 @@ export default function Products({ showToast }) {
     setImageFile(null);
     setImagePreview(null);
     setFlags({ isNewArrival: false, isBestSeller: false });
+    setVariantImageDrafts({});
     setShippingDetails(emptyShippingDetails());
     setSpecifications([]);
     setAssignedChartId('');
@@ -238,6 +291,7 @@ export default function Products({ showToast }) {
     setImagePreview(product.image || null);
     setImageFile(null);
     setFlags({ isNewArrival: Boolean(product.isNewArrival), isBestSeller: Boolean(product.isBestSeller) });
+    setVariantImageDrafts({});
     setShippingDetails(readShippingDetails(product));
     setSpecifications([]);
     productSpecificationApi.getByProduct(product.id)
@@ -317,8 +371,8 @@ export default function Products({ showToast }) {
     try {
       const saved = await sizeChartApi.save(chartDraft, chartDraftId);
       setSizeCharts(current => chartDraftId ? current.map(item => item.id === saved.id ? saved : item) : [...current, saved]);
-      setChartDraftId(saved.id);
-      setChartDraft(cloneChart(saved));
+      setChartDraftId(null);
+      setChartDraft(null);
       showToast('Size Chart Saved', 'Your size chart is ready to assign to products.');
     } catch (error) { showToast('Size Chart Save Failed', error.message); }
     finally { setChartSaving(false); }
@@ -374,27 +428,18 @@ export default function Products({ showToast }) {
     finally { setAssignmentSaving(false); }
   };
 
-  const saveVariantImages = async (variant, files, keepImages) => {
-    const billingVariantId = variant.billingVariantId;
-    if (!billingVariantId) {
-      showToast('Cannot Save', 'This variant is missing its Billing ID. Refresh the product list.');
-      return;
-    }
-    setVariantSavingId(billingVariantId);
-    const body = new FormData();
-    body.append('keepImages', JSON.stringify(keepImages));
-    files.forEach(file => body.append('images', file));
-    try {
-      await variantApi.updateImage(billingVariantId, body);
-      const products = await fetchProducts(false);
-      const updatedProduct = products.find(product => String(product.billingProductId) === String(editing?.billingProductId));
-      if (updatedProduct) setEditing(updatedProduct);
-      showToast('Saved', 'Variant image gallery updated.');
-    } catch (error) {
-      showToast('Image Update Failed', error.message || 'Could not update the variant image.');
-    } finally {
-      setVariantSavingId(null);
-    }
+  const recordVariantImageDraft = (variant, files, keepImages) => {
+    const billingVariantId = String(variant.billingVariantId || variant.billing_variant_id || '');
+    if (!billingVariantId) return;
+    const currentImages = variantImageList(variant);
+    const changed = files.length > 0 || keepImages.length !== currentImages.length
+      || keepImages.some((image, index) => image !== currentImages[index]);
+    setVariantImageDrafts(current => {
+      const next = { ...current };
+      if (changed) next[billingVariantId] = { variant, files, keepImages };
+      else delete next[billingVariantId];
+      return next;
+    });
   };
 
   const handleSubmit = async event => {
@@ -417,6 +462,11 @@ export default function Products({ showToast }) {
       showToast('Shipping details required', `${missingShippingField[1]} must be greater than zero.`);
       return;
     }
+    const imageDrafts = Object.entries(variantImageDrafts);
+    if (imageDrafts.some(([id]) => !id)) {
+      showToast('Cannot Save', 'A variant with image changes is missing its Billing ID. Refresh the product list.');
+      return;
+    }
     setSaving(true);
     const body = new FormData();
     body.append('isNewArrival', String(flags.isNewArrival));
@@ -425,16 +475,41 @@ export default function Products({ showToast }) {
     body.append('shipping_length_cm', shippingDetails.lengthCm);
     body.append('shipping_width_cm', shippingDetails.widthCm);
     body.append('shipping_height_cm', shippingDetails.heightCm);
+    body.append('mrpGstType', editing.mrpGstType === 'Without GST' ? 'Without GST' : 'With GST');
     if (imageFile) body.append('image', imageFile);
 
+    let productCustomizationSaved = false;
     try {
       await productApi.updateCustomization(editing.billingProductId, body);
-      showToast('Updated!', 'Product image and storefront settings saved.');
+      productCustomizationSaved = true;
+      for (let index = 0; index < imageDrafts.length; index += 1) {
+        const [billingVariantId, draft] = imageDrafts[index];
+        setVariantSavingId(billingVariantId);
+        const imageBody = new FormData();
+        imageBody.append('keepImages', JSON.stringify(draft.keepImages));
+        draft.files.forEach(file => imageBody.append('images', file));
+        try {
+          await variantApi.updateImage(billingVariantId, imageBody);
+          setVariantImageDrafts(current => {
+            const next = { ...current };
+            delete next[billingVariantId];
+            return next;
+          });
+        } catch (imageError) {
+          const products = await fetchProducts(false);
+          const updatedProduct = products.find(product => String(product.billingProductId) === String(editing.billingProductId));
+          if (updatedProduct) setEditing(updatedProduct);
+          showToast('Product Saved; Some Images Need Retry', `${imageError.message || 'A variant image could not be saved.'} Press Update Product again to retry the remaining image changes.`);
+          return;
+        }
+      }
+      showToast('Updated!', `Product details${imageDrafts.length ? ' and variant images' : ''} saved.`);
       closeEditor();
       await fetchProducts(false);
     } catch (error) {
-      showToast('Failed', error.message || 'Could not update product.');
+      showToast(productCustomizationSaved ? 'Product Saved; Images Need Retry' : 'Failed', error.message || 'Could not update product.');
     } finally {
+      setVariantSavingId(null);
       setSaving(false);
     }
   };
@@ -491,9 +566,9 @@ export default function Products({ showToast }) {
           </div>
           <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '12px 0 4px', color: KM.text, fontSize: 13 }}><input type="checkbox" checked={Boolean(chartDraft.isDefault)} disabled={Boolean(chartDraftId && chartDraft.isDefault)} onChange={event => setChartDraft(current => ({ ...current, isDefault: event.target.checked }))} /><span><strong>Make this the default chart</strong><span style={{ display: 'block', marginTop: 3, color: KM.muted, fontSize: 11 }}>Fallback for products without a product-specific or category chart.</span></span></label>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '14px 0 8px' }}><div><strong style={{ color: KM.blue, fontSize: 13 }}>Measurement columns</strong><div style={{ color: KM.muted, fontSize: 11, marginTop: 3 }}>Examples: Bust, Waist, Hip, Length, Sleeve.</div></div><button type="button" disabled={chartDraft.columns.length >= 12} onClick={addChartColumn} style={{ padding: '7px 10px', background: '#fff', border: `1px solid ${KM.border}`, borderRadius: 7, cursor: 'pointer' }}>+ Add measurement</button></div>
-          <div style={{ display: 'grid', gap: 7 }}>{chartDraft.columns.map((column, index) => <div key={`${index}-${column.key}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) auto', gap: 8 }}><input aria-label={`Measurement column ${index + 1} name`} style={inputStyle} placeholder="Measurement name (e.g. Bust)" value={column.label} onChange={event => updateChartColumn(index, 'label', event.target.value)} /><button type="button" disabled={chartDraft.columns.length <= 1} onClick={() => removeChartColumn(index)} style={{ border: '1px solid #fecaca', borderRadius: 7, color: '#b91c1c', background: '#fff', cursor: 'pointer' }}>Remove</button></div>)}</div>
+          <div style={{ display: 'grid', gap: 7 }}>{chartDraft.columns.map((column, index) => <div key={`${index}-${column.key}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) auto', gap: 8 }}><input aria-label={`Measurement column ${index + 1} name`} style={inputStyle} placeholder="Measurement name (e.g. Bust)" value={column.label} onChange={event => updateChartColumn(index, 'label', event.target.value)} /><button type="button" disabled={chartDraft.columns.length <= 1} onClick={() => removeChartColumn(index)} style={{ border: '1px solid #fecaca', borderRadius: 7, color: '#b91c1c', background: '#fff', cursor: 'pointer', padding: '7px 12px', minWidth: 76 }}>Remove</button></div>)}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '16px 0 8px' }}><div><strong style={{ color: KM.blue, fontSize: 13 }}>Size measurements</strong><div style={{ color: KM.muted, fontSize: 11, marginTop: 3 }}>Create one row for each available size.</div></div><button type="button" disabled={chartDraft.rows.length >= 40} onClick={() => setChartDraft(current => ({ ...current, rows: [...current.rows, { size: '', measurements: {} }] }))} style={{ padding: '7px 10px', background: '#fff', border: `1px solid ${KM.border}`, borderRadius: 7, cursor: 'pointer' }}>+ Add size</button></div>
-          <div style={{ overflowX: 'auto', border: `1px solid ${KM.border}`, borderRadius: 8 }}><table style={{ width: '100%', minWidth: `${Math.max(430, (chartDraft.columns.length + 2) * 125)}px`, borderCollapse: 'collapse', background: '#fff' }}><thead><tr style={{ background: KM.bg }}><th style={{ padding: 8, textAlign: 'left', color: KM.muted }}>Size</th>{chartDraft.columns.map(column => <th key={column.key} style={{ padding: 8, color: KM.muted }}>{column.label || 'Measurement'} ({chartDraft.unit})</th>)}<th /></tr></thead><tbody>{chartDraft.rows.map((row, rowIndex) => <tr key={`row-${rowIndex}`} style={{ borderTop: `1px solid ${KM.border}` }}><td style={{ padding: 6 }}><input aria-label={`Size label for row ${rowIndex + 1}`} style={inputStyle} placeholder="Size label (e.g. S, M, 32)" value={row.size} onChange={event => setChartDraft(current => ({ ...current, rows: current.rows.map((item, index) => index === rowIndex ? { ...item, size: event.target.value } : item) }))} /></td>{chartDraft.columns.map(column => <td key={column.key} style={{ padding: 6 }}><input aria-label={`${row.size || 'Size'} ${column.label} measurement`} style={inputStyle} inputMode="decimal" placeholder={`Enter ${column.label.toLowerCase()}`} value={row.measurements?.[column.key] ?? ''} onChange={event => updateChartCell(rowIndex, column.key, event.target.value)} /></td>)}<td style={{ padding: 6 }}><button type="button" disabled={chartDraft.rows.length <= 1} onClick={() => setChartDraft(current => ({ ...current, rows: current.rows.filter((_, index) => index !== rowIndex) }))} style={{ border: 0, background: 'transparent', color: '#b91c1c', cursor: 'pointer' }}>Remove</button></td></tr>)}</tbody></table></div>
+          <div style={{ overflowX: 'auto', border: `1px solid ${KM.border}`, borderRadius: 8 }}><table style={{ width: '100%', minWidth: `${Math.max(430, (chartDraft.columns.length + 2) * 125)}px`, borderCollapse: 'collapse', background: '#fff' }}><thead><tr style={{ background: KM.bg }}><th style={{ padding: 8, textAlign: 'left', color: KM.muted }}>Size</th>{chartDraft.columns.map(column => <th key={column.key} style={{ padding: 8, color: KM.muted }}>{column.label || 'Measurement'} ({chartDraft.unit})</th>)}<th /></tr></thead><tbody>{chartDraft.rows.map((row, rowIndex) => <tr key={`row-${rowIndex}`} style={{ borderTop: `1px solid ${KM.border}` }}><td style={{ padding: 6 }}><input aria-label={`Size label for row ${rowIndex + 1}`} style={inputStyle} placeholder="Size label (e.g. S, M, 32)" value={row.size} onChange={event => setChartDraft(current => ({ ...current, rows: current.rows.map((item, index) => index === rowIndex ? { ...item, size: event.target.value } : item) }))} /></td>{chartDraft.columns.map(column => <td key={column.key} style={{ padding: 6 }}><input aria-label={`${row.size || 'Size'} ${column.label} measurement`} style={inputStyle} inputMode="decimal" placeholder={`Enter ${column.label.toLowerCase()}`} value={row.measurements?.[column.key] ?? ''} onChange={event => updateChartCell(rowIndex, column.key, event.target.value)} /></td>)}<td style={{ padding: 6 }}><button type="button" disabled={chartDraft.rows.length <= 1} onClick={() => setChartDraft(current => ({ ...current, rows: current.rows.filter((_, index) => index !== rowIndex) }))} style={{ border: 0, background: 'transparent', color: '#b91c1c', cursor: 'pointer', padding: '8px 10px', borderRadius: 6 }}>Remove</button></td></tr>)}</tbody></table></div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 13 }}><button type="button" disabled={chartSaving} onClick={saveChartDraft} style={{ padding: '9px 14px', background: KM.blue, color: '#fff', border: 0, borderRadius: 7, cursor: chartSaving ? 'wait' : 'pointer', fontWeight: 600 }}>{chartSaving ? 'Saving…' : chartDraftId ? 'Save chart changes' : 'Save new chart'}</button>{chartDraftId && !chartDraft.isDefault && <button type="button" onClick={deleteChartDraft} style={{ padding: '9px 14px', background: '#fff', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 7, cursor: 'pointer' }}>Delete chart</button>}</div>
         </div>}
       </section>
@@ -548,6 +623,18 @@ export default function Products({ showToast }) {
                 <label style={labelStyle}>Final price</label>
                 <input style={readOnlyInputStyle} value={editing?.franchise_price_final ?? editing?.Variants?.[0]?.franchise_price_final ?? editing?.variants?.[0]?.franchise_price_final ?? ''} readOnly aria-readonly="true" aria-label="Final franchise price" title="Final price is managed in Billing" />
               </div>
+              <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'flex-start', gap: 9, padding: '12px 14px', border: `1px solid ${KM.border}`, borderRadius: 8, background: '#F8FAFC', color: KM.text, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={String(editing.mrpGstType || editing.mrp_gst_type || 'With GST').toLowerCase() !== 'without gst'}
+                  onChange={event => setEditing(current => ({ ...current, mrpGstType: event.target.checked ? 'With GST' : 'Without GST' }))}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  <strong style={{ display: 'block', fontSize: 12 }}>5% GST included in product price</strong>
+                  <span style={{ display: 'block', marginTop: 3, fontSize: 11, color: KM.muted }}>Checked by default. The price already includes GST; checkout will not add another 5%. Uncheck to apply no GST.</span>
+                </span>
+              </label>
 
               <div style={{ gridColumn: 'span 2', padding: '16px 20px', background: '#F8FAFC', border: `1px solid ${KM.border}`, borderRadius: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -620,9 +707,9 @@ export default function Products({ showToast }) {
                   <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '12px 0 4px', color: KM.text, fontSize: 13 }}><input type="checkbox" checked={Boolean(chartDraft.isDefault)} disabled={Boolean(chartDraftId && chartDraft.isDefault)} onChange={event => setChartDraft(current => ({ ...current, isDefault: event.target.checked }))} /><span><strong>Make this the default chart</strong><span style={{ display: 'block', marginTop: 3, color: KM.muted, fontSize: 11 }}>Fallback shoppers see when their product has no assigned chart and its category has no chart.</span></span></label>
                   {chartDraftId && chartDraft.isDefault && <p style={{ margin: '0 0 10px', color: KM.muted, fontSize: 11 }}>To change the default, select “Make default” on another chart and save it.</p>}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '14px 0 8px' }}><div><strong style={{ color: KM.blue, fontSize: 13 }}>Measurement columns</strong><div style={{ color: KM.muted, fontSize: 11, marginTop: 3 }}>Each name becomes a column in the shopper’s chart. Examples: Bust, Waist, Hip, Length, Sleeve.</div></div><button type="button" disabled={chartDraft.columns.length >= 12} onClick={addChartColumn} style={{ padding: '7px 10px', background: '#fff', border: `1px solid ${KM.border}`, borderRadius: 7, cursor: 'pointer' }}>+ Add measurement</button></div>
-                  <div style={{ display: 'grid', gap: 7 }}>{chartDraft.columns.map((column, index) => <div key={`${index}-${column.key}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) auto', gap: 8 }}><input aria-label={`Measurement column ${index + 1} name`} style={inputStyle} placeholder="Measurement name (e.g. Bust)" value={column.label} onChange={event => updateChartColumn(index, 'label', event.target.value)} /><button type="button" disabled={chartDraft.columns.length <= 1} onClick={() => removeChartColumn(index)} style={{ border: '1px solid #fecaca', borderRadius: 7, color: '#b91c1c', background: '#fff', cursor: 'pointer' }}>Remove</button></div>)}</div>
+                  <div style={{ display: 'grid', gap: 7 }}>{chartDraft.columns.map((column, index) => <div key={`${index}-${column.key}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) auto', gap: 8 }}><input aria-label={`Measurement column ${index + 1} name`} style={inputStyle} placeholder="Measurement name (e.g. Bust)" value={column.label} onChange={event => updateChartColumn(index, 'label', event.target.value)} /><button type="button" disabled={chartDraft.columns.length <= 1} onClick={() => removeChartColumn(index)} style={{ border: '1px solid #fecaca', borderRadius: 7, color: '#b91c1c', background: '#fff', cursor: 'pointer', padding: '7px 12px', minWidth: 76 }}>Remove</button></div>)}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '16px 0 8px' }}><div><strong style={{ color: KM.blue, fontSize: 13 }}>Size measurements</strong><div style={{ color: KM.muted, fontSize: 11, marginTop: 3 }}>Create one row for each available size. Enter the matching body or garment measurement in each column.</div></div><button type="button" disabled={chartDraft.rows.length >= 40} onClick={() => setChartDraft(current => ({ ...current, rows: [...current.rows, { size: '', measurements: {} }] }))} style={{ padding: '7px 10px', background: '#fff', border: `1px solid ${KM.border}`, borderRadius: 7, cursor: 'pointer' }}>+ Add size</button></div>
-                  <div style={{ overflowX: 'auto', border: `1px solid ${KM.border}`, borderRadius: 8 }}><table style={{ width: '100%', minWidth: `${Math.max(430, (chartDraft.columns.length + 2) * 125)}px`, borderCollapse: 'collapse', background: '#fff' }}><thead><tr style={{ background: KM.bg }}><th style={{ padding: 8, textAlign: 'left', color: KM.muted }}>Size</th>{chartDraft.columns.map(column => <th key={column.key} style={{ padding: 8, color: KM.muted }}>{column.label || 'Measurement'} ({chartDraft.unit})</th>)}<th /></tr></thead><tbody>{chartDraft.rows.map((row, rowIndex) => <tr key={`row-${rowIndex}`} style={{ borderTop: `1px solid ${KM.border}` }}><td style={{ padding: 6 }}><input aria-label={`Size label for row ${rowIndex + 1}`} style={inputStyle} placeholder="Size label (e.g. S, M, 32)" value={row.size} onChange={event => setChartDraft(current => ({ ...current, rows: current.rows.map((item, index) => index === rowIndex ? { ...item, size: event.target.value } : item) }))} /></td>{chartDraft.columns.map(column => <td key={column.key} style={{ padding: 6 }}><input aria-label={`${row.size || 'Size'} ${column.label} measurement`} style={inputStyle} inputMode="decimal" placeholder={`Enter ${column.label.toLowerCase()}`} value={row.measurements?.[column.key] ?? ''} onChange={event => updateChartCell(rowIndex, column.key, event.target.value)} /></td>)}<td style={{ padding: 6 }}><button type="button" disabled={chartDraft.rows.length <= 1} onClick={() => setChartDraft(current => ({ ...current, rows: current.rows.filter((_, index) => index !== rowIndex) }))} style={{ border: 0, background: 'transparent', color: '#b91c1c', cursor: 'pointer' }}>Remove</button></td></tr>)}</tbody></table></div>
+                  <div style={{ overflowX: 'auto', border: `1px solid ${KM.border}`, borderRadius: 8 }}><table style={{ width: '100%', minWidth: `${Math.max(430, (chartDraft.columns.length + 2) * 125)}px`, borderCollapse: 'collapse', background: '#fff' }}><thead><tr style={{ background: KM.bg }}><th style={{ padding: 8, textAlign: 'left', color: KM.muted }}>Size</th>{chartDraft.columns.map(column => <th key={column.key} style={{ padding: 8, color: KM.muted }}>{column.label || 'Measurement'} ({chartDraft.unit})</th>)}<th /></tr></thead><tbody>{chartDraft.rows.map((row, rowIndex) => <tr key={`row-${rowIndex}`} style={{ borderTop: `1px solid ${KM.border}` }}><td style={{ padding: 6 }}><input aria-label={`Size label for row ${rowIndex + 1}`} style={inputStyle} placeholder="Size label (e.g. S, M, 32)" value={row.size} onChange={event => setChartDraft(current => ({ ...current, rows: current.rows.map((item, index) => index === rowIndex ? { ...item, size: event.target.value } : item) }))} /></td>{chartDraft.columns.map(column => <td key={column.key} style={{ padding: 6 }}><input aria-label={`${row.size || 'Size'} ${column.label} measurement`} style={inputStyle} inputMode="decimal" placeholder={`Enter ${column.label.toLowerCase()}`} value={row.measurements?.[column.key] ?? ''} onChange={event => updateChartCell(rowIndex, column.key, event.target.value)} /></td>)}<td style={{ padding: 6 }}><button type="button" disabled={chartDraft.rows.length <= 1} onClick={() => setChartDraft(current => ({ ...current, rows: current.rows.filter((_, index) => index !== rowIndex) }))} style={{ border: 0, background: 'transparent', color: '#b91c1c', cursor: 'pointer', padding: '8px 10px', borderRadius: 6 }}>Remove</button></td></tr>)}</tbody></table></div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 13 }}><button type="button" disabled={chartSaving} onClick={saveChartDraft} style={{ padding: '9px 14px', background: KM.blue, color: '#fff', border: 0, borderRadius: 7, cursor: chartSaving ? 'wait' : 'pointer', fontWeight: 600 }}>{chartSaving ? 'Saving…' : chartDraftId ? 'Save chart changes' : 'Save new chart'}</button>{chartDraftId && !chartDraft.isDefault && <button type="button" onClick={deleteChartDraft} style={{ padding: '9px 14px', background: '#fff', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 7, cursor: 'pointer' }}>Delete chart</button>}</div>
                 </div>}
               </section>
@@ -645,7 +732,7 @@ export default function Products({ showToast }) {
                             <VariantImageGallery
                               variant={variant}
                               saving={variantSavingId === variant.billingVariantId}
-                              onSave={saveVariantImages}
+                              onChange={recordVariantImageDraft}
                             />
                           </td>
                         </tr>
@@ -713,7 +800,7 @@ export default function Products({ showToast }) {
 
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: 10, marginTop: 4 }}>
                 <button type="submit" disabled={saving} style={{ flex: 1, padding: 11, background: KM.orange, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
-                  {saving ? 'Saving...' : 'Update Product'}
+                  {saving ? <><span className="km-btn-spinner" /> Saving...</> : 'Update Product'}
                 </button>
                 <button type="button" className="action-btn" onClick={closeEditor}>Cancel</button>
               </div>
@@ -735,6 +822,7 @@ export default function Products({ showToast }) {
             const variants = product.Variants || product.variants || [];
             const stock = Number(product.stock || 0);
             const billingSubcategoryId = product.billingSubcategoryId || product.billing_subcategory_id;
+            const subcategoryName = product.SubCategory?.name || product.subCategory?.name || product.subcategory_name || product.subcategoryName;
             const sizes = [...new Set(variants.map(variant => variant.size).filter(Boolean))];
             const colors = [...new Set(variants.map(variant => variant.color).filter(Boolean))];
 
@@ -754,9 +842,7 @@ export default function Products({ showToast }) {
                 </td>
                 <td>
                   <div style={{ fontWeight: 600 }}>{product.productName || product.name}</div>
-                  <div style={{ fontSize: 11, color: KM.muted, marginTop: 3, maxWidth: 250 }}>
-                    {product.shortDescription || product.longDescription || product.description || 'No description'}
-                  </div>
+                  <div style={{ fontSize: 11, color: KM.muted, marginTop: 3 }}>Subcategory: {subcategoryName || (billingSubcategoryId ? `#${billingSubcategoryId}` : '—')}</div>
                   <div style={{ fontSize: 11, color: KM.muted, marginTop: 3 }}>Barcode: {product.barcode || '—'}</div>
                   <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                     {product.isNewArrival && <span style={{ fontSize: 10, background: '#DCFCE7', color: '#16A34A', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>New</span>}

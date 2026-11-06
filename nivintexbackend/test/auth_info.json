@@ -1,0 +1,11 @@
+{
+  "admin": {
+    "id": 1,
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzkyOTk2NDMwLCJleHAiOjE3OTMwODI4MzB9.pwRIfdOVd1DbAXZYDdkIR0VawHBKP7UuNpmaqzuE8rA"
+  },
+  "user": {
+    "id": 1,
+    "email": "harish05082004@gmail.com",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJoYXJpc2gwNTA4MjAwNEBnbWFpbC5jb20iLCJpYXQiOjE3OTI5OTY0MzAsImV4cCI6MTc5MzA4MjgzMH0.p-F8PA1ggE9vYYas_abfyy86OcRxYQ2DoUtsFbR3RGU"
+  }
+}

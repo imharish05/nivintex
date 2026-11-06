@@ -22,6 +22,7 @@ const Product = sequelize.define('Product', {
     mrpGstType: {
         type: DataTypes.STRING(40),
         allowNull: true,
+        defaultValue: 'With GST',
         field: 'mrp_gst_type',
     },
     categoryId: {

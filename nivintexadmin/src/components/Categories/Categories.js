@@ -5,6 +5,7 @@ import CharWordCounter from '../common/CharWordCounter';
 import { validateFields, isOverLimit } from '../../utils/textValidation';
 import { categoryApi, getImageUrl } from '../../api';
 import defaultLogo from '../../assets/logo.png';
+import { confirmToast } from '../../utils/confirmToast';
 
 const categoriesFromBilling = Boolean(process.env.REACT_APP_API_FROM_BILLING_URL);
 
@@ -18,6 +19,7 @@ export default function Categories({ showToast }) {
   const [status, setStatus]         = useState('Active');
   const [imageFile, setImageFile]   = useState(null);
   const [existingImage, setExistingImage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => { fetchCategories(); }, []);
 
@@ -72,13 +74,14 @@ export default function Categories({ showToast }) {
   };
 
   const resetForm = () => {
+    setIsSubmitting(false);
     setShowForm(false); setEditingId(null);
     setCategoryName(''); setStatus('Active'); setImageFile(null);
     setExistingImage(null);
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this category?')) return;
+    if (!(await confirmToast('Delete this category?', 'Delete'))) return;
     try {
       await categoryApi.remove(id);
       setRows((prev) => prev.filter((r) => r.id !== id));
@@ -148,8 +151,13 @@ export default function Categories({ showToast }) {
                 previewMaxHeight={120}
               />
 
-              <button type="submit" className="km-btn-submit">
-                {editingId ? 'Update Category' : 'Save Category'}
+              <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
+                {isSubmitting && <span className="km-btn-spinner" />}
+                <span>
+                  {isSubmitting
+                    ? (editingId ? 'Updating Category...' : 'Saving Category...')
+                    : (editingId ? 'Update Category' : 'Save Category')}
+                </span>
               </button>
               <button type="button" className="km-btn-cancel" onClick={resetForm}>Cancel</button>
             </form>

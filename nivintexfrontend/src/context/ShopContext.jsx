@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { cartApi, wishlistApi, authApi, orderApi, productApi, billingCatalogApi, getImageUrl } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
@@ -10,12 +10,27 @@ export const useShop = () => useContext(ShopContext);
 
 /* ── Session helpers ─────────────────────────────────────────────────── */
 const loadSession = () => {
-  try { const s = sessionStorage.getItem('nv_user'); return s ? JSON.parse(s) : null; }
+  try {
+    // User identity must be shared across tabs. Migrate the old tab-scoped
+    // value once so users already logged in before this change stay signed in.
+    const shared = localStorage.getItem('nv_user');
+    if (shared) {
+      sessionStorage.removeItem('nv_user');
+      return JSON.parse(shared);
+    }
+    const legacy = sessionStorage.getItem('nv_user');
+    if (!legacy) return null;
+    localStorage.setItem('nv_user', legacy);
+    sessionStorage.removeItem('nv_user');
+    return JSON.parse(legacy);
+  }
   catch { return null; }
 };
 const saveSession = (u) => {
-  if (u) sessionStorage.setItem('nv_user', JSON.stringify(u));
-  else   sessionStorage.removeItem('nv_user');
+  if (u) localStorage.setItem('nv_user', JSON.stringify(u));
+  else   localStorage.removeItem('nv_user');
+  // Do not leave stale tab-scoped identities behind after migrating.
+  sessionStorage.removeItem('nv_user');
 };
 
 /* ── Guest cart/wishlist localStorage helpers ────────────────────────── */
@@ -102,14 +117,53 @@ export const ShopProvider = ({ children }) => {
   });
   const [cartLoading, setCartLoading] = useState(false);
   const [toasts, setToasts]           = useState([]);
+  const toastSequence = useRef(0);
+  const toastTimers = useRef(new Map());
   const cartStockSyncKey = cartItems.map(item => `${normId(item.billingVariantId)}:${Number(item.qty) || 0}`).join('|');
 
+  // Keep React auth state aligned when another tab logs in, updates the
+  // profile, or logs out. The browser emits `storage` only in other tabs.
+  useEffect(() => {
+    const syncAuthAcrossTabs = (event) => {
+      if (event.key === 'nv_user') {
+        let nextUser = null;
+        try { nextUser = event.newValue ? JSON.parse(event.newValue) : null; }
+        catch { nextUser = null; }
+        setUser(nextUser);
+        if (!nextUser) {
+          setMyOrders([]);
+          setCartItems(loadGuestCart());
+          setWishlistItems(loadGuestWishlist());
+        }
+      }
+      if (event.key === 'userToken' && event.newValue === null) {
+        setUser(null);
+      }
+    };
+    window.addEventListener('storage', syncAuthAcrossTabs);
+    return () => window.removeEventListener('storage', syncAuthAcrossTabs);
+  }, []);
+
   const showToast = useCallback((message, type = 'success') => {
-    const id = Date.now();
+    const id = `${Date.now()}-${++toastSequence.current}`;
     setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
+      toastTimers.current.delete(id);
     }, 3000);
+    toastTimers.current.set(id, timer);
+  }, []);
+
+  const dismissToast = (id) => {
+    const timer = toastTimers.current.get(id);
+    if (timer) clearTimeout(timer);
+    toastTimers.current.delete(id);
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  useEffect(() => () => {
+    toastTimers.current.forEach(timer => clearTimeout(timer));
+    toastTimers.current.clear();
   }, []);
 
   /* Persist guest data */
@@ -169,7 +223,11 @@ export const ShopProvider = ({ children }) => {
         if (!product) return item;
         const variant = (product.Variants || []).find(row => normId(row.id) === normId(item.variantId));
         const finalPrice = variant?.franchise_price_final ?? product.franchise_price_final;
-        return finalPrice == null ? item : { ...item, price: Number(finalPrice) || 0 };
+        return {
+          ...item,
+          ...(finalPrice == null ? {} : { price: Number(finalPrice) || 0 }),
+          mrpGstType: product.mrpGstType || product.mrp_gst_type || 'With GST',
+        };
       }));
     }).catch(error => console.warn('[ShopContext] refresh guest cart prices:', error.message));
     return () => { active = false; };
@@ -184,16 +242,17 @@ export const ShopProvider = ({ children }) => {
     billingProductId: row.Product?.billingProductId || null,
     variantId: row.variantId || null,
     billingVariantId: row.Variant?.billingVariantId || null,
+    mrpGstType: row.Product?.mrpGstType || row.Product?.mrp_gst_type || 'With GST',
     color: row.color || '',
     size: row.size || '',
     fabric: row.fabric || '',
     name:      row.name   || 'Product',
     image:     resolveImg(row.img),
     subtitle:  row.weight || '',
-    shippingWeightKg: row.shipping_weight_kg ?? row.shippingWeightKg ?? null,
-    shippingLengthCm: row.shipping_length_cm ?? row.shippingLengthCm ?? null,
-    shippingWidthCm: row.shipping_width_cm ?? row.shippingWidthCm ?? null,
-    shippingHeightCm: row.shipping_height_cm ?? row.shippingHeightCm ?? null,
+    shippingWeightKg: row.shipping_weight_kg ?? row.shippingWeightKg ?? row.Product?.shipping_weight_kg ?? row.Product?.shippingWeightKg ?? null,
+    shippingLengthCm: row.shipping_length_cm ?? row.shippingLengthCm ?? row.Product?.shipping_length_cm ?? row.Product?.shippingLengthCm ?? null,
+    shippingWidthCm: row.shipping_width_cm ?? row.shippingWidthCm ?? row.Product?.shipping_width_cm ?? row.Product?.shippingWidthCm ?? null,
+    shippingHeightCm: row.shipping_height_cm ?? row.shippingHeightCm ?? row.Product?.shipping_height_cm ?? row.Product?.shippingHeightCm ?? null,
     price:     Number(row.Variant?.franchise_price_final ?? row.Product?.franchise_price_final) || 0,
     qty:       parseInt(row.quantity   || 1, 10),
     isBuyOneGetOne: row.Product ? !!row.Product.isBuyOneGetOne : !!row.isBuyOneGetOne,
@@ -227,15 +286,35 @@ export const ShopProvider = ({ children }) => {
       .join(' '),
     total:  parseFloat(row.total || 0),
     subtotal: parseFloat(row.subtotal || 0),
-    tax: parseFloat(row.tax || 0),
+    discount: parseFloat(row.discount || 0),
+    tax: Number(row.tax) > 0 ? Number(row.tax) : (row.OrderItems || []).reduce((sum, item) => {
+      const gstType = String(item.Product?.mrpGstType || item.Product?.mrp_gst_type || 'With GST').toLowerCase();
+      if (gstType === 'without gst') return sum;
+      const quantity = Math.max(1, Number(item.quantity) || 1);
+      const paidQuantity = item.Product?.isBuyOneGetOne ? Math.ceil(quantity / 2) : quantity;
+      return sum + ((Number(item.price) || 0) * paidQuantity * 5 / 105);
+    }, 0),
     deliveryCharge: parseFloat(row.delivery_charge || 0),
-    items: (row.OrderItems || []).map(it => ({
-      name:     it.name || it.Product?.productName || 'Product',
-      subtitle: it.weight || '',
-      price:    parseFloat(it.price || 0),
-      qty:      parseInt(it.quantity || 1, 10),
-      image:    resolveImg(it.image),
-    })),
+    items: (row.OrderItems || []).map(it => {
+      const variant = it.Variant || {};
+      const size = variant.size || it.size || '';
+      const color = variant.color || it.color || '';
+      const fabric = variant.fabric || it.fabric || '';
+      const variantLabel = [
+        size && `Size: ${size}`,
+        color && `Color: ${color}`,
+        fabric && `Fabric: ${fabric}`,
+      ].filter(Boolean).join(' · ') || (variant.variant_code || variant.sku ? `Variant code: ${variant.variant_code || variant.sku}` : '');
+      return {
+        name:     it.Product?.productName || it.name || 'Product',
+        subtitle: variantLabel,
+        price:    parseFloat(it.price || 0),
+        qty:      parseInt(it.quantity || 1, 10),
+        image:    resolveImg(it.image || it.Product?.image),
+        mrpGstType: it.Product?.mrpGstType || it.Product?.mrp_gst_type || 'With GST',
+        isBuyOneGetOne: !!it.Product?.isBuyOneGetOne,
+      };
+    }),
   });
 
   const fetchCart = useCallback(async (customerId) => {
@@ -311,7 +390,6 @@ export const ShopProvider = ({ children }) => {
           customerId: u.id,
           productId: item.productId || item.id,
           variantId: item.variantId || null,
-          billingVariantId: item.billingVariantId || null,
           name: item.name,
           img: item.image,
           price: item.price,
@@ -330,7 +408,7 @@ export const ShopProvider = ({ children }) => {
     }
     for (const item of guestWishlist) {
       try {
-        await wishlistApi.add({ customerId: u.id, productId: item.productId || item.id, variantId: item.variantId || null, color: item.color || '', size: item.size || '', fabric: item.fabric || '', name: item.name, img: item.image, price: item.price, weight: item.subtitle || '' });
+        await wishlistApi.add({ customerId: u.id, productId: item.productId || item.id, variantId: item.variantId || null, billingVariantId: item.billingVariantId || null, color: item.color || '', size: item.size || '', fabric: item.fabric || '', name: item.name, img: item.image, price: item.price, weight: item.subtitle || '' });
       } catch (err) { console.warn('[ShopContext] merge wishlist:', err.message); }
     }
     if (guestCart.length > 0 || guestWishlist.length > 0) {
@@ -445,6 +523,7 @@ export const ShopProvider = ({ children }) => {
     const shippingWidthCm = Number(product.shippingWidthCm || 0) || null;
     const shippingHeightCm = Number(product.shippingHeightCm || 0) || null;
     const isBuyOneGetOne = !!product.isBuyOneGetOne;
+    const mrpGstType = product.mrpGstType || product.mrp_gst_type || 'With GST';
     const billingVariantId = product.billingVariantId || null;
     const billingProductId = product.billingProductId || null;
     const addQty    = parseInt(product.qty || 1, 10);
@@ -479,7 +558,7 @@ export const ShopProvider = ({ children }) => {
       setCartItems(prev => {
         const ex = prev.find(i => i.productId === productId && normId(i.variantId) === normId(product.variantId));
         if (ex) return prev.map(i => i === ex ? { ...i, qty: i.qty + addQty, availableStock, stockSyncStatus: billingVariantId ? 'verified' : 'unverified' } : i);
-        return [...prev, { id: `${productId}-${product.variantId || 'default'}`, productId, billingProductId, variantId: product.variantId || null, billingVariantId, availableStock, stockSyncStatus: billingVariantId ? 'verified' : 'unverified', color: product.color || '', size: product.size || '', fabric: product.fabric || '', name, image: resolveImg(img), subtitle: weight, price, qty: addQty, shippingWeightKg, shippingLengthCm, shippingWidthCm, shippingHeightCm, isBuyOneGetOne }];
+        return [...prev, { id: `${productId}-${product.variantId || 'default'}`, productId, billingProductId, variantId: product.variantId || null, billingVariantId, availableStock, stockSyncStatus: billingVariantId ? 'verified' : 'unverified', color: product.color || '', size: product.size || '', fabric: product.fabric || '', name, image: resolveImg(img), subtitle: weight, price, qty: addQty, shippingWeightKg, shippingLengthCm, shippingWidthCm, shippingHeightCm, isBuyOneGetOne, mrpGstType }];
       });
       if (!product.silent) showToast(`${name} added to cart!`, 'cart');
       return true;
@@ -534,6 +613,7 @@ export const ShopProvider = ({ children }) => {
       id: Date.now(),
       productId,
       variantId,
+      billingVariantId: product.billingVariantId || product.billing_variant_id || null,
       color: product.color || '',
       size: product.size || '',
       fabric: product.fabric || '',
@@ -547,7 +627,7 @@ export const ShopProvider = ({ children }) => {
     showToast(`${item.name} added to wishlist!`, 'wishlist');
     if (user?.id) {
       try {
-        await wishlistApi.add({ customerId: user.id, productId, variantId, color: item.color, size: item.size, fabric: item.fabric, name: item.name, img: rawImg, price: item.price, weight: item.subtitle });
+        await wishlistApi.add({ customerId: user.id, productId, variantId, billingVariantId: item.billingVariantId, color: item.color, size: item.size, fabric: item.fabric, name: item.name, img: rawImg, price: item.price, weight: item.subtitle });
         await fetchWishlist(user.id);
       } catch (err) { console.warn('[ShopContext] addToWishlist:', err.message); }
     }
@@ -613,10 +693,13 @@ export const ShopProvider = ({ children }) => {
       {/* Toast Notification Container */}
       <div style={{
         position: 'fixed',
-        bottom: '24px',
-        right: '24px',
+        top: '24px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 'min(420px, calc(100vw - 24px))',
         display: 'flex',
         flexDirection: 'column',
+        alignItems: 'center',
         gap: '10px',
         zIndex: 999999,
         pointerEvents: 'none',
@@ -625,7 +708,7 @@ export const ShopProvider = ({ children }) => {
           <div
             key={t.id}
             style={{
-              background: '#0f5447',
+              background: t.type === 'error' ? '#a83232' : '#0f5447',
               color: '#fff',
               padding: '14px 40px 14px 20px',
               borderRadius: '6px',
@@ -638,8 +721,10 @@ export const ShopProvider = ({ children }) => {
               fontFamily: "'Raleway', sans-serif",
               animation: 'toastFadeInUp 0.3s cubic-bezier(0.25, 1, 0.5, 1)',
               pointerEvents: 'auto',
-              minWidth: '280px',
+              minWidth: 0,
               maxWidth: '360px',
+              width: '100%',
+              boxSizing: 'border-box',
               position: 'relative',
             }}
           >
@@ -647,7 +732,9 @@ export const ShopProvider = ({ children }) => {
               className={
                 t.type === 'wishlist' 
                   ? 'fa-solid fa-heart toast-icon-wishlist' 
-                  : t.type === 'info' 
+                  : t.type === 'error'
+                    ? 'fa-solid fa-circle-exclamation'
+                    : t.type === 'info' 
                     ? 'fa-solid fa-heart toast-icon-info' 
                     : t.type === 'cart'
                       ? 'fa-solid fa-bag-shopping toast-icon-cart'
@@ -658,7 +745,9 @@ export const ShopProvider = ({ children }) => {
             <span style={{ flex: 1, color: '#fff', letterSpacing: '0.3px' }}>{t.message}</span>
             
             <button
-              onClick={() => setToasts(prev => prev.filter(toast => toast.id !== t.id))}
+              type="button"
+              aria-label="Dismiss notification"
+              onClick={() => dismissToast(t.id)}
               style={{
                 background: 'transparent',
                 border: 'none',

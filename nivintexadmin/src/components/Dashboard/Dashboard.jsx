@@ -32,6 +32,11 @@ function stockLabel(s) {
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DONUT_COLORS = ['#0f5447','#28C76F','#FF9F43','#EA5455','#00CFE8','#9B59B6'];
+const orderStatus = order => String(order?.status || '').trim().toLowerCase();
+const isRevenueOrder = order => String(order?.payment_status || '').toLowerCase() === 'paid'
+  && !['cancelled', 'refunded'].includes(orderStatus(order));
+const orderDate = order => new Date(order?.createdAt || order?.created_at || 0).getTime() || 0;
+const orderAmount = order => Number(order?.total ?? order?.grand_total ?? order?.paid_amount ?? 0) || 0;
 const STATUS_CONFIG = [
   { key:'pending',          label:'Pending',           color:'#F59E0B' },
   { key:'processing',       label:'Processing',        color:'#FF9F43' },
@@ -169,7 +174,6 @@ function ChartTooltip({ active, payload, label }) {
 export default function Dashboard({ showToast }) {
   const STORAGE_KEY = 'kalpana_low_stock_threshold';
   const [threshold,        setThreshold]        = useState(parseInt(localStorage.getItem(STORAGE_KEY)) || 10);
-  const [recentProducts,   setRecentProducts]   = useState([]);
   const [allProducts,      setAllProducts]      = useState([]);
   const [allOrders,        setAllOrders]        = useState([]);
   const [allCustomers,     setAllCustomers]     = useState([]);
@@ -192,9 +196,14 @@ export default function Dashboard({ showToast }) {
     fetch(`${API}/products`)
       .then(r => r.json())
       .then(d => {
-        const list = Array.isArray(d) ? d : [];
-        setAllProducts(list);
-        setRecentProducts([...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10));
+        const list = Array.isArray(d) ? d
+          : Array.isArray(d?.products) ? d.products
+            : Array.isArray(d?.data?.products) ? d.data.products : [];
+        // The local catalog keeps Billing-removed products as inactive rows
+        // for history/customization. Dashboard totals should reflect products
+        // that are currently available in the catalog.
+        setAllProducts(list.filter(product => String(product.status || 'Active').trim().toLowerCase() === 'active'
+          && (product.billingProductId || product.billing_product_id)));
       })
       .catch(() => showToast?.('Failed to load products'))
       .finally(() => setProductsLoading(false));
@@ -204,7 +213,10 @@ export default function Dashboard({ showToast }) {
     const token = localStorage.getItem('adminToken');
     fetch(`${API}/orders/all`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(d => setAllOrders(Array.isArray(d.orders) ? d.orders : []))
+      .then(d => {
+        const orders = Array.isArray(d?.orders) ? d.orders : Array.isArray(d?.data?.orders) ? d.data.orders : [];
+        setAllOrders([...orders].sort((a, b) => orderDate(b) - orderDate(a) || Number(b.id) - Number(a.id)));
+      })
       .catch(() => showToast?.('Failed to load orders'))
       .finally(() => setOrdersLoading(false));
   }, [showToast]);
@@ -295,17 +307,17 @@ export default function Dashboard({ showToast }) {
 
   /* ── Derived: sales ──────────────────────────────────────────────────── */
   const sales = useMemo(() => {
-    const delivered = allOrders.filter(o => o.status === 'delivered');
-    const cancelled = allOrders.filter(o => o.status === 'cancelled');
-    const refunded  = allOrders.filter(o => o.status === 'refunded');
-    const totalRevenue = delivered.reduce((s, o) => s + (Number(o.total) || 0), 0);
-    const aov = delivered.length ? totalRevenue / delivered.length : 0;
+    const revenueOrders = allOrders.filter(isRevenueOrder);
+    const cancelled = allOrders.filter(o => orderStatus(o) === 'cancelled');
+    const refunded  = allOrders.filter(o => orderStatus(o) === 'refunded');
+    const totalRevenue = revenueOrders.reduce((sum, order) => sum + orderAmount(order), 0);
+    const aov = revenueOrders.length ? totalRevenue / revenueOrders.length : 0;
 
     const now = new Date(), thisM = now.getMonth(), thisY = now.getFullYear();
     const revOfMonth = (m, y) =>
-      delivered
-        .filter(o => { const d = new Date(o.createdAt); return d.getMonth() === m && d.getFullYear() === y; })
-        .reduce((s, o) => s + (Number(o.total) || 0), 0);
+      revenueOrders
+        .filter(o => { const d = new Date(o.createdAt || o.created_at); return d.getMonth() === m && d.getFullYear() === y; })
+        .reduce((sum, order) => sum + orderAmount(order), 0);
 
     const lastM = (thisM + 11) % 12, lastY = thisM === 0 ? thisY - 1 : thisY;
     const growth = revOfMonth(lastM, lastY)
@@ -319,7 +331,7 @@ export default function Dashboard({ showToast }) {
         month: MONTH_NAMES[m],
         revenue: revOfMonth(m, y),
         orders: allOrders.filter(o => {
-          const d = new Date(o.createdAt);
+          const d = new Date(o.createdAt || o.created_at);
           return d.getMonth() === m && d.getFullYear() === y;
         }).length,
       });
@@ -331,7 +343,7 @@ export default function Dashboard({ showToast }) {
     return {
       totalRevenue, aov,
       ordersCount: allOrders.length,
-      deliveredCount: delivered.length,
+      revenueOrderCount: revenueOrders.length,
       growth: Number(growth),
       cancellations: cancelled.length,
       refunds: refunded.length,
@@ -342,34 +354,50 @@ export default function Dashboard({ showToast }) {
 
   /* ── Derived: products ───────────────────────────────────────────────── */
   const products = useMemo(() => {
-    const nameToId = {};
-    allProducts.forEach(p => { if (p.productName) nameToId[p.productName.toLowerCase().trim()] = p.id; });
+    const nameToId = new Map();
+    const productById = new Map(allProducts.map(product => [String(product.id), product]));
+    allProducts.forEach(product => {
+      const name = String(product.productName || product.name || '').toLowerCase().trim();
+      if (name) nameToId.set(name, product.id);
+    });
 
-    const salesByProduct = {}, salesByName = {};
-    allOrders.filter(o => o.status === 'delivered').forEach(o => {
-      const items = o.OrderItems || o.orderItems || o.order_items || o.items || [];
-      items.forEach(item => {
-        const qty  = Number(item.quantity) || 1;
-        const pid  = item.product_id || item.productId || item.ProductId || null;
-        const key  = (item.name || item.productName || '').toLowerCase().trim();
-        if (pid) salesByProduct[String(pid)] = (salesByProduct[String(pid)] || 0) + qty;
-        if (key) {
-          salesByName[key] = (salesByName[key] || 0) + qty;
-          if (!pid && nameToId[key]) salesByProduct[String(nameToId[key])] = (salesByProduct[String(nameToId[key])] || 0) + qty;
-        }
+    const salesByProduct = {}, salesByName = {}, revenueByCategory = {};
+    allOrders.filter(isRevenueOrder).forEach(order => {
+      const items = order.OrderItems || order.orderItems || order.order_items || order.items || [];
+      const lines = items.map(item => ({
+        item,
+        quantity: Number(item.quantity) || 1,
+        lineValue: Math.max(0, Number(item.price ?? item.selling_price ?? item.unit_price) || 0) * (Number(item.quantity) || 1),
+      }));
+      const lineTotal = lines.reduce((sum, line) => sum + line.lineValue, 0);
+      const paidTotal = orderAmount(order);
+      if (!lines.length && paidTotal > 0) revenueByCategory.Uncategorized = (revenueByCategory.Uncategorized || 0) + paidTotal;
+      lines.forEach(({ item, quantity, lineValue }) => {
+        const productName = String(item.name || item.productName || item.product_name || '').toLowerCase().trim();
+        const productId = item.product_id || item.productId || item.ProductId || nameToId.get(productName);
+        const product = productById.get(String(productId));
+        const category = product?.Category?.name || product?.category?.name || product?.categoryName || 'Uncategorized';
+        revenueByCategory[category] = (revenueByCategory[category] || 0) + (lineTotal > 0 ? paidTotal * lineValue / lineTotal : 0);
+        if (productId) salesByProduct[String(productId)] = (salesByProduct[String(productId)] || 0) + quantity;
+        if (productName) salesByName[productName] = (salesByName[productName] || 0) + quantity;
       });
     });
 
     const enriched = allProducts.map(p => {
-      const stock = Number(p.stock) || 0;
-      const nameKey = p.productName?.toLowerCase().trim() || '';
+      const variants = p.Variants || p.variants || p.product_variants || [];
+      const stock = Array.isArray(variants) && variants.length
+        ? variants.reduce((sum, variant) => sum + (Number(variant.stock ?? variant.quantity) || 0), 0)
+        : Number(p.stock) || 0;
+      const name = p.productName || p.name || `Product ${p.id}`;
+      const nameKey = name.toLowerCase().trim();
+      const category = p.Category?.name || p.category?.name || p.categoryName || 'Uncategorized';
       const s = salesByProduct[String(p.id)] || salesByName[nameKey] || Number(p.salesCount ?? p.totalSales ?? 0);
-      return { id: p.id, name: p.productName, category: p.Category?.name || '—', stock, sales: s, price: Number(p.salesPrice) || 0, mrp: Number(p.mrp) ?? 0 };
+      return { id: p.id, name, category, stock, sales: s, price: Number(p.salesPrice ?? p.franchise_price_final) || 0, mrp: Number(p.mrp) || 0 };
     });
 
     const lowStock = [], outOfStock = [];
-    allProducts.forEach(p => {
-      const entry = { productId: p.id, productName: p.productName, category: p.Category?.name || '—', stock: Number(p.stock) || 0, salesPrice: Number(p.salesPrice) || 0, mrp: Number(p.mrp) || 0 };
+    enriched.forEach(p => {
+      const entry = { productId: p.id, productName: p.name, category: p.category, stock: p.stock, salesPrice: p.price, mrp: p.mrp };
       if (entry.stock === 0) outOfStock.push(entry);
       else if (entry.stock <= threshold) lowStock.push(entry);
     });
@@ -387,7 +415,8 @@ export default function Dashboard({ showToast }) {
       enriched, lowStock, outOfStock,
       bestSelling: [...enriched].sort((a, b) => b.sales - a.sales).slice(0, 5),
       topPerformers: [...enriched].sort((a, b) => b.sales - a.sales).slice(0, 6),
-      categoryData: Object.values(byCategory).sort((a, b) => b.products - a.products).slice(0, 6),
+      categoryData: Object.values(byCategory).map(category => ({ ...category, revenue: revenueByCategory[category.name] || 0 }))
+        .sort((a, b) => b.revenue - a.revenue || b.products - a.products).slice(0, 6),
       totalStock: enriched.reduce((s, p) => s + p.stock, 0),
       highStock: enriched.filter(p => p.stock > 200).length,
     };
@@ -420,17 +449,24 @@ export default function Dashboard({ showToast }) {
 
   const StatusPill = ({ status }) => {
     const map = {
-      Processing: "bg-amber-50 text-amber-700",
-      Confirmed: "bg-blue-50 text-blue-700",
-      Shipped: "bg-purple-50 text-purple-700",
-      Delivered: "bg-emerald-50 text-emerald-700",
-      Cancelled: "bg-red-50 text-red-700",
-      Refunded: "bg-slate-100 text-slate-600",
+      pending: "bg-amber-50 text-amber-700",
+      processing: "bg-amber-50 text-amber-700",
+      assigned: "bg-blue-50 text-blue-700",
+      accepted: "bg-blue-50 text-blue-700",
+      confirmed: "bg-blue-50 text-blue-700",
+      packed: "bg-indigo-50 text-indigo-700",
+      shipped: "bg-purple-50 text-purple-700",
+      in_transit: "bg-purple-50 text-purple-700",
+      out_for_delivery: "bg-cyan-50 text-cyan-700",
+      delivered: "bg-emerald-50 text-emerald-700",
+      cancelled: "bg-red-50 text-red-700",
+      refunded: "bg-slate-100 text-slate-600",
     };
-    const key = status ? status.charAt(0).toUpperCase() + status.slice(1) : "";
+    const key = orderStatus({ status });
+    const label = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     return (
       <span className={`text-[11px] px-2 py-1 rounded-md ${map[key] || "bg-slate-100 text-slate-600"}`}>
-        {key || status}
+        {label || status}
       </span>
     );
   };
@@ -480,7 +516,10 @@ export default function Dashboard({ showToast }) {
 
   const recentOrders = allOrders.slice(0, 5).map(o => ({
     id: o.id || o.orderId || `#${o.id}`,
-    status: o.status
+    status: o.status,
+    customer: o.customer_name || o.customerName || o.Customer?.name || 'Customer',
+    total: orderAmount(o),
+    date: o.createdAt || o.created_at,
   }));
 
   return (
@@ -539,7 +578,7 @@ export default function Dashboard({ showToast }) {
 
         <div className="bg-white border border-slate-200 rounded-xl p-5">
           <p className="text-[15px] font-medium text-slate-900">Sales overview</p>
-          <p className="text-xs text-slate-400 mb-4">Category distribution</p>
+          <p className="text-xs text-slate-400 mb-4">Paid revenue by category</p>
           {productsLoading ? (
             <div className="h-32 flex items-center justify-center text-slate-400 text-sm">Loading…</div>
           ) : products.categoryData.length === 0 ? (
@@ -550,12 +589,12 @@ export default function Dashboard({ showToast }) {
           ) : (
             <ResponsiveContainer width="100%" height={128}>
               <PieChart>
-                <Pie data={products.categoryData} dataKey="products" nameKey="name"
+                <Pie data={products.categoryData} dataKey="revenue" nameKey="name"
                   cx="50%" cy="50%" outerRadius={50} innerRadius={30} paddingAngle={2}
                   labelLine={false}>
                   {products.categoryData.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />)}
                 </Pie>
-                <Tooltip formatter={(v, _, p) => [`${v} products`, p.payload.name]} />
+                <Tooltip formatter={(v, _, p) => [fmtINR(v), p.payload.name]} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -574,7 +613,12 @@ export default function Dashboard({ showToast }) {
                   key={o.id}
                   className={i !== recentOrders.length - 1 ? "border-b border-slate-100" : ""}
                 >
-                  <td className="py-2 text-slate-500 font-mono">{o.id}</td>
+                  <td className="py-2 text-slate-500 font-mono">#{o.id}</td>
+                  <td className="py-2 pl-3">
+                    <div className="text-slate-700">{o.customer}</div>
+                    <div className="text-xs text-slate-400">{o.date ? new Date(o.date).toLocaleDateString('en-IN') : ''}</div>
+                  </td>
+                  <td className="py-2 text-right font-medium text-slate-700">{fmtINR(o.total)}</td>
                   <td className="py-2 text-right">
                     <StatusPill status={o.status} />
                   </td>

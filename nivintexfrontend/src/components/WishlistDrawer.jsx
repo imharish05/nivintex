@@ -52,6 +52,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
     addToCart({
       productId: item.productId || item.id,
       variantId: item.variantId,
+      billingVariantId: item.billingVariantId,
       name:      item.name,
       img:       item.image,
       image:     item.image,
@@ -69,6 +70,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
     wishlistItems.forEach(item => addToCart({
       productId: item.productId || item.id,
       variantId: item.variantId,
+      billingVariantId: item.billingVariantId,
       name:      item.name,
       img:       item.image,
       image:     item.image,

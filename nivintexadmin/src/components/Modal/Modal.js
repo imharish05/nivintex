@@ -1,7 +1,8 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 
 export default function Modal({ open, title, fields, onClose, onSave }) {
   const formRef = useRef(null);
+  const [validationError, setValidationError] = useState('');
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -22,7 +23,8 @@ export default function Modal({ open, title, fields, onClose, onSave }) {
         inp.style.borderColor = '';
       }
     });
-    if (!valid) { alert('Please fill in required fields'); return; }
+    if (!valid) { setValidationError('Please fill in required fields'); return; }
+    setValidationError('');
     onSave(title.replace('Add ', ''));
     onClose();
   };
@@ -36,6 +38,7 @@ export default function Modal({ open, title, fields, onClose, onSave }) {
         <div className="km-modal-header">{title}</div>
 
         <div className="km-modal-body" ref={formRef}>
+          {validationError && <p role="alert" style={{ color: 'var(--km-red)', margin: '0 0 12px' }}>{validationError}</p>}
           {fields.map((f) => (
             <div key={f.l} className="km-field" data-required={f.req ? 'true' : undefined}>
               <label className="km-label">

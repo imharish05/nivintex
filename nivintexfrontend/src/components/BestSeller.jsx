@@ -556,7 +556,7 @@ export default function BestSellersSection() {
     setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
   };
 
-  const goToShop = () => { navigate('/shop'); };
+  const goToShop = () => { navigate('/shop?sort=best-sellers'); };
 
   const goToProduct = (product) => {
     navigate(`/product/${product.slug || slugifyProductName(product.productName || product.name, product.id)}`);

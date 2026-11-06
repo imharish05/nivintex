@@ -66,27 +66,22 @@ exports.updateProfile = async (req, res) => {
 
     const numericId = parseInt(id, 10);
 
-    if (username || email) {
-      const conditions = [];
-      if (username) conditions.push({ username });
-      if (email)    conditions.push({ email });
-
+    if (email) {
+      const trimmedEmail = email.trim().toLowerCase();
       const existing = await UserLogin.findOne({
         where: {
-          [Op.and]: [
-            { id: { [Op.ne]: numericId } },
-            { [Op.or]: conditions }
-          ]
+          id: { [Op.ne]: numericId },
+          email: trimmedEmail
         }
       });
 
-      if (existing) return res.status(400).json({ error: 'Username or Email already taken!' });
+      if (existing) return res.status(400).json({ error: 'This email is already in use by another account.' });
     }
 
     const updateData = {};
-    if (username)            updateData.username = username;
-    if (email)               updateData.email    = email;
-    if (phone !== undefined) updateData.phone    = phone || null;
+    if (username)            updateData.username = username.trim();
+    if (email)               updateData.email    = email.trim().toLowerCase();
+    if (phone !== undefined) updateData.phone    = phone ? phone.trim() : null;
 
     await UserLogin.update(updateData, { where: { id: numericId } });
 
@@ -99,6 +94,9 @@ exports.updateProfile = async (req, res) => {
 
     res.status(200).json({ message: 'Profile updated successfully!', user: updatedUser });
   } catch (err) {
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ error: 'This email is already in use.' });
+    }
     console.error('Update profile error:', err.message);
     res.status(500).json({ error: err.message });
   }

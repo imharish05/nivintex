@@ -340,7 +340,7 @@ export default function NewArrivalsSection() {
   const [bannerData, setBannerData] = useState(null);
   const [bannerLoading, setBannerLoading] = useState(true);
 
-  const goToShop = () => { navigate("/shop"); };
+  const goToShop = () => { navigate("/shop?sort=new-arrivals"); };
 
   const goToProduct = (product) => {
     navigate(`/product/${product.slug || slugifyProductName(product.productName || product.name, product.id)}`);
@@ -356,11 +356,21 @@ export default function NewArrivalsSection() {
   useEffect(() => {
     productApi.getAllFast()
       .then((data) => {
-        const arrivals = Array.isArray(data) ? data.filter(product => product.isNewArrival) : [];
+        const arrivals = (Array.isArray(data) ? data.filter(product => product.isNewArrival) : [])
+          .sort((a, b) => {
+            const timeA = new Date(a.createdAt || a.created_at || 0).getTime();
+            const timeB = new Date(b.createdAt || b.created_at || 0).getTime();
+            if (timeB !== timeA) return timeB - timeA;
+            return (Number(b.id) || 0) - (Number(a.id) || 0);
+          })
+          .slice(0, 6);
         setProducts(arrivals);
         setLoading(false);
         productApi.enrichWithBillingPrices(arrivals)
-          .then(priced => setProducts(Array.isArray(priced) ? priced : arrivals))
+          .then(priced => {
+            const list = Array.isArray(priced) ? priced : arrivals;
+            setProducts(list.slice(0, 6));
+          })
           .catch(() => {});
       })
       .catch(() => setProducts([]))
@@ -451,7 +461,7 @@ export default function NewArrivalsSection() {
             {!loading && products.length === 0 && (
               <div className="na-empty">No new arrivals yet.</div>
             )}
-            {!loading && products.map((p) => {
+            {!loading && products.slice(0, 6).map((p) => {
               const imgSrc   = getImageUrl(p.image);
               const mrp      = Number(p.mrp       ?? 0);
               const sale     = Number(p.franchise_price_final ?? p.salesPrice ?? mrp);

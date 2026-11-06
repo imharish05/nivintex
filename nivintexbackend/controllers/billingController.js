@@ -37,12 +37,15 @@ exports.getCategories = async (_req, res) => {
   try {
     const data = await billingCatalog.getEndpoint('/category');
     const assetBase = billingAssetBaseUrl();
+    res.set('Cache-Control', 'no-store, max-age=0');
     if (Array.isArray(data?.category)) {
       data.category = data.category.map(cat => {
-        if (cat.image && !/^https?:\/\//i.test(cat.image)) {
-          return { ...cat, image: `${assetBase}/${String(cat.image).replace(/^\/+/, '')}` };
-        }
-        return cat;
+        const rawStatus = cat.status ?? cat.is_active ?? cat.isActive ?? cat.active;
+        const inactive = ['inactive', 'disabled', '0', 'false', 'no'].includes(String(rawStatus ?? '').trim().toLowerCase());
+        const image = cat.image && !/^https?:\/\//i.test(cat.image)
+          ? `${assetBase}/${String(cat.image).replace(/^\/+/, '')}`
+          : cat.image;
+        return { ...cat, image, status: inactive ? 'Inactive' : 'Active' };
       });
     }
     return res.status(200).json(data);

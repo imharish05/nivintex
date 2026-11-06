@@ -15,11 +15,15 @@ export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick })
   const [activeTab, setActiveTab] = useState('low');
   const [loading, setLoading]     = useState(false);
   const dropRef                   = useRef(null);
+  const alertListRef              = useRef(null);
 
   const fetchAlerts = useCallback((t) => {
     setLoading(true);
     fetch(`${API}/dashboard/stock-alerts?threshold=${t}`)
-      .then(r => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(data => { if (data.summary) setAlerts(data); })
       .catch(err => console.error('Stock alerts fetch error:', err))
       .finally(() => setLoading(false));
@@ -172,7 +176,10 @@ export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick })
                   { key: 'out', label: `❌ Out of Stock (${alerts.summary?.outOfStockCount || 0})`, color: '#dc2626' },
                   { key: 'low', label: `⚠️ Low Stock ≤${threshold} (${alerts.summary?.lowStockCount || 0})`, color: '#ea580c' },
                 ].map(tab => (
-                  <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+                  <button key={tab.key} onClick={() => {
+                    setActiveTab(tab.key);
+                    if (alertListRef.current) alertListRef.current.scrollTop = 0;
+                  }} style={{
                     flex: 1, padding: '9px 4px',
                     fontSize: 11, fontWeight: 700, border: 'none',
                     borderBottom: activeTab === tab.key ? `2px solid ${tab.color}` : '2px solid transparent',
@@ -186,20 +193,20 @@ export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick })
               </div>
 
               {/* List */}
-              <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+              <div ref={alertListRef} style={{ maxHeight: 280, overflowY: 'auto', overflowAnchor: 'none' }}>
                 {loading ? (
                   <div style={{ padding: 24, textAlign: 'center', fontSize: 12, color: '#94a3b8' }}>Loading…</div>
                 ) : activeTab === 'out' ? (
                   alerts.outOfStock?.length === 0
                     ? <EmptyMsg text="✅ No out-of-stock products!" />
                     : alerts.outOfStock.map((item, i) => (
-                        <AlertRow key={`out-${item.id}`} item={item} isLast={i === alerts.outOfStock.length - 1} type="out" />
+                        <AlertRow key={`out-${item.variantId || item.productId}`} item={item} isLast={i === alerts.outOfStock.length - 1} type="out" />
                       ))
                 ) : (
                   alerts.lowStock?.length === 0
                     ? <EmptyMsg text={`✅ No products with stock ≤ ${threshold}!`} />
                     : alerts.lowStock.map((item, i) => (
-                        <AlertRow key={`low-${item.id}`} item={item} isLast={i === alerts.lowStock.length - 1} type="low" />
+                        <AlertRow key={`low-${item.variantId || item.productId}`} item={item} isLast={i === alerts.lowStock.length - 1} type="low" />
                       ))
                 )}
               </div>
@@ -242,9 +249,12 @@ function AlertRow({ item, isLast, type }) {
           {item.productName}
         </div>
         <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>
-          {item.unit ? `${item.unit}` : ''}
+          {item.variant || item.unit || ''}
           {item.category && item.category !== '—' ? ` · ${item.category}` : ''}
         </div>
+        {item.identifier && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+          {item.identifierType || 'Code'}: {item.identifier}
+        </div>}
       </div>
 
       <span style={{

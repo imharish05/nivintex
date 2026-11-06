@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
 import ImageUploadPreview from '../common/ImageUploadPreview';
 import CharWordCounter from '../common/CharWordCounter';
 import { validateFields, isOverLimit } from '../../utils/textValidation';
 import { getImageUrl } from '../../api';
+import { confirmToast } from '../../utils/confirmToast';
 
 const API = process.env.REACT_APP_API_URL;
 
@@ -118,7 +119,7 @@ export default function OfferBanners({ showToast }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this offer banner?')) return;
+    if (!(await confirmToast('Delete this offer banner?', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/offer-banners/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -223,20 +224,12 @@ export default function OfferBanners({ showToast }) {
 
               <div className="km-field km-field-full">
                 <label className="km-label">Button Link <span style={{ color: 'red' }}>*</span></label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input
+                                  <input
                     className={`km-input ${isOverLimit(formData.btnLink, { maxChars: 255 }) ? 'km-input-error' : ''}`}
                     type="text" required
                     placeholder="e.g. /shop or https://..."
                     value={formData.btnLink} onChange={set('btnLink')}
-                    style={{ flex: 1 }}
                   />
-                  {formData.btnLink && (
-                    <a href={formData.btnLink} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#0d6efd', color: '#fff', padding: '6px 12px', borderRadius: 4, fontSize: 12, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', border: '1px solid #0a58ca' }}>
-                      ↗ Open
-                    </a>
-                  )}
-                </div>
                 <CharWordCounter
                   value={formData.btnLink}
                   maxChars={255}
@@ -275,7 +268,7 @@ export default function OfferBanners({ showToast }) {
         <p className="km-loading">Loading offer banners...</p>
       ) : (
         <DataTable
-          columns={['ID', 'Image', 'Title', 'Subtitle', 'Offer Label', 'Button Text', 'Button Link', 'Status', 'Actions']}
+          columns={['ID', 'Image', 'Title', 'Subtitle', 'Offer Label', 'Button Text', 'Status', 'Actions']}
           initialRows={rows}
           renderRow={(row) => (
             <tr key={row.id}>
@@ -308,14 +301,6 @@ export default function OfferBanners({ showToast }) {
               </td>
 
               <td>{row.btnText || '—'}</td>
-
-              <td>
-                {row.btnLink ? (
-                  <a href={row.btnLink} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#0d6efd', color: '#fff', padding: '3px 10px', borderRadius: 4, fontWeight: 600, fontSize: 12, border: '1px solid #0a58ca', textDecoration: 'none' }}>
-                    ↗ Open
-                  </a>
-                ) : '—'}
-              </td>
 
               <td>
                 <span className={`status-pill ${pillClass[row.status] || 'pill-active'}`}>

@@ -19,6 +19,7 @@ function configuredStockLocationId() {
 
 function makeBillingCreatePayload(snapshot) {
   const combinedItems = new Map();
+  let itemDiscountTotal = 0;
   for (const item of Array.isArray(snapshot.items) ? snapshot.items : []) {
     const rawId = item?.product_variant_id;
     const variantId = Number(rawId);
@@ -33,17 +34,42 @@ function makeBillingCreatePayload(snapshot) {
     if (!Number.isFinite(discount) || discount < 0) {
       throw new Error(`Billing discount is invalid for product variant ${variantId}.`);
     }
-    const current = combinedItems.get(variantId) || { product_variant_id: variantId, quantity: 0, discount_amount: 0 };
+    itemDiscountTotal += discount;
+    const rawGstPercent = Number(item.gst_percent ?? (snapshot.has_gst === false ? 0 : 5));
+    if (!Number.isFinite(rawGstPercent) || ![0, 5].includes(rawGstPercent)) {
+      throw new Error(`Billing GST rate is invalid for product variant ${variantId}.`);
+    }
+    const current = combinedItems.get(variantId) || {
+      product_variant_id: variantId,
+      quantity: 0,
+      discount_amount: 0,
+      gst_percent: rawGstPercent,
+      includeGstPercent: item.gst_percent !== undefined && item.gst_percent !== null,
+    };
+    if (current.gst_percent !== rawGstPercent) {
+      throw new Error(`Conflicting GST settings were submitted for product variant ${variantId}.`);
+    }
+    current.includeGstPercent = current.includeGstPercent || (item.gst_percent !== undefined && item.gst_percent !== null);
     current.quantity += quantity;
     current.discount_amount += discount;
     combinedItems.set(variantId, current);
   }
-  const items = [...combinedItems.values()];
+  const combined = [...combinedItems.values()];
+  const hasGst = combined.some(item => item.gst_percent > 0);
+  const items = combined.map(({ includeGstPercent, ...item }) => {
+    item.discount_amount = 0;
+    if (!includeGstPercent) delete item.gst_percent;
+    return item;
+  });
   if (!items.length) throw new Error('Billing invoice needs at least one purchased variant.');
 
   const rawLocationId = snapshot.franchise_location_id;
   const locationId = rawLocationId === undefined || rawLocationId === ''
     ? configuredStockLocationId() : normalizeStockLocationId(rawLocationId);
+  const snapshotBillDiscount = Number(snapshot.bill_discount_amount) || 0;
+  if (!Number.isFinite(snapshotBillDiscount) || snapshotBillDiscount < 0) {
+    throw new Error('Billing bill-level discount is invalid.');
+  }
 
   return {
     franchise_location_id: locationId === null ? null : Number(locationId),
@@ -52,10 +78,12 @@ function makeBillingCreatePayload(snapshot) {
     customer_email: String(snapshot.customer_email || ''),
     source: 'Website',
     entry_mode: 'Manual',
-    price_type: 'MRP',
+    price_type: 'Franchise',
     payment_mode: 'Online',
-    has_gst: false,
-    bill_discount_amount: Number(snapshot.bill_discount_amount) || 0,
+    has_gst: hasGst,
+    billing_address: String(snapshot.billing_address || ''),
+    shipping_address: String(snapshot.shipping_address || ''),
+    bill_discount_amount: Number((snapshotBillDiscount + itemDiscountTotal).toFixed(2)),
     paid_amount: Number(snapshot.paid_amount) || 0,
     items,
   };

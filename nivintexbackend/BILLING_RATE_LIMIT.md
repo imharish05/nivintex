@@ -2,7 +2,7 @@
 
 All runtime Billing API requests from the backend use `services/billingRequestManager.js`. It applies an in-process concurrency queue, deduplicates identical in-flight GETs, logs a correlation ID and duration, and retries only idempotent GET requests after HTTP 429. POST requests such as `/billings` are queued but never retried automatically.
 
-Checkout stock validation calls one fresh `GET /product_varients` and does not read the display cache. The invoice POST remains the authority for final inventory acceptance and Billing owns the decrement. A stale display snapshot cannot authorize payment.
+Checkout stock validation calls fresh `GET /product_varients` and `GET /stocks` and does not read the display cache. The `/stocks` row is matched to the catalog variant by its exact variant code/SKU; catalog aggregate stock cannot authorize payment. The invoice POST remains the authority for final inventory acceptance and Billing owns the decrement. A stale display snapshot cannot authorize payment.
 
 Defaults are deliberately conservative concurrency and bounded queue settings, not claims about Billing's quota. No requests-per-second limit is configured because Billing's actual quota and scope have not been provided.
 

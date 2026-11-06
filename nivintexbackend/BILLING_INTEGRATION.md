@@ -1,29 +1,48 @@
 # Billing API integration
 
-The admin panel's **Sync billing data now** action calls `POST /api/sync/billing` on the ecommerce backend. It requires the existing admin JWT in an `Authorization: Bearer …` header. In `nivintexadmin/.env`, `REACT_APP_API_URL` must point to the ecommerce backend and include `/api`; the current setting is present and has that shape.
+The admin panel's **Sync billing data now** action calls `POST /api/sync/billing` on the ecommerce backend and requires its admin JWT. Billing API credentials stay in `nivintexbackend/.env`; the browser never receives `BILLING_API_TOKEN`.
 
-The backend pulls these GET endpoints from the billing API:
+The live Billing API was read on 2026-10-21. `BILLING_API_BASE_URL` must be `https://nivintex.saitechnosolutions.co.in/api` for the current test account. The sync uses the following endpoints:
 
-- `/category`
-- `/subcategory`
-- `/products`
-- `/product_varients`
-- `/varients`
-- `/stocks`
-- `/franchises`
+| Billing endpoint | Live response shape | Purpose |
+| --- | --- | --- |
+| `GET /products` | `{ status, products, meta }`; 15 products per page, 104 total, 7 pages | Base product names, codes, descriptions, category/subcategory, prices, and paging. The sync fetches all pages; Billing image fields are ignored. |
+| `GET /product_varients` | `{ status, product_varients }`; 104 product records, each with nested `variants` | Billing product/variant IDs, SKUs, codes, size/color, and prices. Billing image fields are ignored by the storefront sync. `total_stock` is aggregate, not a location stock quantity. |
+| `GET /product_details/:id` | `{ status, product }` | Per-product detail enrichment, including nested variants. A full admin sync reads each product sequentially and merges it by Billing product ID. Billing image fields are ignored. |
+| `GET /stocks` | `{ status, stocks }`; live rows shaped like `{ id, variant_code, display_name, size, color, barcode, product, quantity, in_stock }` | Current website/Central Admin stock view. The row `id` maps to the Billing variant ID after the SKU/code is checked against `/product_varients`. This response does not contain a location ID; it must remain the stock view for the same Central Admin/null location used by invoice creation. |
 
-The external billing API base is configured separately in `nivintexbackend/.env` with `BILLING_API_BASE_URL`; it defaults to the host in the supplied workbook. Billing stock writes require `BILLING_API_TOKEN` with a valid bearer token and stock write permission, even though read endpoints may be public. When this token is unset, the order flow skips the stock request and marks the order `not_configured`. `BILLING_API_TIMEOUT_MS` and `BILLING_ASSET_BASE_URL` are optional. Never put billing credentials in the React app.
+Full sync fetches product pages, product variants and stock rows, then fetches product details one at a time with `BILLING_API_PRODUCT_DETAILS_DELAY_MS` (default 250 ms) between detail requests. A post-invoice catalog refresh skips per-product details and refreshes products, variants, and stock only. All requests go through the shared Billing request manager; only GETs can be retried after a 429.
 
-## Field mapping
+## Field mapping into Nivintex
 
-- Categories: billing ID, name, code prefix, image, status.
-- Subcategories: `/subcategory` is read directly through the ecommerce backend; billing IDs are kept separately from local subcategory IDs and linked to the matching local category when synced.
-- Products: billing ID, category, subcategory, product code, HSN, barcode, name, description, image, status, and `franchise_price_final`. That final franchise amount is used as the website/admin selling price; variants can still use their own final price.
-- Variants: billing ID, variant code, SKU, size/color/fabric/weight/volume/nos, retail and wholesale price fields, MRP, status, image.
-- Stock: the billing `/stocks` quantity is matched by variant ID and copied to the ecommerce variant. Ecommerce stock is integer-based, so fractional billing quantities are rounded down to avoid overselling. After an order commits, the backend posts `{ "product_variant_id": "<billing variant id>", "quantity": <integer> }` to `/stocks/decrement`. The route accepts POST, but writes require a valid `BILLING_API_TOKEN` with stock write access. If that token is absent, the ecommerce backend skips the remote request and records `not_configured` on the order; if Billing rejects it, the order records `failed` and the response message. Admin order details show that status and error. Set the token in the backend environment and restart the backend; never put billing credentials in the React app.
-- Shipping: paid orders retain the customer-selected Shiprocket courier ID/name, quoted rate, estimated delivery, shipping amount charged, booking status, actual booked courier, shipment ID, and AWB on the order. Admin order details show these fields. Historical orders created before these fields were added cannot recover a courier name or quote that was never stored.
-- Franchises: billing ID, business/contact details, address, location fields, and status.
+| Billing source field | Nivintex database field | Notes |
+| --- | --- | --- |
+| `products[].id`, `product_varients[].id`, `product_details.product.id` | `Product.billing_product_id` | Stable external key; matched across all three responses. Local `Product.id` remains independent. |
+| `name`, `product_code`, `hsn_code`, `barcode`, `description`, `status` | `Product.name`, `product_code`, `hsn_code`, `barcode`, `shortDescription`, `longDescription`, `status` | Description populates both descriptions until Billing exposes separate short/long fields. |
+| `category.id`, `subcategory.id` | `Product.billingCategoryId` via Category; `Product.billing_subcategory_id`; local category/subcategory foreign keys | Billing IDs are resolved to local IDs; external IDs are retained separately. |
+| `prices.franchise` or `franchise_price_final` | `Product.franchise_price_final`, `Product.retail_price_final` (`salesPrice`) | Current storefront selling price. Variant franchise price overrides the product price. |
+| `prices.mrp`; if zero/missing, `prices.retail` | `Product.mrp_price` | The API reports MRP as zero on several products; retail is used as the display compare price fallback. |
+| Admin GST checkbox | `Product.mrp_gst_type` | Storefront-owned value, default `With GST`. Checked products add 5% GST to the listed storefront price. Unchecked products use `Without GST`; Billing catalog refresh preserves this setting. |
+| Admin product image upload | `Product.main_image` | Only Admin-uploaded `uploads/prod-*` paths are retained. Billing `main_image` and other image fields are ignored. If no Admin upload exists, the storefront shows the Fashion Aura logo. |
+| Admin gallery image upload | `ProductImages.url`, `sortOrder` | Only Admin-uploaded `uploads/gal-*` paths are retained. Billing gallery fields are ignored. |
+| `variants[].id` | `ProductVariant.billing_variant_id` | Stable external variant key, matched to product by nested parent relationship. |
+| `variant_code`, `sku`, `size`, `color`, `fabric`, `weight`, `volume`, `nos`, `variant_name`, `barcode`, `hsn_code`, `width` | `ProductVariant.variant_code`, `sku`, attributes, `billing_data` | `billing_data` retains additional Billing-only variant metadata. |
+| Variant `prices.mrp`, `prices.retail`, `prices.wholesale`, `prices.franchise` and direct price fields | `ProductVariant.mrp`, retail/wholesale fields, `franchise_price_final`, `salesPrice` | Variant price values override product prices when supplied. |
+| Admin variant image upload | `ProductVariant.image`, `ProductVariant.images` | Only Admin-uploaded `uploads/prod-*` paths are retained. Billing variant image fields are ignored; absent an Admin image, the product/Admin gallery or Fashion Aura logo is shown. |
+| `/stocks[].variant_code` (or `sku`), `quantity`, `in_stock` | `ProductVariant.stock`; `Product.stock` (sum of its variants) | Live `/stocks` rows do not include `franchise_location_id`. Sync matches by exact variant code/SKU; preflight may also use the row ID only after validating its code against the catalog. `in_stock: false` becomes zero. Aggregate `total_stock` is only a local display fallback if no `/stocks` row exists, never for pre-payment validation or post-invoice refresh. |
 
-Billing IDs are stored in separate nullable columns and are not used as ecommerce primary keys. Repeated syncs update the matching billing record; records missing from a later billing response are left untouched. Billing image paths are converted to absolute URLs on the billing host.
+Missing Billing products/variants are deactivated locally rather than deleted, preserving order references and locally uploaded photos. A failed GET or invalid required catalog collection aborts the transaction so the existing DB catalog is not partially replaced.
 
-The shared GET responses do not provide per-line GST rate or unit-of-measure fields; those require additional API fields if the billing system must be used for invoice/tax calculations. The Billing create-invoice endpoint and request contract have not been supplied/configured, so paid orders are retained locally with invoice sync pending. Confirm the stock request fields with the Billing API implementation if it expects different names.
+## Checkout and invoice flow
+
+1. Before creating a Razorpay order, the backend reads `/product_varients` and `/stocks` fresh, matches each cart item's Billing variant ID and SKU/code, combines duplicate variant quantities, and verifies requested quantity against `/stocks[].quantity`. If a stock row says `in_stock: false`, available quantity is zero. Missing variant rows or insufficient quantity stop checkout before Razorpay is created.
+2. For the current website flow, `/stocks` is treated as Central Admin stock because its live response has no location column. `BILLING_STOCK_LOCATION_ID` should remain blank so invoice creation uses `franchise_location_id: null`. Do not use an unscoped `/stocks` response with a non-null franchise location. For franchise fulfillment, Billing must expose location-filtered stock rows and the same location must be sent in the invoice.
+3. After successful payment, Nivintex verifies the Razorpay signature and order amount/currency, saves the local paid order, then posts `POST /billings` using the backend Billing base URL and optional bearer token.
+4. The invoice payload includes `franchise_location_id`, customer name/phone/email, billing and shipping addresses, `source: "Website"`, `entry_mode: "Manual"`, `price_type: "Franchise"`, `payment_mode: "Online"`, `has_gst: true`, `bill_discount_amount`, `paid_amount`, and `items`. Each item contains `product_variant_id`, `quantity`, and `discount_amount`. Billing creates the invoice and decrements its own inventory atomically. Nivintex does not separately post `/stocks/decrement`, which would subtract the stock twice.
+5. Successful invoice response data is stored on the order and invoice sync becomes `synced`; Nivintex refreshes the local stock cache from fresh `/product_varients` and `/stocks` responses, using exact SKU/code matches. If fresh location stock cannot be verified, the invoice remains accepted but the local stock refresh is marked failed for follow-up. An explicit rejection is recorded as failed. A timeout or server error is treated as an unknown outcome and must be reconciled with Billing before retrying, to avoid duplicate invoices.
+
+`BILLING_API_TOKEN` is sent as `Authorization: Bearer ...` on reads and invoice creation when configured. Never put it in `nivintexfrontend/.env` or `nivintexadmin/.env`.
+
+## Live sample: Billing product 2
+
+`GET /product_varients` and `GET /product_details/2` both identify Billing product `2`, `CRD-2026-07-002`, “HANDBLOCK CO ORDS”. It has Billing variants `4`, `5`, and `6` (L, M, XL). `GET /stocks` returns those variant codes and quantity `2` each; the product-level aggregate is `total_stock: 6`. The local DB stores product ID `2` only in `billing_product_id`; its local primary key may be different. The variant IDs are stored the same way in `billing_variant_id`.

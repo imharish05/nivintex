@@ -9,6 +9,7 @@ const LiveProduct = require('./LiveProduct');
 const Order       = require('./Order');
 const OrderItem   = require('./OrderItem');
 const FranchiseUser = require('./FranchiseUser');
+const DeliveryZone = require('./DeliveryZone');
 
 // ── Associations ──────────────────────────────────────────────────
 // Define ALL model relationships here so every require('./models')
@@ -36,4 +37,5 @@ module.exports = {
   User,
   LiveProduct,   // ← NEW
   FranchiseUser, // ← NEW
+  DeliveryZone,  // ← NEW
 };

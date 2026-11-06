@@ -17,6 +17,12 @@ const visibleOrderStatus = status => ({ accepted: 'confirmed', packed: 'shipped'
 
 const labelFor = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 const parseAddr = (raw) => { try { return JSON.parse(raw); } catch { return null; } };
+const isCustomerSelectedCourier = (order, courier) => {
+  const selectedId = String(order?.shiprocket_requested_courier_id || '');
+  const selectedName = String(order?.shiprocket_requested_courier_name || order?.courier_name || '').trim().toLowerCase();
+  if (selectedId) return String(courier?.courierId || '') === selectedId;
+  return Boolean(selectedName) && String(courier?.courierName || '').trim().toLowerCase() === selectedName;
+};
 
 const AddressBlock = ({ addr, phone, phone2, email }) => {
   if (!addr) return <p className="td-muted">Not provided</p>;
@@ -78,9 +84,45 @@ function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetryBi
             <div className="km-order-modal-items">
               {order.OrderItems?.map((item, index) => {
                 const image = item.image || item.Product?.image || item.product?.image;
+                const variant = item.Variant || {};
+                let billingVariantData = variant.billingData || {};
+                if (typeof billingVariantData === 'string') {
+                  try { billingVariantData = JSON.parse(billingVariantData); } catch { billingVariantData = {}; }
+                }
+                const selectedAttributes = [
+                  ['Size', variant.size],
+                  ['Color', variant.color],
+                  ['Fabric', variant.fabric],
+                  ['Weight', variant.weight],
+                  ['Volume', variant.volume],
+                  ['Pieces', variant.nos],
+                ].filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '');
+                const variantAttributes = selectedAttributes.length
+                  ? [...selectedAttributes, ...((variant.variant_code || variant.sku || item.billing_variant_id)
+                    ? [['Variant code', variant.variant_code || variant.sku || item.billing_variant_id]] : [])]
+                  : (billingVariantData.variant_name
+                    ? [['Variant', billingVariantData.variant_name]]
+                    : ((variant.variant_code || variant.sku || item.billing_variant_id)
+                      ? [['Variant code', variant.variant_code || variant.sku || item.billing_variant_id]] : []));
+                const itemCode = item.Product?.product_code || item.Product?.barcode
+                  || item.Product?.billingProductId || item.product_id;
                 return <div className="km-order-modal-item" key={`${item.id || item.product_id || index}-${index}`}>
                   {image ? <button type="button" className="km-order-modal-image" onClick={() => onPreview({ ...item, imageUrl: getImageUrl(image) })} aria-label={`Preview ${item.name || 'product image'}`}><img src={getImageUrl(image)} alt="" onError={event => { event.currentTarget.style.visibility = 'hidden'; }} /></button> : <div className="km-order-modal-image km-order-modal-image-empty">No image</div>}
-                  <strong>{item.name || item.Product?.productName || 'Product'}</strong>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <strong>{item.Product?.productName || item.name || 'Product'}</strong>
+                    {variantAttributes.length > 0 ? (
+                      <div className="km-order-variant-list" aria-label="Selected variant options">
+                        {variantAttributes.map(([label, value]) => (
+                          <span className="km-order-variant-value" key={label}><b>{label}:</b> {String(value)}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <small className="km-order-variant-missing">
+                        {item.variant_id || item.billing_variant_id ? `Selected variant ID: ${item.billing_variant_id || item.variant_id}` : 'No variant selected'}
+                      </small>
+                    )}
+                    {itemCode && <small style={{ display: 'block', marginTop: 4, color: '#64748b', fontSize: 11 }}>Product code: {itemCode}</small>}
+                  </div>
                   <span>Qty {item.quantity}</span>
                   <span>₹{(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}</span>
                 </div>;
@@ -103,7 +145,7 @@ function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetryBi
               </div>
               {order.billing_sync_error && <p className="km-order-modal-error">{order.billing_sync_error}</p>}
               {order.billing_stock_sync_error && <p className="km-order-modal-error">{order.billing_stock_sync_error}</p>}
-              <button type="button" className="km-order-modal-secondary" onClick={() => onEditBilling(order)}>Edit billing details</button>
+              {/* <button type="button" className="km-order-modal-secondary" onClick={() => onEditBilling(order)}>Edit billing details</button> */}
               {order.billing_sync_status === 'failed' && /HTTP 422: Insufficient stock/i.test(order.billing_sync_error || '') && (
                 <button type="button" className="km-order-modal-primary" onClick={() => onRetryBilling(order)}>Recheck stock &amp; retry invoice</button>
               )}
@@ -122,8 +164,8 @@ function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetryBi
                 {order.shiprocket_shipment_id && <div><span>Shipment ID</span><strong>{order.shiprocket_shipment_id}</strong></div>}
               </div>
               {order.shiprocket_booking_error && <p className="km-order-modal-error">{order.shiprocket_booking_error}</p>}
-              {!order.awb_code && <button type="button" className="km-order-modal-secondary" onClick={() => onEditShipping(order)}>Edit shipping address</button>}
-              {!order.awb_code && <button type="button" className="km-order-modal-primary" onClick={() => onRetryShipment(order)}>Choose / retry courier</button>}
+              {/* {!order.awb_code && <button type="button" className="km-order-modal-secondary" onClick={() => onEditShipping(order)}>Edit shipping address</button>} */}
+              {/* {!order.awb_code && <button type="button" className="km-order-modal-primary" onClick={() => onRetryShipment(order)}>Choose / retry courier</button>} */}
             </section>
           </div>
         </div>
@@ -233,7 +275,11 @@ export default function Orders({ showToast, status = null }) {
     }
   };
 
-  const filteredRows = useMemo(() => [...rows].sort((a, b) => a.id - b.id), [rows]);
+  const filteredRows = useMemo(() => [...rows].sort((a, b) => {
+    const createdAtDiff = new Date(b.createdAt || b.created_at || 0).getTime()
+      - new Date(a.createdAt || a.created_at || 0).getTime();
+    return createdAtDiff || Number(b.id) - Number(a.id);
+  }), [rows]);
 
   const openBillingEditor = async order => {
     try {
@@ -373,7 +419,7 @@ export default function Orders({ showToast, status = null }) {
         })}
       </div>
 
-      <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+      {/* <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div className="section-title">
           {status ? `${labelFor(status)} Orders` : 'All Orders'}
         </div>
@@ -381,7 +427,7 @@ export default function Orders({ showToast, status = null }) {
         <div style={{ display: 'flex', gap: 15, alignItems: 'center' }}>
           {!loading && <span className="km-count-badge">{filteredRows.length}</span>}
         </div>
-      </div>
+      </div> */}
 
       {loading ? (
         <p className="km-loading">Loading orders...</p>
@@ -470,10 +516,10 @@ export default function Orders({ showToast, status = null }) {
               {[['customer_name', 'Customer name'], ['customer_phone', 'Phone'], ['customer_email', 'Email'], ['billing_address', 'Billing address'], ['shipping_address', 'Shipping address']].map(([key, label]) => (
                 <label key={key} style={{ display: 'grid', gap: 5, color: '#475569', fontSize: 11, fontWeight: 600 }}>{label}<textarea rows={key.includes('address') ? 3 : 1} value={billingDraft[key] || ''} onChange={event => setBillingDraft(current => ({ ...current, [key]: event.target.value }))} style={{ padding: '9px 10px', border: '1px solid #cbd5e1', borderRadius: 7, font: '13px inherit', resize: 'vertical' }} /></label>
               ))}
-              <label style={{ display: 'grid', gap: 5, color: '#475569', fontSize: 11, fontWeight: 600 }}>Price type<select value={billingDraft.price_type || 'MRP'} onChange={event => setBillingDraft(current => ({ ...current, price_type: event.target.value }))} style={{ padding: '9px 10px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#fff' }}><option value="MRP">Website Price (MRP)</option><option value="Retail">Retail</option><option value="Wholesale">Wholesale</option></select></label>
+              <label style={{ display: 'grid', gap: 5, color: '#475569', fontSize: 11, fontWeight: 600 }}>Price type<input readOnly value="Franchise" style={{ padding: '9px 10px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#f8fafc' }} /></label>
               <label style={{ display: 'grid', gap: 5, color: '#475569', fontSize: 11, fontWeight: 600 }}>Stock location<input readOnly value="Central Admin" style={{ padding: '9px 10px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#f8fafc' }} /></label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#475569', fontSize: 12 }}><input type="checkbox" checked={Boolean(Number(billingDraft.has_gst))} onChange={event => setBillingDraft(current => ({ ...current, has_gst: event.target.checked ? 1 : 0 }))} />With GST (5%)</label>
-              <div style={{ gridColumn: '1 / -1', padding: 12, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}><strong style={{ display: 'block', marginBottom: 8, color: '#334155', fontSize: 12 }}>Purchased items and verified totals (read-only)</strong>{(billingDraft.items || []).map((item, index) => <div key={`${item.product_variant_id}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '5px 0', color: '#475569', fontSize: 12 }}><span>Variant {item.product_variant_id || 'Billing ID unavailable'} × {item.quantity}</span><span>GST {item.gst_percent}%</span></div>)}<div style={{ borderTop: '1px solid #e2e8f0', marginTop: 7, paddingTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 7, color: '#334155', fontSize: 11 }}><span>Subtotal ₹{Number(billingDraft.subtotal || 0).toFixed(2)}</span><span>Bill discount ₹{Number(billingDraft.bill_discount_amount || 0).toFixed(2)}</span><span>GST ₹{Number(billingDraft.gst_amount || 0).toFixed(2)}</span><span>Shipping ₹{Number(billingDraft.delivery_charge || 0).toFixed(2)}</span><span>Paid ₹{Number(billingDraft.paid_amount || 0).toFixed(2)}</span><span>Balance ₹{Number(billingDraft.balance || 0).toFixed(2)}</span></div></div>
+              <div style={{ gridColumn: '1 / -1', padding: 12, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}><strong style={{ display: 'block', marginBottom: 8, color: '#334155', fontSize: 12 }}>Purchased items and verified totals (read-only)</strong>{(billingDraft.items || []).map((item, index) => <div key={`${item.product_variant_id}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '5px 0', color: '#475569', fontSize: 12 }}><span>Billing variant ID: {item.product_variant_id || 'Unavailable'} × {item.quantity}</span><span>GST {item.gst_percent}%</span></div>)}<div style={{ borderTop: '1px solid #e2e8f0', marginTop: 7, paddingTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 7, color: '#334155', fontSize: 11 }}><span>Subtotal ₹{Number(billingDraft.subtotal || 0).toFixed(2)}</span><span>Bill discount ₹{Number(billingDraft.bill_discount_amount || 0).toFixed(2)}</span><span>GST ₹{Number(billingDraft.gst_amount || 0).toFixed(2)}</span><span>Shipping ₹{Number(billingDraft.delivery_charge || 0).toFixed(2)}</span><span>Paid ₹{Number(billingDraft.paid_amount || 0).toFixed(2)}</span><span>Balance ₹{Number(billingDraft.balance || 0).toFixed(2)}</span></div></div>
             </div>
             <footer style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px', borderTop: '1px solid #e5e7eb' }}><button type="button" disabled={billingEditSaving} onClick={() => setBillingEditOrder(null)} style={{ padding: '9px 14px', border: '1px solid #cbd5e1', borderRadius: 7, background: '#fff', cursor: 'pointer' }}>Cancel</button><button type="button" disabled={billingEditSaving} onClick={saveBillingEditor} style={{ padding: '9px 14px', border: 0, borderRadius: 7, background: '#0f5447', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>{billingEditSaving ? 'Saving…' : 'Save billing details'}</button></footer>
           </section>
@@ -503,12 +549,16 @@ export default function Orders({ showToast, status = null }) {
               <button type="button" onClick={() => setCourierOrder(null)} disabled={Boolean(bookingCourierId)} aria-label="Close couriers" style={{ border: 0, borderRadius: 8, width: 36, height: 36, background: '#f1f5f9', fontSize: 23, cursor: 'pointer' }}>×</button>
             </header>
             <div style={{ padding: 20 }}>
+              {!courierLoading && (courierOrder.shiprocket_requested_courier_id || courierOrder.shiprocket_requested_courier_name || courierOrder.courier_name) && !couriers.some(courier => isCustomerSelectedCourier(courierOrder, courier)) && <p style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 8, background: '#fff8e6', color: '#815b00', fontSize: 13 }}>The courier selected by the customer is not currently available. Choose an available service to continue.</p>}
               {courierLoading ? <p style={{ margin: 0, color: '#64748b' }}>Checking Shiprocket serviceability…</p> : couriers.length === 0 ? <p style={{ margin: 0, color: '#64748b' }}>No couriers are available for this delivery address.</p> : (
                 <div style={{ display: 'grid', gap: 10 }}>
-                  {couriers.map(courier => <article key={courier.courierId} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 12, padding: 14, border: '1px solid #e2e8f0', borderRadius: 12 }}>
-                    <div style={{ minWidth: 0 }}><strong style={{ display: 'block', color: '#1e293b', overflowWrap: 'anywhere' }}>{courier.courierName}</strong><span style={{ display: 'block', marginTop: 5, color: '#64748b', fontSize: 12 }}>{courier.estimatedDeliveryDays || courier.etd || 'Delivery estimate unavailable'}{courier.rating ? ` · ★ ${courier.rating}` : ''}</span></div>
+                  {couriers.map(courier => {
+                    const selectedByCustomer = isCustomerSelectedCourier(courierOrder, courier);
+                    return <article key={courier.courierId} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 12, padding: 14, border: selectedByCustomer ? '2px solid #0f766e' : '1px solid #e2e8f0', borderRadius: 12, background: selectedByCustomer ? '#effaf6' : '#fff', boxShadow: selectedByCustomer ? '0 0 0 2px rgba(15,118,110,.08)' : 'none' }}>
+                    <div style={{ minWidth: 0 }}><strong style={{ display: 'block', color: '#1e293b', overflowWrap: 'anywhere' }}>{courier.courierName}{selectedByCustomer && <span style={{ display: 'inline-block', marginLeft: 8, padding: '3px 7px', borderRadius: 999, background: '#d1fae5', color: '#065f46', fontSize: 10, fontWeight: 700, verticalAlign: 'middle' }}>Customer chose</span>}</strong><span style={{ display: 'block', marginTop: 5, color: '#64748b', fontSize: 12 }}>{courier.estimatedDeliveryDays || courier.etd || 'Delivery estimate unavailable'}{courier.rating ? ` · ★ ${courier.rating}` : ''}</span></div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 7 }}><strong style={{ color: '#0f5447' }}>₹{Number(courier.rate).toFixed(2)}</strong><button type="button" disabled={Boolean(bookingCourierId)} onClick={() => bookWithCourier(courier)} style={{ padding: '8px 12px', border: 0, borderRadius: 7, background: bookingCourierId === courier.courierId ? '#94a3b8' : '#0f5447', color: '#fff', fontWeight: 600, cursor: bookingCourierId ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{bookingCourierId === courier.courierId ? 'Booking…' : 'Book courier'}</button></div>
-                  </article>)}
+                  </article>;
+                  })}
                 </div>
               )}
             </div>

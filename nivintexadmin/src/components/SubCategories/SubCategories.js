@@ -55,7 +55,12 @@ export default function SubCategories({ showToast }) {
     <div>
       <div className="section-header">
         <div className="section-title">Subcategories</div>
-        <span style={{ color: '#64748b', fontSize: 12 }}>Synced from Billing</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ color: '#64748b', fontSize: 12 }}>Synced from Billing</span>
+          <button className="action-btn btn-edit" onClick={fetchAll} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {loading ? <p className="km-loading">Loading subcategories...</p> : (

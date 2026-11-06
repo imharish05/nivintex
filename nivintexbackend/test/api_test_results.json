@@ -1,0 +1,957 @@
+[
+  {
+    "category": "Settings",
+    "name": "Public Settings",
+    "method": "GET",
+    "endpoint": "/api/site-settings/public",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 131,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Settings",
+    "name": "Admin Settings",
+    "method": "GET",
+    "endpoint": "/api/site-settings",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 18,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "PromoBar",
+    "name": "Active Promo Bar",
+    "method": "GET",
+    "endpoint": "/api/promo-bar/active",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 9,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "PromoBar",
+    "name": "All Promo Bars",
+    "method": "GET",
+    "endpoint": "/api/promo-bar",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 8,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Banners",
+    "name": "Store Banners",
+    "method": "GET",
+    "endpoint": "/api/banners",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 9,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Banners",
+    "name": "Hero Banners",
+    "method": "GET",
+    "endpoint": "/api/banners/section/hero",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 7,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "OfferBanners",
+    "name": "Offer Banners",
+    "method": "GET",
+    "endpoint": "/api/offer-banners",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 7,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "LiveProducts",
+    "name": "Live Products",
+    "method": "GET",
+    "endpoint": "/api/live-products",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 7,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Instagram",
+    "name": "Public Instagram Posts",
+    "method": "GET",
+    "endpoint": "/api/instagram-posts",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 10,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Instagram",
+    "name": "Admin Instagram Posts",
+    "method": "GET",
+    "endpoint": "/api/instagram-posts/admin",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 6,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Category",
+    "name": "All Categories",
+    "method": "GET",
+    "endpoint": "/api/category",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 6,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "SubCategory",
+    "name": "All Subcategories",
+    "method": "GET",
+    "endpoint": "/api/subcategories",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 730,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "SubCategory",
+    "name": "Local Subcategories",
+    "method": "GET",
+    "endpoint": "/api/subcategories/local",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 24,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "SubCategory",
+    "name": "Billing Subcategories",
+    "method": "GET",
+    "endpoint": "/api/subcategories/billing",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 6,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "SubCategory",
+    "name": "Subcategories of Cat 1",
+    "method": "GET",
+    "endpoint": "/api/subcategories/category/1",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 12,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Products",
+    "name": "All Products",
+    "method": "GET",
+    "endpoint": "/api/products",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 233,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Products",
+    "name": "Search Products",
+    "method": "GET",
+    "endpoint": "/api/products/search?query=a",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 3,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Products",
+    "name": "New Arrivals",
+    "method": "GET",
+    "endpoint": "/api/products/new-arrivals",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 69,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Products",
+    "name": "Best Sellers",
+    "method": "GET",
+    "endpoint": "/api/products/best-sellers",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 39,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Variants",
+    "name": "All Product Variants",
+    "method": "GET",
+    "endpoint": "/api/product_varients",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 228,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Brands",
+    "name": "All Brands",
+    "method": "GET",
+    "endpoint": "/api/brands",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 5,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Products",
+    "name": "Get Product #104",
+    "method": "GET",
+    "endpoint": "/api/products/104",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 19,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "ProductDetails",
+    "name": "Product Details #104",
+    "method": "GET",
+    "endpoint": "/api/product_details/104",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 12,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Variants",
+    "name": "Product Variants for #104",
+    "method": "GET",
+    "endpoint": "/api/variants/product/104",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 8,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Specifications",
+    "name": "Product Specifications for #104",
+    "method": "GET",
+    "endpoint": "/api/product-specifications/product/104",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 8,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "SizeCharts",
+    "name": "Size Chart for Product #104",
+    "method": "GET",
+    "endpoint": "/api/size-charts/product/104",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 15,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "SizeCharts",
+    "name": "Size Chart Assignment for Product #104",
+    "method": "GET",
+    "endpoint": "/api/size-charts/assignment/104",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 17,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "SizeCharts",
+    "name": "All Size Charts",
+    "method": "GET",
+    "endpoint": "/api/size-charts",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 11,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Combos",
+    "name": "All Combos",
+    "method": "GET",
+    "endpoint": "/api/combos",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 5,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Combos",
+    "name": "Storefront Combos",
+    "method": "GET",
+    "endpoint": "/api/combos/storefront",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 33,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Stocks",
+    "name": "All Stocks",
+    "method": "GET",
+    "endpoint": "/api/stocks",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 128,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Franchises",
+    "name": "All Franchises",
+    "method": "GET",
+    "endpoint": "/api/franchises",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 6,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Customers",
+    "name": "All Customers (Admin)",
+    "method": "GET",
+    "endpoint": "/api/customers",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 5,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Cart",
+    "name": "Get Cart for Customer 1",
+    "method": "GET",
+    "endpoint": "/api/cart/customer/1",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 7,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Wishlist",
+    "name": "Get Wishlist for Customer 1",
+    "method": "GET",
+    "endpoint": "/api/wishlist/1",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 6,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Reviews",
+    "name": "All Reviews",
+    "method": "GET",
+    "endpoint": "/api/reviews",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 8,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Reviews",
+    "name": "Can Review check",
+    "method": "GET",
+    "endpoint": "/api/reviews/can-review?customerId=1&productId=104",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 16,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Reviews",
+    "name": "Product Reviews for #104",
+    "method": "GET",
+    "endpoint": "/api/reviews/product/104",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 6,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Orders",
+    "name": "All Orders (Admin)",
+    "method": "GET",
+    "endpoint": "/api/orders/all",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 34,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Orders",
+    "name": "Orders for Customer 1",
+    "method": "GET",
+    "endpoint": "/api/orders/customer/1",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 18,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Returns",
+    "name": "All Returns (Admin)",
+    "method": "GET",
+    "endpoint": "/api/returns",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 7,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Returns",
+    "name": "Returns for Customer 1",
+    "method": "GET",
+    "endpoint": "/api/returns/customer/1",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 5,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Contact",
+    "name": "All Contact Submissions (Admin)",
+    "method": "GET",
+    "endpoint": "/api/contact/all",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 10,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Coupons",
+    "name": "Admin Coupons",
+    "method": "GET",
+    "endpoint": "/api/coupons/admin/all",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 5,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Coupons",
+    "name": "Available Coupons",
+    "method": "GET",
+    "endpoint": "/api/coupons/available",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 12,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Coupons",
+    "name": "Apply Coupon Validation",
+    "method": "POST",
+    "endpoint": "/api/coupons/apply",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 15,
+    "passed": true,
+    "expected": [
+      200,
+      400
+    ],
+    "error": null
+  },
+  {
+    "category": "Shipping",
+    "name": "Shipping Quote",
+    "method": "GET",
+    "endpoint": "/api/shipping/quote?pincode=641038&weight=0.5",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 212,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Billing",
+    "name": "Billing Categories",
+    "method": "GET",
+    "endpoint": "/api/billing/category",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 6,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Billing",
+    "name": "Billing Subcategories",
+    "method": "GET",
+    "endpoint": "/api/billing/subcategory",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 5,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Billing",
+    "name": "Billing Products",
+    "method": "GET",
+    "endpoint": "/api/billing/products",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 3058,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Billing",
+    "name": "Billing Product Variants",
+    "method": "GET",
+    "endpoint": "/api/billing/product-varients",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 387,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Billing",
+    "name": "Billing Stocks",
+    "method": "GET",
+    "endpoint": "/api/billing/stocks",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 413,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Dashboard",
+    "name": "Dashboard Stats",
+    "method": "GET",
+    "endpoint": "/api/dashboard/stats",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 16,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Dashboard",
+    "name": "Dashboard Stock Alerts",
+    "method": "GET",
+    "endpoint": "/api/dashboard/stock-alerts",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 58,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Auth",
+    "name": "Get User Profile",
+    "method": "GET",
+    "endpoint": "/api/user",
+    "tokenType": "user",
+    "status": 200,
+    "elapsed": 7,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Contact",
+    "name": "Submit Contact Inquiry",
+    "method": "POST",
+    "endpoint": "/api/contact/submit",
+    "tokenType": "none",
+    "status": 201,
+    "elapsed": 31,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Brand",
+    "name": "Create Test Brand",
+    "method": "POST",
+    "endpoint": "/api/brands/add",
+    "tokenType": "admin",
+    "status": 201,
+    "elapsed": 14,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Brand",
+    "name": "Update Test Brand",
+    "method": "PUT",
+    "endpoint": "/api/brands/update/1",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 16,
+    "passed": true,
+    "expected": [
+      200
+    ],
+    "error": null
+  },
+  {
+    "category": "Brand",
+    "name": "Delete Test Brand",
+    "method": "DELETE",
+    "endpoint": "/api/brands/1",
+    "tokenType": "admin",
+    "status": 200,
+    "elapsed": 14,
+    "passed": true,
+    "expected": [
+      200
+    ],
+    "error": null
+  },
+  {
+    "category": "Cart",
+    "name": "Add Item to Cart",
+    "method": "POST",
+    "endpoint": "/api/cart/add",
+    "tokenType": "none",
+    "status": 201,
+    "elapsed": 26,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Cart",
+    "name": "Update Cart Item Quantity",
+    "method": "PUT",
+    "endpoint": "/api/cart/update/34",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 16,
+    "passed": true,
+    "expected": [
+      200
+    ],
+    "error": null
+  },
+  {
+    "category": "Cart",
+    "name": "Remove Item from Cart",
+    "method": "DELETE",
+    "endpoint": "/api/cart/34",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 8,
+    "passed": true,
+    "expected": [
+      200
+    ],
+    "error": null
+  },
+  {
+    "category": "Wishlist",
+    "name": "Add to Wishlist",
+    "method": "POST",
+    "endpoint": "/api/wishlist/add",
+    "tokenType": "none",
+    "status": 201,
+    "elapsed": 20,
+    "passed": true,
+    "expected": [
+      200,
+      201
+    ],
+    "error": null
+  },
+  {
+    "category": "Wishlist",
+    "name": "Remove from Wishlist",
+    "method": "DELETE",
+    "endpoint": "/api/wishlist/18",
+    "tokenType": "none",
+    "status": 200,
+    "elapsed": 7,
+    "passed": true,
+    "expected": [
+      200
+    ],
+    "error": null
+  }
+]

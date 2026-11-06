@@ -19,7 +19,8 @@ test('invoice payload preserves the Billing location and combines duplicate exac
   });
   assert.equal(payload.franchise_location_id, null);
   assert.deepEqual(payload.items, [{ product_variant_id: 451, quantity: 3, discount_amount: 0 }]);
-  assert.equal(payload.price_type, 'MRP');
+  assert.equal(payload.price_type, 'Franchise');
+  assert.equal(payload.has_gst, true);
 });
 
 test('invoice payload rejects local IDs that are not valid Billing variant IDs and bad quantities', () => {

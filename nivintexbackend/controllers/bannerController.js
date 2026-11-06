@@ -138,13 +138,19 @@ const addBanner = async (req, res) => {
     const targetSection = section || 'hero';
     const isRequired = ['new_arrivals', 'best_sellers'].includes(targetSection);
 
+    const isNewArrivalsOrBestSellers = ['new_arrivals', 'best_sellers'].includes(targetSection);
+
     // Validate character and word limits
-    const validationError = validateFields([
-      { value: title, fieldName: 'Title', required: isRequired, maxChars: 60, maxWords: 10 },
-      { value: subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 80, maxWords: 15 },
-      { value: content, fieldName: 'Content / Description', maxChars: 250, maxWords: 40 },
+    const fieldsToValidate = [
+      { value: title, fieldName: 'Title', required: isRequired, maxChars: 40, maxWords: 6 },
+      { value: subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 50, maxWords: 8 },
       { value: link, fieldName: 'Link/URL', required: isRequired, maxChars: 255 },
-    ]);
+    ];
+    if (!isNewArrivalsOrBestSellers) {
+      fieldsToValidate.push({ value: content, fieldName: 'Content / Description', maxChars: 150, maxWords: 25 });
+    }
+
+    const validationError = validateFields(fieldsToValidate);
     if (validationError) {
       if (req.file && fs.existsSync(req.file.path)) {
         try { fs.unlinkSync(req.file.path); } catch (e) {}
@@ -200,13 +206,24 @@ const updateBanner = async (req, res) => {
     const targetSection = section || banner.section;
     const isRequired = ['new_arrivals', 'best_sellers'].includes(targetSection);
 
+    const isNewArrivalsOrBestSellers = ['new_arrivals', 'best_sellers'].includes(targetSection);
+
     // Validate character and word limits if fields are provided
-    const validationError = validateFields([
-      { value: title !== undefined ? title : banner.title, fieldName: 'Title', required: isRequired, maxChars: 60, maxWords: 10 },
-      { value: subtitle !== undefined ? subtitle : banner.subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 80, maxWords: 15 },
-      { value: content !== undefined ? content : banner.content, fieldName: 'Content / Description', maxChars: 250, maxWords: 40 },
+    const fieldsToValidate = [
+      { value: title !== undefined ? title : banner.title, fieldName: 'Title', required: isRequired, maxChars: 40, maxWords: 6 },
+      { value: subtitle !== undefined ? subtitle : banner.subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 50, maxWords: 8 },
       { value: link !== undefined ? link : banner.link, fieldName: 'Link/URL', required: isRequired, maxChars: 255 },
-    ]);
+    ];
+    if (!isNewArrivalsOrBestSellers) {
+      fieldsToValidate.push({
+        value: content !== undefined ? content : banner.content,
+        fieldName: 'Content / Description',
+        maxChars: 150,
+        maxWords: 25,
+      });
+    }
+
+    const validationError = validateFields(fieldsToValidate);
     if (validationError) {
       if (req.file && fs.existsSync(req.file.path)) {
         try { fs.unlinkSync(req.file.path); } catch (e) {}
@@ -245,7 +262,7 @@ const updateBanner = async (req, res) => {
 
     banner.title     = title     || banner.title;
     banner.subtitle  = subtitle  !== undefined ? subtitle  : banner.subtitle;
-    banner.content   = content   !== undefined ? content   : banner.content;
+    banner.content   = isNewArrivalsOrBestSellers ? null : (content !== undefined ? content : banner.content);
     banner.link      = link      !== undefined ? link      : banner.link;
     banner.sortOrder = sortOrder ? parseInt(sortOrder)     : banner.sortOrder;
     banner.status    = status    || banner.status;

@@ -25,12 +25,32 @@ function bodyText(value) {
   return serialized;
 }
 
+function fullBodyText(value) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (error) {
+    return JSON.stringify({ logSerializationError: error.message });
+  }
+}
+
 function logRequest(step, method, url, requestBody) {
   console.info(`[ORDER FLOW] ${step}\nrequest url: ${url}\nrequest method: ${String(method).toUpperCase()}\nrequest body: ${bodyText(requestBody)}`);
 }
 
 function logResponse(step, status, responseBody) {
   console.info(`[ORDER FLOW] ${step}\nresponse status: ${status}\nresponse body: ${bodyText(responseBody)}`);
+}
+
+function logBillingRequest(step, method, url, requestBody) {
+  console.info(`[BILLING EXCHANGE] ${step}\nrequest url: ${url}\nrequest method: ${String(method).toUpperCase()}\nrequest body: ${fullBodyText(requestBody)}`);
+}
+
+function logBillingResponse(step, status, responseBody) {
+  console.info(`[BILLING EXCHANGE] ${step}\nresponse status: ${status}\nresponse body: ${fullBodyText(responseBody)}`);
+}
+
+function logBillingFailure(step, error) {
+  logBillingResponse(step, error.response?.status || error.status || 'NO_RESPONSE', error.response?.data || error.data || { message: error.message, code: error.code || null });
 }
 
 function logFailure(step, error) {
@@ -47,4 +67,4 @@ function attachOrderApiResponseLogger(req, res, flowId) {
   };
 }
 
-module.exports = { logRequest, logResponse, logFailure, attachOrderApiResponseLogger, redact };
+module.exports = { logRequest, logResponse, logFailure, logBillingRequest, logBillingResponse, logBillingFailure, attachOrderApiResponseLogger, redact };

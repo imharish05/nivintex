@@ -79,7 +79,7 @@ const PaymentPolicyPage = () => {
 
       <h2>5. Pricing, Currency & Taxes</h2>
       <p>
-        All prices across the Fashion Aura online catalog are in <strong>Indian National Rupees (INR - ₹)</strong> and inclusive of all applicable Goods and Services Tax (GST). Delivery charges, if applicable, are clearly computed and declared at checkout prior to final payment submission.
+        All prices across the Fashion Aura online catalog are in <strong>Indian National Rupees (INR - ₹)</strong>. Applicable 5% Goods and Services Tax (GST) is added to product prices at checkout. Delivery charges, if applicable, are clearly computed and declared at checkout prior to final payment submission.
       </p>
     </PolicyLayout>
   );

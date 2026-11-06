@@ -25,16 +25,41 @@ const Contact = () => {
     setError('');
   };
 
+  const handlePhoneChange = (e) => {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setForm((f) => ({ ...f, phone: val }));
+    setError('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.phone || !form.subject || !form.message) {
+    const name = form.name.trim();
+    const email = form.email.trim();
+    const phone = form.phone.trim();
+    const subject = form.subject.trim();
+    const message = form.message.trim();
+
+    if (!name || !email || !phone || !subject || !message) {
       setError('Please fill in all fields.');
       return;
     }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(phone)) {
+      setError('Phone number must be a 10-digit number starting with 9, 8, 7, or 6.');
+      return;
+    }
+
     setSending(true);
     setError('');
     try {
-      await contactApi.send(form);
+      await contactApi.send({ name, email, phone, subject, message });
       setSubmitted(true);
       setForm({ name: '', email: '', phone: '', subject: '', message: '' });
       setTimeout(() => setSubmitted(false), 3000);
@@ -56,10 +81,11 @@ const Contact = () => {
           min-height: 100vh;
         }
 
-        .cp-top-gap { height: 16px; }
+        .cp-top-gap { height: 8px; }
         @media (max-width: 600px) {
-          .cp-top-gap { height: 8px; }
           .cp-body { padding: 0 14px 50px !important; }
+          .cp-breadcrumb { font-size: 16px; margin-bottom: 12px; }
+          .cp-top-row { padding-bottom: 12px; margin-bottom: 16px; }
         }
 
         .cp-body {
@@ -68,36 +94,52 @@ const Contact = () => {
           padding: 0 24px 80px;
         }
 
+        .cp-breadcrumb {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          margin: 0 0 22px;
+          color: #52615B;
+          font-size: 18px;
+          letter-spacing: .5px;
+          font-family: ${F.sub};
+        }
+        .cp-breadcrumb a {
+          color: #0f5447;
+          text-decoration: none;
+          font-weight: 600;
+          transition: color .2s ease;
+        }
+        .cp-breadcrumb a:hover { color: #8A5B16; text-decoration: underline; }
+        .cp-breadcrumb [aria-current="page"] { color: #20332C; font-weight: 600; }
+
         /* ── Page Heading (matches Orders page) ── */
         .cp-top-row {
           display: flex;
           align-items: center;
-          gap: 14px;
-          margin-bottom: 28px;
-          padding-bottom: 18px;
-          border-bottom: 1px solid #EAE4D6;
+          margin-bottom: 16px;
+          padding: 0 0 12px;
+          border-bottom: 1px solid #D9E2D6;
         }
         .cp-heading-line {
-          width: 32px;
-          height: 1px;
-          background: #C9933A;
+          display: none;
           flex-shrink: 0;
         }
         .cp-heading {
           margin: 0;
-          font-size: 24px;
-          font-weight: 300;
+          font-size: clamp(28px, 4vw, 34px);
+          font-weight: 400;
           color: #0f5447;
-          letter-spacing: 6px;
+          letter-spacing: 3px;
           text-transform: uppercase;
           font-family: ${F.main};
         }
         .cp-sub-head {
-          margin: 5px 0 0;
-          font-size: 12px;
-          color: #6B6B8A;
-          letter-spacing: 2px;
-          font-weight: 300;
+          margin: 7px 0 0;
+          font-size: 14px;
+          color: #52615B;
+          letter-spacing: .3px;
+          font-weight: 400;
           font-family: ${F.sub};
         }
         .cp-section-label {
@@ -107,7 +149,7 @@ const Contact = () => {
           letter-spacing: 3px;
           text-transform: uppercase;
           font-family: ${F.main};
-          margin-bottom: 16px;
+          margin-bottom: 10px;
         }
 
         /* ── Main Grid ── */
@@ -279,21 +321,39 @@ const Contact = () => {
           background: #F4F0E8;
           font-family: ${F.sub};
           font-size: 12px;
-          color: #0f5447;
+          color: #0f5447 !important;
           outline: none;
           transition: all 0.25s;
-          font-weight: 300;
+          font-weight: 400;
           letter-spacing: 0.5px;
         }
         .cp-input:focus {
-          border-color: #C9933A;
-          background: #fff;
+          border-color: #C9933A !important;
+          background: #fff !important;
+          color: #0f5447 !important;
           box-shadow: 0 0 0 3px rgba(201,147,58,0.08);
         }
         .cp-input::placeholder {
           color: #9BBFB3;
-          font-weight: 200;
+          font-weight: 300;
           font-family: ${F.sub};
+        }
+        .cp-input::selection,
+        .cp-textarea::selection {
+          background: #C9933A;
+          color: #ffffff;
+        }
+        .cp-input::-moz-selection,
+        .cp-textarea::-moz-selection {
+          background: #C9933A;
+          color: #ffffff;
+        }
+        .cp-input:-webkit-autofill,
+        .cp-input:-webkit-autofill:hover,
+        .cp-input:-webkit-autofill:focus,
+        .cp-input:-webkit-autofill:active {
+          -webkit-text-fill-color: #0f5447 !important;
+          transition: background-color 5000s ease-in-out 0s;
         }
         .cp-textarea { resize: none; min-height: 100px; }
 
@@ -401,14 +461,18 @@ const Contact = () => {
           .cp-row { grid-template-columns: 1fr; gap: 14px; }
           .cp-form-panel { padding: 28px 24px; }
           .cp-info { padding: 28px 24px; }
-          .cp-top-gap { height: 80px; }
+          .cp-top-gap { height: 8px; }
           .cp-body { padding: 0 20px 60px; }
         }
         @media (max-width: 480px) {
+          .cp-top-gap { height: 6px; }
           .cp-form-panel { padding: 20px 14px; }
           .cp-info { padding: 20px 14px; }
           .cp-body { padding: 0 14px 40px; }
           .cp-input { font-size: 16px; }
+          .cp-top-row { margin-bottom: 14px; }
+          .cp-section-label { margin-bottom: 8px; }
+          .cp-grid { gap: 18px; }
         }
       `}</style>
 
@@ -416,7 +480,6 @@ const Contact = () => {
         <div className="cp-top-gap"></div>
 
         <div className="cp-body">
-
           {/* ── Page Heading (matches Orders page style) ── */}
           <div className="cp-top-row">
             <span className="cp-heading-line" />
@@ -493,7 +556,16 @@ const Contact = () => {
 
                 <div className="cp-field" style={{ marginBottom: 16 }}>
                   <label className="cp-label">Phone</label>
-                  <input type="tel" placeholder="+91 98765 43210" className="cp-input" value={form.phone} onChange={setField('phone')} required />
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="10-digit mobile number (e.g. 9876543210)"
+                    className="cp-input"
+                    value={form.phone}
+                    onChange={handlePhoneChange}
+                    required
+                  />
                 </div>
 
                 <div className="cp-field" style={{ marginBottom: 16 }}>

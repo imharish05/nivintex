@@ -121,6 +121,153 @@ export default function SiteSettingsPage({ showToast }) {
             </div>
             {billingSyncResult && <p role="status" style={{ margin: '12px 0 0', color: '#374151', fontSize: 13 }}>{billingSyncResult}</p>}
           </div>
+          {/* Shipping Delivery Method: Custom Delivery vs 🚀 Shiprocket Courier */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 24, boxShadow: '0 1px 6px rgba(0,0,0,0.06)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 20 }}>🚚</span>
+                  <h3 style={{ margin: 0, color: '#1a1a2e', fontSize: 17, fontWeight: 700 }}>
+                    Checkout Shipping Method
+                  </h3>
+                  <span
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 20,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      background: (settings.shipping_method || 'custom') === 'custom' ? '#ecfdf5' : '#f5f3ff',
+                      color: (settings.shipping_method || 'custom') === 'custom' ? '#047857' : '#6d28d9',
+                      border: `1px solid ${(settings.shipping_method || 'custom') === 'custom' ? '#a7f3d0' : '#ddd6fe'}`,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: (settings.shipping_method || 'custom') === 'custom' ? '#10b981' : '#8b5cf6' }} />
+                    {(settings.shipping_method || 'custom') === 'custom' ? 'CUSTOM DELIVERY ACTIVE' : '🚀 SHIPROCKET ACTIVE'}
+                  </span>
+                </div>
+                <p style={{ margin: '6px 0 0', color: '#6b7280', fontSize: 13, lineHeight: 1.5 }}>
+                  Choose whether customer checkout calculates delivery rates using fixed state Delivery Zones or live 🚀 Shiprocket couriers.
+                </p>
+              </div>
+
+              {/* Segmented Toggle */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  background: '#f1f5f9',
+                  borderRadius: 30,
+                  padding: 4,
+                  border: '1px solid #cbd5e1',
+                  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.06)'
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={async () => {
+                    handleChange('shipping_method', 'custom');
+                    try {
+                      await fetch(`${BASE}/site-settings/shipping_method`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ value: 'custom' }),
+                      });
+                      setOriginal(prev => ({ ...prev, shipping_method: 'custom' }));
+                      showToast?.('Shipping Mode Updated', 'Storefront checkout set to Custom Delivery.');
+                    } catch (err) {
+                      showToast?.('Error', 'Could not update shipping method.');
+                    }
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 18px',
+                    borderRadius: 24,
+                    border: 'none',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.25s ease',
+                    background: (settings.shipping_method || 'custom') === 'custom' ? '#0f5447' : 'transparent',
+                    color: (settings.shipping_method || 'custom') === 'custom' ? '#ffffff' : '#64748b',
+                    boxShadow: (settings.shipping_method || 'custom') === 'custom' ? '0 2px 6px rgba(15, 84, 71, 0.35)' : 'none',
+                  }}
+                >
+                  <span>📦 Custom Delivery</span>
+                  {(settings.shipping_method || 'custom') === 'custom' && (
+                    <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.25)', padding: '2px 6px', borderRadius: 10 }}>ACTIVE</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    handleChange('shipping_method', 'shiprocket');
+                    try {
+                      await fetch(`${BASE}/site-settings/shipping_method`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ value: 'shiprocket' }),
+                      });
+                      setOriginal(prev => ({ ...prev, shipping_method: 'shiprocket' }));
+                      showToast?.('Shipping Mode Updated', 'Storefront checkout set to 🚀 Shiprocket Courier.');
+                    } catch (err) {
+                      showToast?.('Error', 'Could not update shipping method.');
+                    }
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 18px',
+                    borderRadius: 24,
+                    border: 'none',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.25s ease',
+                    background: settings.shipping_method === 'shiprocket' ? '#6d28d9' : 'transparent',
+                    color: settings.shipping_method === 'shiprocket' ? '#ffffff' : '#64748b',
+                    boxShadow: settings.shipping_method === 'shiprocket' ? '0 2px 6px rgba(109, 40, 217, 0.35)' : 'none',
+                  }}
+                >
+                  <span>🚀 Shiprocket Courier</span>
+                  {settings.shipping_method === 'shiprocket' && (
+                    <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.25)', padding: '2px 6px', borderRadius: 10 }}>ACTIVE</span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 14,
+                padding: '10px 16px',
+                borderRadius: 8,
+                fontSize: 12.5,
+                lineHeight: 1.5,
+                background: (settings.shipping_method || 'custom') === 'custom' ? '#f0fdf4' : '#faf5ff',
+                borderLeft: `4px solid ${(settings.shipping_method || 'custom') === 'custom' ? '#10b981' : '#8b5cf6'}`,
+                color: (settings.shipping_method || 'custom') === 'custom' ? '#065f46' : '#5b21b6',
+              }}
+            >
+              {(settings.shipping_method || 'custom') === 'custom' ? (
+                <span>
+                  <strong>Custom Delivery is active:</strong> Customer orders calculate shipping instantly based on delivery state and parcel weight (Tamil Nadu: ₹80, Other states: ₹120, +₹35/Kg). You can customize state rates under <strong>Delivery Zones</strong>.
+                </span>
+              ) : (
+                <span>
+                  <strong>🚀 Shiprocket Courier is active:</strong> Real-time courier partners (Delhivery, Blue Dart, Ekart) and live shipping quotes are fetched via Shiprocket API based on customer PIN code.
+                </span>
+              )}
+            </div>
+          </div>
+
           {SETTING_GROUPS.map(group => (
             <div key={group.group} style={{
               background: '#fff',

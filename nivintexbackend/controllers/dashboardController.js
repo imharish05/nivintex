@@ -4,12 +4,13 @@ const Category = require('../models/Category');
 const Customer = require('../models/Customer');
 const ProductVariant = require('../models/ProductVariant');
 const sequelize = require('../config/db');
+const { Op } = require('sequelize');
 
 // ─── GET /dashboard/stats ────────────────────────────────────────────────────
 exports.getDashboardStats = async (req, res) => {
   try {
     const [totalProducts, totalCustomers, recentProducts] = await Promise.all([
-      Product.count(),
+      Product.count({ where: { status: 'Active', billingProductId: { [Op.ne]: null } } }),
       Customer.count(),
       Product.findAll({
         attributes: [
@@ -19,6 +20,7 @@ exports.getDashboardStats = async (req, res) => {
         ],
         order: [['created_at', 'DESC']],
         limit: 10,
+        where: { status: 'Active', billingProductId: { [Op.ne]: null } },
         include: [
           { model: Category, attributes: ['id', 'name'] },
         ],
@@ -45,10 +47,12 @@ exports.getStockAlerts = async (req, res) => {
     // Inventory lives on ProductVariants; the legacy Products table uses
     // `description` and `mrp_price` rather than the columns in Product.js.
     const products = await ProductVariant.findAll({
-      attributes: ['id', 'productId', 'stock', 'mrp', 'salesPrice'],
+      where: { status: 'Active' },
+      attributes: ['id', 'productId', 'stock', 'mrp', 'salesPrice', 'sku', 'variant_code', 'size', 'color', 'fabric', 'billingVariantId', 'billingData'],
       include: [{
         model: Product,
-        attributes: ['id', 'productName', 'categoryId'],
+        attributes: ['id', 'productName', 'categoryId', 'product_code', 'barcode', 'hsn_code'],
+        where: { status: 'Active' },
         include: [{ model: Category, attributes: ['id', 'name'] }],
       }],
       order: [['stock', 'ASC']],
@@ -62,6 +66,14 @@ exports.getStockAlerts = async (req, res) => {
         productId:   p.productId,
         variantId:   p.id,
         productName: p.Product?.productName || `Product ${p.productId}`,
+        identifier: p.Product?.product_code || p.Product?.barcode || p.Product?.hsn_code || p.sku || p.variant_code || p.billingVariantId || null,
+        identifierType: p.Product?.product_code ? 'Product code'
+          : p.Product?.barcode ? 'Barcode'
+            : p.Product?.hsn_code ? 'HSN'
+              : p.sku ? 'SKU'
+                : p.variant_code ? 'Variant code'
+                  : p.billingVariantId ? 'Billing variant' : null,
+        variant: [p.size, p.color, p.fabric].filter(Boolean).join(' · '),
         category:    p.Product?.Category?.name || '—',
         stock:       Number(p.stock) || 0,
         mrp:         p.mrp,

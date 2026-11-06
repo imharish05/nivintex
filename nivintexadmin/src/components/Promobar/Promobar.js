@@ -3,6 +3,7 @@ import DataTable from '../DataTable/DataTable';
 import CharWordCounter from '../common/CharWordCounter';
 import { validateFields, isOverLimit } from '../../utils/textValidation';
 import { API_BASE_URL } from '../../config/api';
+import { confirmToast } from '../../utils/confirmToast';
 
 const API = API_BASE_URL;
 const pillClass = { true: 'pill-active', false: 'pill-inactive' };
@@ -15,6 +16,7 @@ export default function PromoBar({ showToast }) {
   const [loading, setLoading]       = useState(true);
   const [showForm, setShowForm]     = useState(false);
   const [editingId, setEditingId]   = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData]     = useState({
     message:    '',
     code:       '',
@@ -40,6 +42,7 @@ export default function PromoBar({ showToast }) {
   };
 
   const closeForm = () => {
+    setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
     setFormData({
@@ -125,7 +128,7 @@ export default function PromoBar({ showToast }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this promo bar?')) return;
+    if (!(await confirmToast('Delete this promo bar?', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/promo-bar/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -336,8 +339,13 @@ export default function PromoBar({ showToast }) {
                 </select>
               </div>
 
-              <button type="submit" className="km-btn-submit">
-                {editingId ? 'Update Promo Bar' : 'Save Promo Bar'}
+              <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
+                {isSubmitting && <span className="km-btn-spinner" />}
+                <span>
+                  {isSubmitting
+                    ? (editingId ? 'Updating Promo Bar...' : 'Saving Promo Bar...')
+                    : (editingId ? 'Update Promo Bar' : 'Save Promo Bar')}
+                </span>
               </button>
             </form>
           </div>

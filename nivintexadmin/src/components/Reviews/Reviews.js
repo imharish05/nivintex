@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import DataTable from '../DataTable/DataTable';
 import { reviewApi } from '../../api';
+import { confirmToast } from '../../utils/confirmToast';
 
 const pillClass = { 
     Approved: 'pill-approved', 
@@ -87,7 +88,7 @@ export default function Reviews({ showToast }) {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this review? This action cannot be undone.')) {
+        if (!(await confirmToast('Are you sure you want to delete this review? This action cannot be undone.', 'Delete'))) {
             return;
         }
         

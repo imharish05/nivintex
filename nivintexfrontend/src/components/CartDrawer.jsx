@@ -288,15 +288,17 @@ const CartDrawer = ({ open, onClose }) => {
               <span style={{
                 fontWeight: 300, fontSize: '11px', color: C.muted,
                 fontFamily: F.main, letterSpacing: '3px', textTransform: 'uppercase',
-              }}>Total</span>
+              }}>Subtotal</span>
               <span style={{
                 fontWeight: 400, fontSize: '18px', color: C.brand,
                 fontFamily: F.main, letterSpacing: '1px',
               }}>{fmt(subtotal)}</span>
             </div>
-            <p style={{ margin: '-12px 0 14px', textAlign: 'right', color: C.muted, fontSize: 10, fontFamily: F.sub }}>
-              Product prices include GST.
-            </p>
+            {cartItems.some(item => String(item.mrpGstType || 'With GST').toLowerCase() !== 'without gst') && (
+              <p style={{ margin: '-12px 0 14px', textAlign: 'right', color: C.muted, fontSize: 10, fontFamily: F.sub }}>
+                Applicable 5% GST is added at checkout.
+              </p>
+            )}
 
             <button onClick={() => { 
               sessionStorage.removeItem('buyNowItem');

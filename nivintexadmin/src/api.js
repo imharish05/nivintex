@@ -51,7 +51,17 @@ const getBillingCategories = async () => {
     handleExpiredAdmin(response);
     if (!response.ok) throw new Error(`GET /billing/category failed: ${response.status}`);
     const data = await response.json();
-    return unwrapBillingCollection(data, 'category').map(category => ({ ...category, image: billingImageUrl(category.image) }));
+    return unwrapBillingCollection(data, 'category').map(category => {
+        const rawStatus = category.status ?? category.is_active ?? category.isActive ?? category.active;
+        const inactive = ['inactive', 'disabled', '0', 'false', 'no'].includes(String(rawStatus ?? '').trim().toLowerCase());
+        return {
+            ...category,
+            id: category.id ?? category.category_id ?? category.categoryId,
+            name: category.name || category.category_name || category.categoryName || '',
+            status: inactive ? 'Inactive' : 'Active',
+            image: billingImageUrl(category.image || category.image_url || category.imageUrl || category.category_image || category.categoryImage || category.photo),
+        };
+    });
 };
 
 const send = async (method, path, body) => {
@@ -157,7 +167,16 @@ export const categoryApi = {
 
 // ─── Sub-Categories ───────────────────────────────────────────────────────────
 export const subCategoryApi = {
-    getAll: async () => unwrapBillingCollection(await get('/subcategories/billing'), 'subcategory'),
+    getAll: async () => unwrapBillingCollection(await get('/subcategories/billing'), 'subcategory').map(subcategory => {
+        const rawStatus = subcategory.status ?? subcategory.is_active ?? subcategory.isActive ?? subcategory.active;
+        const inactive = ['inactive', 'disabled', '0', 'false', 'no'].includes(String(rawStatus ?? '').trim().toLowerCase());
+        return {
+            ...subcategory,
+            id: subcategory.id ?? subcategory.subcategory_id ?? subcategory.subcategoryId,
+            name: subcategory.name || subcategory.subcategory_name || subcategory.sub_category_name || subcategory.subcategoryName || '',
+            status: inactive ? 'Inactive' : 'Active',
+        };
+    }),
     getById: async (id) => (await subCategoryApi.getAll()).find(row => String(row.id) === String(id)) || null,
 };
 
@@ -451,6 +470,22 @@ export const couponApi = {
 
 
 // ─── Contacts ─────────────────────────────────────────────────────────────────
+export const deliveryZoneApi = {
+    getAll: () => get('/delivery-zones'),
+    getById: (id) => get(`/delivery-zones/${id}`),
+    create: (data) => send('POST', '/delivery-zones', data),
+    update: (id, data) => send('PUT', `/delivery-zones/${id}`, data),
+    delete: (id) => del(`/delivery-zones/${id}`),
+    seedDefaults: () => send('POST', '/delivery-zones/seed', {}),
+};
+
+export const siteSettingsApi = {
+    getAll: () => get('/site-settings'),
+    getPublic: () => get('/site-settings/public'),
+    update: (key, value) => send('PUT', `/site-settings/${key}`, { value }),
+    bulkUpdate: (data) => send('PUT', '/site-settings', data),
+};
+
 export const contactApi = {
     getAll: () => get('/contacts'),
     getById: (id) => get(`/contacts/${id}`),

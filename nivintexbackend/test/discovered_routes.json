@@ -1,0 +1,1568 @@
+[
+  {
+    "prefix": "/api/user",
+    "fullRoute": "/api/user/register",
+    "routePath": "/register",
+    "methods": [
+      "POST"
+    ],
+    "source": "userloginRoutes"
+  },
+  {
+    "prefix": "/api/user",
+    "fullRoute": "/api/user/login",
+    "routePath": "/login",
+    "methods": [
+      "POST"
+    ],
+    "source": "userloginRoutes"
+  },
+  {
+    "prefix": "/api/user",
+    "fullRoute": "/api/user/update-profile",
+    "routePath": "/update-profile",
+    "methods": [
+      "PUT"
+    ],
+    "source": "userloginRoutes"
+  },
+  {
+    "prefix": "/api/user",
+    "fullRoute": "/api/user/change-password",
+    "routePath": "/change-password",
+    "methods": [
+      "PUT"
+    ],
+    "source": "userloginRoutes"
+  },
+  {
+    "prefix": "/api/user",
+    "fullRoute": "/api/user",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "userloginRoutes"
+  },
+  {
+    "prefix": "/api/auth",
+    "fullRoute": "/api/auth/admin/register",
+    "routePath": "/admin/register",
+    "methods": [
+      "POST"
+    ],
+    "source": "adminRoutes"
+  },
+  {
+    "prefix": "/api/auth",
+    "fullRoute": "/api/auth/admin/login",
+    "routePath": "/admin/login",
+    "methods": [
+      "POST"
+    ],
+    "source": "adminRoutes"
+  },
+  {
+    "prefix": "/api/category",
+    "fullRoute": "/api/category",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "categoryRoutes"
+  },
+  {
+    "prefix": "/api/category",
+    "fullRoute": "/api/category/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "categoryRoutes"
+  },
+  {
+    "prefix": "/api/category",
+    "fullRoute": "/api/category/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "categoryRoutes"
+  },
+  {
+    "prefix": "/api/category",
+    "fullRoute": "/api/category/delete/:id",
+    "routePath": "/delete/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "categoryRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/search",
+    "routePath": "/search",
+    "methods": [
+      "GET"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/slug/:slug",
+    "routePath": "/slug/:slug",
+    "methods": [
+      "GET"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/billing/:billingProductId/customization",
+    "routePath": "/billing/:billingProductId/customization",
+    "methods": [
+      "PUT"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/billing-variants/:billingVariantId/image",
+    "routePath": "/billing-variants/:billingVariantId/image",
+    "methods": [
+      "PUT"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/update-variants/:id",
+    "routePath": "/update-variants/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/update-sale-status/:id",
+    "routePath": "/update-sale-status/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/gallery/:imageId",
+    "routePath": "/gallery/:imageId",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/new-arrivals",
+    "routePath": "/new-arrivals",
+    "methods": [
+      "GET"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/best-sellers",
+    "routePath": "/best-sellers",
+    "methods": [
+      "GET"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/products",
+    "fullRoute": "/api/products/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "productRoutes"
+  },
+  {
+    "prefix": "/api/product-specifications",
+    "fullRoute": "/api/product-specifications/product/:productId",
+    "routePath": "/product/:productId",
+    "methods": [
+      "GET"
+    ],
+    "source": "productSpecificationRoutes"
+  },
+  {
+    "prefix": "/api/product-specifications",
+    "fullRoute": "/api/product-specifications/product/:productId",
+    "routePath": "/product/:productId",
+    "methods": [
+      "PUT"
+    ],
+    "source": "productSpecificationRoutes"
+  },
+  {
+    "prefix": "/api/size-charts",
+    "fullRoute": "/api/size-charts/product/:productId",
+    "routePath": "/product/:productId",
+    "methods": [
+      "GET"
+    ],
+    "source": "sizeChartRoutes"
+  },
+  {
+    "prefix": "/api/size-charts",
+    "fullRoute": "/api/size-charts",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "sizeChartRoutes"
+  },
+  {
+    "prefix": "/api/size-charts",
+    "fullRoute": "/api/size-charts",
+    "routePath": "/",
+    "methods": [
+      "POST"
+    ],
+    "source": "sizeChartRoutes"
+  },
+  {
+    "prefix": "/api/size-charts",
+    "fullRoute": "/api/size-charts/:id",
+    "routePath": "/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "sizeChartRoutes"
+  },
+  {
+    "prefix": "/api/size-charts",
+    "fullRoute": "/api/size-charts/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "sizeChartRoutes"
+  },
+  {
+    "prefix": "/api/size-charts",
+    "fullRoute": "/api/size-charts/assignment/:productId",
+    "routePath": "/assignment/:productId",
+    "methods": [
+      "GET"
+    ],
+    "source": "sizeChartRoutes"
+  },
+  {
+    "prefix": "/api/size-charts",
+    "fullRoute": "/api/size-charts/assignment/:productId",
+    "routePath": "/assignment/:productId",
+    "methods": [
+      "PUT"
+    ],
+    "source": "sizeChartRoutes"
+  },
+  {
+    "prefix": "/api/product_details",
+    "fullRoute": "/api/product_details/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "productDetailsRoutes"
+  },
+  {
+    "prefix": "/api/product_varients",
+    "fullRoute": "/api/product_varients",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "productVariantsRoutes"
+  },
+  {
+    "prefix": "/api/brands",
+    "fullRoute": "/api/brands",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "brandRoutes"
+  },
+  {
+    "prefix": "/api/brands",
+    "fullRoute": "/api/brands/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "brandRoutes"
+  },
+  {
+    "prefix": "/api/brands",
+    "fullRoute": "/api/brands/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "brandRoutes"
+  },
+  {
+    "prefix": "/api/brands",
+    "fullRoute": "/api/brands/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "brandRoutes"
+  },
+  {
+    "prefix": "/api/stocks",
+    "fullRoute": "/api/stocks/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "stockRoutes"
+  },
+  {
+    "prefix": "/api/stocks",
+    "fullRoute": "/api/stocks/decrement",
+    "routePath": "/decrement",
+    "methods": [
+      "POST"
+    ],
+    "source": "stockRoutes"
+  },
+  {
+    "prefix": "/api/stocks",
+    "fullRoute": "/api/stocks",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "stockRoutes"
+  },
+  {
+    "prefix": "/api/stocks",
+    "fullRoute": "/api/stocks/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "stockRoutes"
+  },
+  {
+    "prefix": "/api/stocks",
+    "fullRoute": "/api/stocks/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "stockRoutes"
+  },
+  {
+    "prefix": "/api/stocks",
+    "fullRoute": "/api/stocks/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "stockRoutes"
+  },
+  {
+    "prefix": "/api/customers",
+    "fullRoute": "/api/customers/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "customerRoutes"
+  },
+  {
+    "prefix": "/api/customers",
+    "fullRoute": "/api/customers",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "customerRoutes"
+  },
+  {
+    "prefix": "/api/customers",
+    "fullRoute": "/api/customers/by-email",
+    "routePath": "/by-email",
+    "methods": [
+      "GET"
+    ],
+    "source": "customerRoutes"
+  },
+  {
+    "prefix": "/api/customers",
+    "fullRoute": "/api/customers/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "customerRoutes"
+  },
+  {
+    "prefix": "/api/customers",
+    "fullRoute": "/api/customers/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "customerRoutes"
+  },
+  {
+    "prefix": "/api/reviews",
+    "fullRoute": "/api/reviews/can-review",
+    "routePath": "/can-review",
+    "methods": [
+      "GET"
+    ],
+    "source": "reviewRoutes"
+  },
+  {
+    "prefix": "/api/reviews",
+    "fullRoute": "/api/reviews",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "reviewRoutes"
+  },
+  {
+    "prefix": "/api/reviews",
+    "fullRoute": "/api/reviews/product/:productId",
+    "routePath": "/product/:productId",
+    "methods": [
+      "GET"
+    ],
+    "source": "reviewRoutes"
+  },
+  {
+    "prefix": "/api/reviews",
+    "fullRoute": "/api/reviews",
+    "routePath": "/",
+    "methods": [
+      "POST"
+    ],
+    "source": "reviewRoutes"
+  },
+  {
+    "prefix": "/api/reviews",
+    "fullRoute": "/api/reviews/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "reviewRoutes"
+  },
+  {
+    "prefix": "/api/reviews",
+    "fullRoute": "/api/reviews/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "reviewRoutes"
+  },
+  {
+    "prefix": "/api/reviews",
+    "fullRoute": "/api/reviews/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "reviewRoutes"
+  },
+  {
+    "prefix": "/api/dashboard",
+    "fullRoute": "/api/dashboard/stats",
+    "routePath": "/stats",
+    "methods": [
+      "GET"
+    ],
+    "source": "dashboardRoutes"
+  },
+  {
+    "prefix": "/api/dashboard",
+    "fullRoute": "/api/dashboard/stock-alerts",
+    "routePath": "/stock-alerts",
+    "methods": [
+      "GET"
+    ],
+    "source": "dashboardRoutes"
+  },
+  {
+    "prefix": "/api/subcategories",
+    "fullRoute": "/api/subcategories/local",
+    "routePath": "/local",
+    "methods": [
+      "GET"
+    ],
+    "source": "subCategoryRoutes"
+  },
+  {
+    "prefix": "/api/subcategories",
+    "fullRoute": "/api/subcategories/category/:categoryId",
+    "routePath": "/category/:categoryId",
+    "methods": [
+      "GET"
+    ],
+    "source": "subCategoryRoutes"
+  },
+  {
+    "prefix": "/api/subcategories",
+    "fullRoute": "/api/subcategories",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "subCategoryRoutes"
+  },
+  {
+    "prefix": "/api/subcategories",
+    "fullRoute": "/api/subcategories/billing",
+    "routePath": "/billing",
+    "methods": [
+      "GET"
+    ],
+    "source": "subCategoryRoutes"
+  },
+  {
+    "prefix": "/api/subcategories",
+    "fullRoute": "/api/subcategories/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "subCategoryRoutes"
+  },
+  {
+    "prefix": "/api/subcategories",
+    "fullRoute": "/api/subcategories/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "subCategoryRoutes"
+  },
+  {
+    "prefix": "/api/subcategories",
+    "fullRoute": "/api/subcategories/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "subCategoryRoutes"
+  },
+  {
+    "prefix": "/api/subcategories",
+    "fullRoute": "/api/subcategories/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "subCategoryRoutes"
+  },
+  {
+    "prefix": "/api/cart",
+    "fullRoute": "/api/cart/clear/:customerId",
+    "routePath": "/clear/:customerId",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "cartRoutes"
+  },
+  {
+    "prefix": "/api/cart",
+    "fullRoute": "/api/cart/customer/:customerId",
+    "routePath": "/customer/:customerId",
+    "methods": [
+      "GET"
+    ],
+    "source": "cartRoutes"
+  },
+  {
+    "prefix": "/api/cart",
+    "fullRoute": "/api/cart/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "cartRoutes"
+  },
+  {
+    "prefix": "/api/cart",
+    "fullRoute": "/api/cart/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "cartRoutes"
+  },
+  {
+    "prefix": "/api/cart",
+    "fullRoute": "/api/cart/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "cartRoutes"
+  },
+  {
+    "prefix": "/api/wishlist",
+    "fullRoute": "/api/wishlist/:customerId",
+    "routePath": "/:customerId",
+    "methods": [
+      "GET"
+    ],
+    "source": "wishlistRoutes"
+  },
+  {
+    "prefix": "/api/wishlist",
+    "fullRoute": "/api/wishlist/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "wishlistRoutes"
+  },
+  {
+    "prefix": "/api/wishlist",
+    "fullRoute": "/api/wishlist/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "wishlistRoutes"
+  },
+  {
+    "prefix": "/api/wishlist",
+    "fullRoute": "/api/wishlist/move-to-cart/:id",
+    "routePath": "/move-to-cart/:id",
+    "methods": [
+      "POST"
+    ],
+    "source": "wishlistRoutes"
+  },
+  {
+    "prefix": "/api/coupons",
+    "fullRoute": "/api/coupons/admin/create",
+    "routePath": "/admin/create",
+    "methods": [
+      "POST"
+    ],
+    "source": "couponRoutes"
+  },
+  {
+    "prefix": "/api/coupons",
+    "fullRoute": "/api/coupons/admin/all",
+    "routePath": "/admin/all",
+    "methods": [
+      "GET"
+    ],
+    "source": "couponRoutes"
+  },
+  {
+    "prefix": "/api/coupons",
+    "fullRoute": "/api/coupons/admin/update/:id",
+    "routePath": "/admin/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "couponRoutes"
+  },
+  {
+    "prefix": "/api/coupons",
+    "fullRoute": "/api/coupons/admin/delete/:id",
+    "routePath": "/admin/delete/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "couponRoutes"
+  },
+  {
+    "prefix": "/api/coupons",
+    "fullRoute": "/api/coupons/available",
+    "routePath": "/available",
+    "methods": [
+      "GET"
+    ],
+    "source": "couponRoutes"
+  },
+  {
+    "prefix": "/api/coupons",
+    "fullRoute": "/api/coupons/apply",
+    "routePath": "/apply",
+    "methods": [
+      "POST"
+    ],
+    "source": "couponRoutes"
+  },
+  {
+    "prefix": "/api/razorpay",
+    "fullRoute": "/api/razorpay/create-order",
+    "routePath": "/create-order",
+    "methods": [
+      "POST"
+    ],
+    "source": "razorpayRoutes"
+  },
+  {
+    "prefix": "/api/razorpay",
+    "fullRoute": "/api/razorpay/verify-payment",
+    "routePath": "/verify-payment",
+    "methods": [
+      "POST"
+    ],
+    "source": "razorpayRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/save",
+    "routePath": "/save",
+    "methods": [
+      "POST"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/:id/billing-payload",
+    "routePath": "/:id/billing-payload",
+    "methods": [
+      "GET"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/:id/billing-payload",
+    "routePath": "/:id/billing-payload",
+    "methods": [
+      "PUT"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/:id/retry-billing",
+    "routePath": "/:id/retry-billing",
+    "methods": [
+      "POST"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/all",
+    "routePath": "/all",
+    "methods": [
+      "GET"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/customer/:id",
+    "routePath": "/customer/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/:id/status",
+    "routePath": "/:id/status",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/:id/assign-franchise",
+    "routePath": "/:id/assign-franchise",
+    "methods": [
+      "PUT"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/orders",
+    "fullRoute": "/api/orders/:id/franchise-status",
+    "routePath": "/:id/franchise-status",
+    "methods": [
+      "PUT"
+    ],
+    "source": "orderRoutes"
+  },
+  {
+    "prefix": "/api/returns",
+    "fullRoute": "/api/returns/request",
+    "routePath": "/request",
+    "methods": [
+      "POST"
+    ],
+    "source": "returnRoutes"
+  },
+  {
+    "prefix": "/api/returns",
+    "fullRoute": "/api/returns/customer/:id",
+    "routePath": "/customer/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "returnRoutes"
+  },
+  {
+    "prefix": "/api/returns",
+    "fullRoute": "/api/returns",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "returnRoutes"
+  },
+  {
+    "prefix": "/api/returns",
+    "fullRoute": "/api/returns/:id/approve",
+    "routePath": "/:id/approve",
+    "methods": [
+      "POST"
+    ],
+    "source": "returnRoutes"
+  },
+  {
+    "prefix": "/api/returns",
+    "fullRoute": "/api/returns/:id/reject",
+    "routePath": "/:id/reject",
+    "methods": [
+      "POST"
+    ],
+    "source": "returnRoutes"
+  },
+  {
+    "prefix": "/api/returns",
+    "fullRoute": "/api/returns/:id/refund",
+    "routePath": "/:id/refund",
+    "methods": [
+      "POST"
+    ],
+    "source": "returnRoutes"
+  },
+  {
+    "prefix": "/api/contact",
+    "fullRoute": "/api/contact/submit",
+    "routePath": "/submit",
+    "methods": [
+      "POST"
+    ],
+    "source": "contactRoutes"
+  },
+  {
+    "prefix": "/api/contact",
+    "fullRoute": "/api/contact/stream",
+    "routePath": "/stream",
+    "methods": [
+      "GET"
+    ],
+    "source": "contactRoutes"
+  },
+  {
+    "prefix": "/api/contact",
+    "fullRoute": "/api/contact/all",
+    "routePath": "/all",
+    "methods": [
+      "GET"
+    ],
+    "source": "contactRoutes"
+  },
+  {
+    "prefix": "/api/contact",
+    "fullRoute": "/api/contact/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "contactRoutes"
+  },
+  {
+    "prefix": "/api/contact",
+    "fullRoute": "/api/contact/:id/status",
+    "routePath": "/:id/status",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "contactRoutes"
+  },
+  {
+    "prefix": "/api/contact",
+    "fullRoute": "/api/contact/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "contactRoutes"
+  },
+  {
+    "prefix": "/api/banners",
+    "fullRoute": "/api/banners",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "bannerRoutes"
+  },
+  {
+    "prefix": "/api/banners",
+    "fullRoute": "/api/banners/section/:section",
+    "routePath": "/section/:section",
+    "methods": [
+      "GET"
+    ],
+    "source": "bannerRoutes"
+  },
+  {
+    "prefix": "/api/banners",
+    "fullRoute": "/api/banners/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "bannerRoutes"
+  },
+  {
+    "prefix": "/api/banners",
+    "fullRoute": "/api/banners/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "bannerRoutes"
+  },
+  {
+    "prefix": "/api/banners",
+    "fullRoute": "/api/banners/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "bannerRoutes"
+  },
+  {
+    "prefix": "/api/banners",
+    "fullRoute": "/api/banners/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "bannerRoutes"
+  },
+  {
+    "prefix": "/api/offer-banners",
+    "fullRoute": "/api/offer-banners",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "offerbannerRoutes"
+  },
+  {
+    "prefix": "/api/offer-banners",
+    "fullRoute": "/api/offer-banners/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "offerbannerRoutes"
+  },
+  {
+    "prefix": "/api/offer-banners",
+    "fullRoute": "/api/offer-banners/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "offerbannerRoutes"
+  },
+  {
+    "prefix": "/api/offer-banners",
+    "fullRoute": "/api/offer-banners/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "offerbannerRoutes"
+  },
+  {
+    "prefix": "/api/offer-banners",
+    "fullRoute": "/api/offer-banners/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "offerbannerRoutes"
+  },
+  {
+    "prefix": "/api/live-products",
+    "fullRoute": "/api/live-products",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "liveProductRoutes"
+  },
+  {
+    "prefix": "/api/live-products",
+    "fullRoute": "/api/live-products/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "liveProductRoutes"
+  },
+  {
+    "prefix": "/api/live-products",
+    "fullRoute": "/api/live-products/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "liveProductRoutes"
+  },
+  {
+    "prefix": "/api/live-products",
+    "fullRoute": "/api/live-products/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "liveProductRoutes"
+  },
+  {
+    "prefix": "/api/live-products",
+    "fullRoute": "/api/live-products/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "liveProductRoutes"
+  },
+  {
+    "prefix": "/api/instagram-posts",
+    "fullRoute": "/api/instagram-posts",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "instagrampostRoutes"
+  },
+  {
+    "prefix": "/api/instagram-posts",
+    "fullRoute": "/api/instagram-posts/admin",
+    "routePath": "/admin",
+    "methods": [
+      "GET"
+    ],
+    "source": "instagrampostRoutes"
+  },
+  {
+    "prefix": "/api/instagram-posts",
+    "fullRoute": "/api/instagram-posts/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "instagrampostRoutes"
+  },
+  {
+    "prefix": "/api/instagram-posts",
+    "fullRoute": "/api/instagram-posts/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "instagrampostRoutes"
+  },
+  {
+    "prefix": "/api/instagram-posts",
+    "fullRoute": "/api/instagram-posts/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "instagrampostRoutes"
+  },
+  {
+    "prefix": "/api/instagram-posts",
+    "fullRoute": "/api/instagram-posts/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "instagrampostRoutes"
+  },
+  {
+    "prefix": "/api/promo-bar",
+    "fullRoute": "/api/promo-bar/active",
+    "routePath": "/active",
+    "methods": [
+      "GET"
+    ],
+    "source": "promoBarRoutes"
+  },
+  {
+    "prefix": "/api/promo-bar",
+    "fullRoute": "/api/promo-bar",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "promoBarRoutes"
+  },
+  {
+    "prefix": "/api/promo-bar",
+    "fullRoute": "/api/promo-bar",
+    "routePath": "/",
+    "methods": [
+      "POST"
+    ],
+    "source": "promoBarRoutes"
+  },
+  {
+    "prefix": "/api/promo-bar",
+    "fullRoute": "/api/promo-bar/:id",
+    "routePath": "/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "promoBarRoutes"
+  },
+  {
+    "prefix": "/api/promo-bar",
+    "fullRoute": "/api/promo-bar/:id/toggle",
+    "routePath": "/:id/toggle",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "promoBarRoutes"
+  },
+  {
+    "prefix": "/api/promo-bar",
+    "fullRoute": "/api/promo-bar/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "promoBarRoutes"
+  },
+  {
+    "prefix": "/api/password-reset",
+    "fullRoute": "/api/password-reset/forgot-password",
+    "routePath": "/forgot-password",
+    "methods": [
+      "POST"
+    ],
+    "source": "passwordResetRoutes"
+  },
+  {
+    "prefix": "/api/password-reset",
+    "fullRoute": "/api/password-reset/verify-otp",
+    "routePath": "/verify-otp",
+    "methods": [
+      "POST"
+    ],
+    "source": "passwordResetRoutes"
+  },
+  {
+    "prefix": "/api/password-reset",
+    "fullRoute": "/api/password-reset/reset-password",
+    "routePath": "/reset-password",
+    "methods": [
+      "POST"
+    ],
+    "source": "passwordResetRoutes"
+  },
+  {
+    "prefix": "/api/variants",
+    "fullRoute": "/api/variants/product/:productId",
+    "routePath": "/product/:productId",
+    "methods": [
+      "GET"
+    ],
+    "source": "variantRoutes"
+  },
+  {
+    "prefix": "/api/variants",
+    "fullRoute": "/api/variants/product/:productId/add",
+    "routePath": "/product/:productId/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "variantRoutes"
+  },
+  {
+    "prefix": "/api/variants",
+    "fullRoute": "/api/variants/product/:productId/bulk",
+    "routePath": "/product/:productId/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "variantRoutes"
+  },
+  {
+    "prefix": "/api/variants",
+    "fullRoute": "/api/variants/:id",
+    "routePath": "/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "variantRoutes"
+  },
+  {
+    "prefix": "/api/variants",
+    "fullRoute": "/api/variants/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "variantRoutes"
+  },
+  {
+    "prefix": "/api/variants",
+    "fullRoute": "/api/variants/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "variantRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos/storefront",
+    "routePath": "/storefront",
+    "methods": [
+      "GET"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos/add",
+    "routePath": "/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos/update/:id",
+    "routePath": "/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos/:rootComboId/children",
+    "routePath": "/:rootComboId/children",
+    "methods": [
+      "GET"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos/children/add",
+    "routePath": "/children/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos/children/update/:id",
+    "routePath": "/children/update/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/combos",
+    "fullRoute": "/api/combos/children/:id",
+    "routePath": "/children/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "comboRoutes"
+  },
+  {
+    "prefix": "/api/site-settings",
+    "fullRoute": "/api/site-settings/public",
+    "routePath": "/public",
+    "methods": [
+      "GET"
+    ],
+    "source": "siteSettingsRoutes"
+  },
+  {
+    "prefix": "/api/site-settings",
+    "fullRoute": "/api/site-settings",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "siteSettingsRoutes"
+  },
+  {
+    "prefix": "/api/site-settings",
+    "fullRoute": "/api/site-settings",
+    "routePath": "/",
+    "methods": [
+      "PUT"
+    ],
+    "source": "siteSettingsRoutes"
+  },
+  {
+    "prefix": "/api/site-settings",
+    "fullRoute": "/api/site-settings/:key",
+    "routePath": "/:key",
+    "methods": [
+      "PUT"
+    ],
+    "source": "siteSettingsRoutes"
+  },
+  {
+    "prefix": "/api/franchises",
+    "fullRoute": "/api/franchises",
+    "routePath": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "franchiseRoutes"
+  },
+  {
+    "prefix": "/api/franchises",
+    "fullRoute": "/api/franchises",
+    "routePath": "/",
+    "methods": [
+      "POST"
+    ],
+    "source": "franchiseRoutes"
+  },
+  {
+    "prefix": "/api/franchises",
+    "fullRoute": "/api/franchises/:id",
+    "routePath": "/:id",
+    "methods": [
+      "PUT"
+    ],
+    "source": "franchiseRoutes"
+  },
+  {
+    "prefix": "/api/franchises",
+    "fullRoute": "/api/franchises/:id",
+    "routePath": "/:id",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "franchiseRoutes"
+  },
+  {
+    "prefix": "/api/franchises",
+    "fullRoute": "/api/franchises/login",
+    "routePath": "/login",
+    "methods": [
+      "POST"
+    ],
+    "source": "franchiseRoutes"
+  },
+  {
+    "prefix": "/api/franchises",
+    "fullRoute": "/api/franchises/create",
+    "routePath": "/create",
+    "methods": [
+      "POST"
+    ],
+    "source": "franchiseRoutes"
+  },
+  {
+    "prefix": "/api/shipping",
+    "fullRoute": "/api/shipping/quote",
+    "routePath": "/quote",
+    "methods": [
+      "GET"
+    ],
+    "source": "shippingRoutes"
+  },
+  {
+    "prefix": "/api/shipping",
+    "fullRoute": "/api/shipping/orders/:orderId/address",
+    "routePath": "/orders/:orderId/address",
+    "methods": [
+      "PUT"
+    ],
+    "source": "shippingRoutes"
+  },
+  {
+    "prefix": "/api/shipping",
+    "fullRoute": "/api/shipping/orders/:orderId/couriers",
+    "routePath": "/orders/:orderId/couriers",
+    "methods": [
+      "GET"
+    ],
+    "source": "shippingRoutes"
+  },
+  {
+    "prefix": "/api/shipping",
+    "fullRoute": "/api/shipping/orders/:orderId/book",
+    "routePath": "/orders/:orderId/book",
+    "methods": [
+      "POST"
+    ],
+    "source": "shippingRoutes"
+  },
+  {
+    "prefix": "/api/sync",
+    "fullRoute": "/api/sync/billing",
+    "routePath": "/billing",
+    "methods": [
+      "POST"
+    ],
+    "source": "syncRoutes"
+  },
+  {
+    "prefix": "/api/sync",
+    "fullRoute": "/api/sync/billing/products",
+    "routePath": "/billing/products",
+    "methods": [
+      "POST"
+    ],
+    "source": "syncRoutes"
+  },
+  {
+    "prefix": "/api/billing",
+    "fullRoute": "/api/billing/category",
+    "routePath": "/category",
+    "methods": [
+      "GET"
+    ],
+    "source": "billingRoutes"
+  },
+  {
+    "prefix": "/api/billing",
+    "fullRoute": "/api/billing/subcategory",
+    "routePath": "/subcategory",
+    "methods": [
+      "GET"
+    ],
+    "source": "billingRoutes"
+  },
+  {
+    "prefix": "/api/billing",
+    "fullRoute": "/api/billing/products",
+    "routePath": "/products",
+    "methods": [
+      "GET"
+    ],
+    "source": "billingRoutes"
+  },
+  {
+    "prefix": "/api/billing",
+    "fullRoute": "/api/billing/product-varients",
+    "routePath": "/product-varients",
+    "methods": [
+      "GET"
+    ],
+    "source": "billingRoutes"
+  },
+  {
+    "prefix": "/api/billing",
+    "fullRoute": "/api/billing/product-details/:id",
+    "routePath": "/product-details/:id",
+    "methods": [
+      "GET"
+    ],
+    "source": "billingRoutes"
+  },
+  {
+    "prefix": "/api/billing",
+    "fullRoute": "/api/billing/stocks",
+    "routePath": "/stocks",
+    "methods": [
+      "GET"
+    ],
+    "source": "billingRoutes"
+  }
+]

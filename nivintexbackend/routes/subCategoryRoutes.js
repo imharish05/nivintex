@@ -35,25 +35,45 @@ async function getBillingSubcategories() {
         return Array.isArray(value) ? value : value ? [value] : [];
     };
     const categories = categoryPayload ? rowsFor(categoryPayload, 'category') : [];
+    const categorySnapshotAvailable = Boolean(categoryPayload) && [
+        categoryPayload?.category,
+        categoryPayload?.data?.category,
+        categoryPayload?.data?.data?.category,
+        categoryPayload?.result?.category,
+        categoryPayload?.data,
+        categoryPayload,
+    ].some(value => Array.isArray(value) || (value && typeof value === 'object'
+        && (value.id != null || value.category_id != null)));
     const categoriesById = new Map(categories.map(category => [String(category.id ?? category.category_id ?? category.categoryId), category]));
-    return rowsFor(subcategoryPayload, 'subcategory').map(row => {
+    return rowsFor(subcategoryPayload, 'subcategory').flatMap(row => {
+        const subcategoryId = row.id ?? row.subcategory_id ?? row.subcategoryId;
         const rawCategory = row.category_id ?? row.categoryId ?? row.cat_id ?? row.category ?? row.Category;
         const categoryId = typeof rawCategory === 'object' && rawCategory !== null
             ? (rawCategory.id ?? rawCategory.category_id ?? rawCategory.value)
             : rawCategory;
-        const category = (categoryId !== undefined && categoryId !== null ? categoriesById.get(String(categoryId)) : null)
-            || (typeof rawCategory === 'object' ? rawCategory : null)
-            || (typeof rawCategory === 'string' ? categories.find(item => String(item.name || item.category_name || item.categoryName || '').trim().toLowerCase() === rawCategory.trim().toLowerCase()) : null);
-        return {
+        const categoryName = row.category_name || row.categoryName
+            || (typeof rawCategory === 'object' && rawCategory !== null ? rawCategory.name || rawCategory.category_name : null)
+            || (typeof rawCategory === 'string' && Number.isNaN(Number(rawCategory)) ? rawCategory : null);
+        const categoryFromSnapshot = (categoryId !== undefined && categoryId !== null ? categoriesById.get(String(categoryId)) : null)
+            || (categoryName ? categories.find(item => String(item.name || item.category_name || item.categoryName || '').trim().toLowerCase() === categoryName.trim().toLowerCase()) : null);
+        const category = categoryFromSnapshot || (!categorySnapshotAvailable && typeof rawCategory === 'object' ? rawCategory : null);
+        // When Billing's category list is available, omit orphaned subcategories
+        // left in a stale /subcategory response after their parent was deleted.
+        if (categorySnapshotAvailable && (categoryId != null || categoryName) && !categoryFromSnapshot) return [];
+        const rawStatus = row.status ?? row.is_active ?? row.isActive ?? row.active;
+        const inactive = ['inactive', 'disabled', '0', 'false', 'no'].includes(String(rawStatus ?? '').trim().toLowerCase());
+        return [{
         ...row,
+        id: subcategoryId,
         name: row.name || row.subcategory_name || row.sub_category_name,
-        billingSubcategoryId: String(row.id),
-        billing_subcategory_id: String(row.id),
+        billingSubcategoryId: subcategoryId == null ? null : String(subcategoryId),
+        billing_subcategory_id: subcategoryId == null ? null : String(subcategoryId),
         category_id: categoryId ?? null,
         categoryId: categoryId ?? null,
-        category_name: row.category_name || row.categoryName || category?.name || category?.category_name || category?.categoryName || (typeof rawCategory === 'string' && Number.isNaN(Number(rawCategory)) ? rawCategory : ''),
+        category_name: row.category_name || row.categoryName || category?.name || category?.category_name || category?.categoryName || categoryName || '',
         category: category || undefined,
-        };
+        status: inactive ? 'Inactive' : 'Active',
+        }];
     });
 }
 
@@ -90,12 +110,18 @@ router.get('/category/:categoryId', async (req, res) => {
 
 // Billing catalog IDs are kept distinct from this store's local subcategory IDs.
 router.get('/', async (_req, res) => {
-    try { return res.json(await getBillingSubcategories()); }
+    try {
+        res.set('Cache-Control', 'no-store, max-age=0');
+        return res.json(await getBillingSubcategories());
+    }
     catch (err) { return res.status(502).json({ error: 'Could not load subcategories from Billing API.' }); }
 });
 
 router.get('/billing', async (_req, res) => {
-    try { return res.json(await getBillingSubcategories()); }
+    try {
+        res.set('Cache-Control', 'no-store, max-age=0');
+        return res.json(await getBillingSubcategories());
+    }
     catch (err) { return res.status(502).json({ error: 'Could not load subcategories from Billing API.' }); }
 });
 

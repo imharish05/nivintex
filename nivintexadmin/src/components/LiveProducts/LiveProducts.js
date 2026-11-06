@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import DataTable from '../DataTable/DataTable';
 import { API_BASE_URL } from '../../config/api';
+import { confirmToast } from '../../utils/confirmToast';
 
 const API = API_BASE_URL;
 const pillClass = { Active: 'pill-active', Inactive: 'pill-inactive' };
@@ -36,6 +37,7 @@ export default function LiveProducts({ showToast }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [videoPreview, setVideoPreview] = useState(null);
   const videoPreviewRef = useRef(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ── Fetch live products ─────────────────────────────────────────
   useEffect(() => { fetchItems(); }, []);
@@ -48,7 +50,7 @@ export default function LiveProducts({ showToast }) {
       .then(data => {
         // Handle both array and paginated { products: [] } shapes
         const list = Array.isArray(data) ? data : data.products || data.rows || [];
-        setAllProducts(list);
+        setAllProducts(list.filter(product => String(product.status || 'Active').trim().toLowerCase() === 'active'));
         setProductsLoading(false);
       })
       .catch(() => {
@@ -69,6 +71,7 @@ export default function LiveProducts({ showToast }) {
   };
 
   const closeForm = () => {
+    setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
     setEditingRow(null);
@@ -150,7 +153,7 @@ export default function LiveProducts({ showToast }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this live product?')) return;
+    if (!(await confirmToast('Delete this live product?', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/live-products/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -460,8 +463,13 @@ export default function LiveProducts({ showToast }) {
                 </div>
               </div>
 
-              <button type="submit" className="km-btn-submit">
-                {editingId ? 'Update Live Product' : 'Save Live Product'}
+              <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
+                {isSubmitting && <span className="km-btn-spinner" />}
+                <span>
+                  {isSubmitting
+                    ? (editingId ? 'Updating Live Product...' : 'Saving Live Product...')
+                    : (editingId ? 'Update Live Product' : 'Save Live Product')}
+                </span>
               </button>
             </form>
           </div>

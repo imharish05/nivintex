@@ -55,10 +55,10 @@ const addOfferBanner = async (req, res) => {
     const { title, subtitle, offerLabel, btnText, btnLink, status } = req.body;
 
     const validationError = validateFields([
-      { value: title, fieldName: 'Title', required: true, maxChars: 60, maxWords: 10 },
-      { value: subtitle, fieldName: 'Subtitle', required: true, maxChars: 80, maxWords: 15 },
-      { value: offerLabel, fieldName: 'Offer Label', required: true, maxChars: 40, maxWords: 6 },
-      { value: btnText, fieldName: 'Button Text', required: true, maxChars: 25, maxWords: 4 },
+      { value: title, fieldName: 'Title', required: true, maxChars: 40, maxWords: 6 },
+      { value: subtitle, fieldName: 'Subtitle', required: true, maxChars: 50, maxWords: 8 },
+      { value: offerLabel, fieldName: 'Offer Label', required: true, maxChars: 20, maxWords: 3 },
+      { value: btnText, fieldName: 'Button Text', required: true, maxChars: 15, maxWords: 3 },
       { value: btnLink, fieldName: 'Button Link', required: true, maxChars: 255 },
     ]);
     if (validationError) {
@@ -96,10 +96,10 @@ const updateOfferBanner = async (req, res) => {
     const { title, subtitle, offerLabel, btnText, btnLink, status } = req.body;
 
     const validationError = validateFields([
-      { value: title !== undefined ? title : offer.title, fieldName: 'Title', required: true, maxChars: 60, maxWords: 10 },
-      { value: subtitle !== undefined ? subtitle : offer.subtitle, fieldName: 'Subtitle', required: true, maxChars: 80, maxWords: 15 },
-      { value: offerLabel !== undefined ? offerLabel : offer.offerLabel, fieldName: 'Offer Label', required: true, maxChars: 40, maxWords: 6 },
-      { value: btnText !== undefined ? btnText : offer.btnText, fieldName: 'Button Text', required: true, maxChars: 25, maxWords: 4 },
+      { value: title !== undefined ? title : offer.title, fieldName: 'Title', required: true, maxChars: 40, maxWords: 6 },
+      { value: subtitle !== undefined ? subtitle : offer.subtitle, fieldName: 'Subtitle', required: true, maxChars: 50, maxWords: 8 },
+      { value: offerLabel !== undefined ? offerLabel : offer.offerLabel, fieldName: 'Offer Label', required: true, maxChars: 20, maxWords: 3 },
+      { value: btnText !== undefined ? btnText : offer.btnText, fieldName: 'Button Text', required: true, maxChars: 15, maxWords: 3 },
       { value: btnLink !== undefined ? btnLink : offer.btnLink, fieldName: 'Button Link', required: true, maxChars: 255 },
     ]);
     if (validationError) {

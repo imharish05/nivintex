@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { confirmToast } from '../../utils/confirmToast';
 
 export default function DataTable({ columns, initialRows = [], renderRow }) {
   const [rows, setRows] = useState(Array.isArray(initialRows) ? initialRows : []);
@@ -12,8 +13,8 @@ export default function DataTable({ columns, initialRows = [], renderRow }) {
     Object.values(r).join(' ').toLowerCase().includes(query.toLowerCase())
   );
 
-  const deleteRow = (id) => {
-    if (window.confirm('Are you sure?')) {
+  const deleteRow = async (id) => {
+    if (await confirmToast('Are you sure you want to delete this item?', 'Delete')) {
       setRows((prev) => prev.filter((r) => r.id !== id));
     }
   };

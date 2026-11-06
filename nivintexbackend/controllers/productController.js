@@ -545,6 +545,13 @@ exports.updateBillingProductCustomization = async (req, res) => {
         const update = {};
         if (req.body.isNewArrival !== undefined) update.isNewArrival = req.body.isNewArrival === 'true' || req.body.isNewArrival === true;
         if (req.body.isBestSeller !== undefined) update.isBestSeller = req.body.isBestSeller === 'true' || req.body.isBestSeller === true;
+        if (req.body.mrpGstType !== undefined || req.body.mrp_gst_type !== undefined) {
+            const gstType = String(req.body.mrpGstType ?? req.body.mrp_gst_type).trim().toLowerCase();
+            if (!['with gst', 'without gst'].includes(gstType)) {
+                return res.status(400).json({ success: false, message: 'GST setting must be With GST or Without GST.' });
+            }
+            update.mrpGstType = gstType === 'with gst' ? 'With GST' : 'Without GST';
+        }
         const shippingFields = [
             ['shippingWeightKg', 'shipping_weight_kg'],
             ['shippingLengthCm', 'shipping_length_cm'],
@@ -610,7 +617,25 @@ exports.updateBillingVariantImage = async (req, res) => {
         }
 
         const uploadedImages = files.map(file => normPath(file.path));
-        const nextImages = [...new Set([...keepImages, ...uploadedImages])];
+        let nextImages = [...new Set([...keepImages, ...uploadedImages])];
+        if (req.body.imageOrder !== undefined) {
+            try {
+                const imageOrder = JSON.parse(req.body.imageOrder);
+                if (!Array.isArray(imageOrder)) throw new Error('Expected an ordered image list.');
+                const orderedImages = imageOrder.map(item => {
+                    if (item?.type === 'saved' && keepImages.includes(item.path)) return item.path;
+                    if (item?.type === 'new' && Number.isInteger(Number(item.index)) && uploadedImages[Number(item.index)]) return uploadedImages[Number(item.index)];
+                    throw new Error('Invalid image order entry.');
+                });
+                if (new Set(orderedImages).size !== orderedImages.length
+                    || orderedImages.length !== new Set([...keepImages, ...uploadedImages]).size) {
+                    throw new Error('Image order must include every image once.');
+                }
+                nextImages = orderedImages;
+            } catch (_) {
+                return res.status(400).json({ success: false, message: 'Invalid imageOrder value.' });
+            }
+        }
         const previousImages = [...new Set([...currentImages, variant.image].filter(Boolean))];
         await variant.update({ image: nextImages[0] || null, images: nextImages }, { hooks: false });
         previousImages
@@ -685,7 +710,7 @@ exports.getProductById = async (req, res) => {
         const product = await Product.findByPk(req.params.id, {
             include: PRODUCT_INCLUDE,
         });
-        if (product) {
+        if (product && product.status === 'Active') {
             const mappedProduct = {
                 id: product.id,
                 category_id: product.categoryId,
@@ -702,6 +727,8 @@ exports.getProductById = async (req, res) => {
                 updated_at: product.updatedAt,
                 variants: product.Variants?.map(v => ({
                     id: v.id,
+                    billingVariantId: v.billingVariantId || null,
+                    billing_variant_id: v.billingVariantId || null,
                     product_id: v.productId,
                     variant_code: v.variant_code,
                     size: v.size,
@@ -826,6 +853,8 @@ exports.getAllProductVariants = async (req, res) => {
             billing_product_id: p.billingProductId,
             variants: p.Variants?.map(v => ({
                 id: v.id,
+                billingVariantId: v.billingVariantId || null,
+                billing_variant_id: v.billingVariantId || null,
                 product_id: v.productId,
                 variant_code: v.variant_code,
                 size: v.size,

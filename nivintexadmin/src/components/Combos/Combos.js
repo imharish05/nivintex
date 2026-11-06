@@ -3,6 +3,7 @@ import DataTable from '../DataTable/DataTable';
 import ImageUploadPreview from '../common/ImageUploadPreview';
 import CharWordCounter from '../common/CharWordCounter';
 import { validateFields, isOverLimit } from '../../utils/textValidation';
+import { confirmToast } from '../../utils/confirmToast';
 
 const API = process.env.REACT_APP_API_URL;
 const pillClass = { Active: 'pill-active', Inactive: 'pill-inactive' };
@@ -50,6 +51,8 @@ export default function Combos({ showToast }) {
   // Child Combo product selection state
   const [selectedProducts, setSelectedProducts] = useState([]); // array of { productId, quantity }
   const [productSearch, setProductSearch] = useState('');
+  const [isRootSubmitting, setIsRootSubmitting] = useState(false);
+  const [isChildSubmitting, setIsChildSubmitting] = useState(false);
 
   // Fetch Root Combos and Products on mount
   useEffect(() => {
@@ -99,7 +102,8 @@ export default function Combos({ showToast }) {
     fetch(`${API}/products`)
       .then(r => r.json())
       .then(data => {
-        setAllProducts(Array.isArray(data) ? data : []);
+        const products = Array.isArray(data) ? data : data?.products || data?.data?.products || [];
+        setAllProducts(products.filter(product => String(product.status || 'Active').trim().toLowerCase() === 'active'));
       })
       .catch(() => {
         console.error('Failed to load products list for selector.');
@@ -109,6 +113,7 @@ export default function Combos({ showToast }) {
   // ── ROOT COMBO ACTIONS ──────────────────────────────────────────
 
   const closeRootForm = () => {
+    setIsRootSubmitting(false);
     setShowRootForm(false);
     setEditingRootId(null);
     setRootFormData({ name: '', status: 'Active' });
@@ -148,6 +153,7 @@ export default function Combos({ showToast }) {
       ? `${API}/combos/update/${editingRootId}`
       : `${API}/combos/add`;
 
+    setIsRootSubmitting(true);
     try {
       const res = await fetch(url, { method, body: data });
       if (res.ok) {
@@ -163,12 +169,14 @@ export default function Combos({ showToast }) {
       }
     } catch {
       showToast('Server Error', 'Something went wrong. Try again.');
+    } finally {
+      setIsRootSubmitting(false);
     }
   };
 
   const handleDeleteRoot = async (e, id) => {
     e.stopPropagation();
-    if (!window.confirm('Delete this Root Combo? This will also delete all its Child Combos.')) return;
+    if (!(await confirmToast('Delete this Root Combo? This will also delete all its Child Combos.', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/combos/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -185,6 +193,7 @@ export default function Combos({ showToast }) {
   // ── CHILD COMBO ACTIONS ─────────────────────────────────────────
 
   const closeChildForm = () => {
+    setIsChildSubmitting(false);
     setShowChildForm(false);
     setEditingChildId(null);
     setChildFormData({
@@ -271,6 +280,7 @@ export default function Combos({ showToast }) {
       ? `${API}/combos/children/update/${editingChildId}`
       : `${API}/combos/children/add`;
 
+    setIsChildSubmitting(true);
     try {
       const res = await fetch(url, { method, body: data });
       if (res.ok) {
@@ -286,11 +296,13 @@ export default function Combos({ showToast }) {
       }
     } catch {
       showToast('Server Error', 'Something went wrong. Try again.');
+    } finally {
+      setIsChildSubmitting(false);
     }
   };
 
   const handleDeleteChild = async (id) => {
-    if (!window.confirm('Delete this Child Combo?')) return;
+    if (!(await confirmToast('Delete this Child Combo?', 'Delete'))) return;
     try {
       const res = await fetch(`${API}/combos/children/${id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -389,8 +401,13 @@ export default function Combos({ showToast }) {
                     previewMaxHeight={140}
                   />
 
-                  <button type="submit" className="km-btn-submit">
-                    {editingRootId ? 'Update Combo Group' : 'Save Combo Group'}
+                  <button type="submit" className="km-btn-submit" disabled={isRootSubmitting}>
+                    {isRootSubmitting && <span className="km-btn-spinner" />}
+                    <span>
+                      {isRootSubmitting
+                        ? (editingRootId ? 'Updating Combo Group...' : 'Saving Combo Group...')
+                        : (editingRootId ? 'Update Combo Group' : 'Save Combo Group')}
+                    </span>
                   </button>
                 </form>
               </div>
@@ -634,8 +651,13 @@ export default function Combos({ showToast }) {
                     </p>
                   </div>
 
-                  <button type="submit" className="km-btn-submit" style={{ gridColumn: 'span 2' }}>
-                    {editingChildId ? 'Update Combo Package' : 'Save Combo Package'}
+                  <button type="submit" className="km-btn-submit" style={{ gridColumn: 'span 2' }} disabled={isChildSubmitting}>
+                    {isChildSubmitting && <span className="km-btn-spinner" />}
+                    <span>
+                      {isChildSubmitting
+                        ? (editingChildId ? 'Updating Combo Package...' : 'Saving Combo Package...')
+                        : (editingChildId ? 'Update Combo Package' : 'Save Combo Package')}
+                    </span>
                   </button>
                 </form>
               </div>

@@ -1,29 +1,27 @@
-# Billing 422 investigation
+# Billing stock and 422 investigation
 
-## Evidence
+## Earlier 422 cases
 
-- Local paid orders `18` and `19` both recorded Billing's HTTP 422 for `RDY-SALWAR-2026-10-027-L-STANDARD`.
-- Both persisted invoice requests contained Billing variant ID `451`, quantity `1`. The supplied Billing catalog response identifies ID `451` as that exact SKU, so the local-to-Billing variant mapping is correct for these orders.
-- The supplied `/product_varients` response reports product `106` with aggregate `total_stock: 4`; variant `451` has `total_stock: 1` and `in_stock: true`. It does not identify a stock location or a location-level quantity.
-- Both saved Nivintex payloads omitted `franchise_location_id`; the stored order location was null.
-- In the supplied Billing `BillingController::store` source, invoice creation checks `Stock` by both `franchise_location_id` and `product_variant_id`, locks that row, and rejects if the row is absent or its `quantity` is below the requested quantity. This occurs inside a database transaction before `Billing::create` and stock decrement.
-- The supplied Billing variant search formatter is not a safe checkout source: for the central (null) location it can report `available_stock = 999999` when the central stock row is zero.
+Paid orders 18 and 19 were submitted to Billing with variant `451` (`RDY-SALWAR-2026-10-027-L-STANDARD`) and quantity `1`. The catalog response showed aggregate `total_stock: 1`, but the older preflight did not read Billing `/stocks`. Billing's invoice handler checks the selected `franchise_location_id` and variant row inside its transaction, so aggregate catalog stock could not explain or guarantee invoice acceptance. Those already-paid orders must be checked against Billing before retrying; an ambiguous/paid invoice must never be posted again without reconciliation.
 
-## Finding
+## Current live API evidence
 
-The mismatch is aggregate catalog stock versus location-specific invoice stock. The catalog snapshot can show one unit somewhere in Billing while the invoice checks one exact stock row at the selected location. The present Nivintex request implicitly targets Central Admin (null location), and the supplied evidence does not show that Central Admin has a unit. The exact location containing the aggregate unit cannot be identified from the supplied API response. The failed requests therefore do not prove that the variant was sellable at the invoice location.
+Read-only GETs to the configured Billing API on 2026-10-21 returned:
 
-Billing's transaction source indicates these particular 422 requests fail before invoice creation or inventory decrement. The paid Nivintex orders still need reconciliation against Billing before an operator retries them.
+- `/products`: `{ status, products, meta }`, paginated at 15 products per page, 104 products total.
+- `/product_varients`: `{ status, product_varients }`, with 104 product records and nested variants. Catalog `total_stock` remains aggregate.
+- `/product_details/2`: `{ status, product }`, with the individual product and nested variants.
+- `/stocks`: `{ status, stocks }`, 451 rows shaped like `{ id, variant_code, display_name, size, color, barcode, product, quantity, in_stock }`. These rows omit `franchise_location_id`.
 
-## Nivintex safeguards applied
+For Billing product `2` (`CRD-2026-07-002`), `/product_varients` and `/product_details/2` identify variants `4`, `5`, and `6`. `/stocks` reports quantities `2` for each matching variant code. For variant `1` (`CRD-2026-07-001-L-STANDARD`), the live stock row reported quantity `0` and `in_stock: false`, despite the catalog variant reporting aggregate `total_stock: 1`. That difference demonstrates why `/stocks` is the pre-payment source and catalog totals cannot authorize payment.
 
-- Invoice payloads now preserve `franchise_location_id`; `BILLING_STOCK_LOCATION_ID` selects a configured franchise location. Leave it unset for Billing's Central Admin/null location. Set it only to an existing Billing franchise ID whose stock is intended for website fulfillment.
-- Repeated lines with the same exact Billing variant ID are combined and invalid IDs or quantities are rejected.
-- Checkout no longer treats `total_stock` or `in_stock` as proof of sellable stock. It requires an exact Billing stock row containing `product_variant_id`, `franchise_location_id`, and `quantity` matching the selected location. With the supplied `/product_varients` response, checkout stops before Razorpay payment because that response has only aggregate stock.
-- The exact original location and invoice payload are reused when an invoice is retried; checkout and retry continue to require a stock check.
+The current `/stocks` response is treated as the website's Central Admin view because it is the direct stock resource supplied for checkout and matches the null-location invoice configuration. If Billing changes that endpoint to return a different location or global total, Billing must expose a location-filtered response before the website can safely support another invoice location. Do not set `BILLING_STOCK_LOCATION_ID` to a franchise while using unscoped `/stocks` rows.
 
-## Billing dependency to finish the flow
+## Safeguards and order flow
 
-The supplied `/product_varients` response does not contain the per-location `Stock` rows needed to pass the same check as `store`. Billing must provide a documented read-only API response for the selected location that exposes the actual `Stock.quantity` for each `product_variant_id`, or update an existing documented endpoint to provide it. The website must use that response for pre-payment validation. Do not use the search formatter's `available_stock` for central checkout because the supplied controller can return its sentinel `999999` when central stock is empty.
+- Before Razorpay order creation, Nivintex fetches fresh `/product_varients` and `/stocks`, matches the Billing variant ID and exact `variant_code`/SKU, and compares requested quantity with `/stocks[].quantity`. `in_stock: false` is zero. Missing stock or insufficient quantity stops payment before Razorpay starts.
+- After payment, Nivintex verifies the Razorpay signature and order amount/currency, stores the paid order idempotently, then posts the invoice to `{BILLING_API_BASE_URL}/billings`. The request includes the configured location (null for Central Admin), customer fields, payment/source/price mode, amount, and each Billing variant ID and quantity.
+- Billing owns invoice creation and its stock decrement in one transaction. Nivintex does not call `/stocks/decrement` after Billing accepts the invoice.
+- The invoice response and request are stored on the local order. A successful invoice triggers local product/variant/stock refresh. Rejected and unknown invoice outcomes stay attached to the order for reconciliation; do not replay an ambiguous POST until Billing has been checked.
 
-Until Billing exposes this authoritative row through a documented route, Nivintex intentionally blocks payment when only aggregate stock is available. No invoice POST or live payment was used to test this fix.
+The field mapping and image synchronization are documented in [BILLING_INTEGRATION.md](./BILLING_INTEGRATION.md).

@@ -12,7 +12,26 @@ exports.submitContact = async (req, res) => {
       return res.status(400).json({ success: false, message: 'All fields are required.' });
     }
 
-    const newContact = await Contact.create({ name, email, phone, subject, message });
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(String(email).trim())) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    }
+
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(String(phone).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number must be a 10-digit number starting with 9, 8, 7, or 6.',
+      });
+    }
+
+    const newContact = await Contact.create({
+      name: String(name).trim(),
+      email: String(email).trim(),
+      phone: String(phone).trim(),
+      subject: String(subject).trim(),
+      message: String(message).trim(),
+    });
 
     // Broadcast to any SSE listeners (admin panel) so new messages appear instantly
     try {

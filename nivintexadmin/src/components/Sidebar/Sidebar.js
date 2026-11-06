@@ -52,18 +52,6 @@ const NAV_ITEMS = [
   {
     section: 'Products',
     items: [
-      { id: 'products', label: 'Products', icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M20 7l-8-4-8 4m16 0v10l-8 4m-8-4V7m8 4v10"/>
-        </svg>
-      )},
-      { id: 'variants', label: 'Variants', icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          <line x1="3" y1="9" x2="21" y2="9"/>
-          <line x1="9" y1="21" x2="9" y2="9"/>
-        </svg>
-      )},
       { id: 'categories', label: 'Categories', icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
@@ -77,8 +65,20 @@ const NAV_ITEMS = [
           <path d="M6.5 14v7M17.5 14v7M3 17.5h18" />
         </svg>
       )},
-      
+      { id: 'products', label: 'Products', icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M20 7l-8-4-8 4m16 0v10l-8 4m-8-4V7m8 4v10"/>
+        </svg>
+      )},
+      { id: 'variants', label: 'Variants', icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="3" y1="9" x2="21" y2="9"/>
+          <line x1="9" y1="21" x2="9" y2="9"/>
+        </svg>
+      )},
 
+      /* Product Stock is temporarily hidden; keep the navigation definition for re-enabling later.
       { id: 'stock', label: 'Product Stock', icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
@@ -87,6 +87,7 @@ const NAV_ITEMS = [
           <line x1="6" y1="18" x2="6.01" y2="18"/>
         </svg>
       )}
+      */
     ],
   },
   {
@@ -139,6 +140,12 @@ const NAV_ITEMS = [
       { id: 'orders_delivered', label: 'Delivered Orders', icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      )},
+      { id: 'delivery-zones', label: 'Delivery Zones', icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+          <circle cx="12" cy="9" r="2.5"/>
         </svg>
       )},
     ],

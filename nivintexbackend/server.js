@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const sequelize = require('./config/db');
@@ -49,6 +50,7 @@ OrderItem.belongsTo(Order,  { foreignKey: 'orderId',  constraints: false });
 
 OrderItem.belongsTo(Product, { foreignKey: 'product_id', as: 'Product', constraints: false });
 Product.hasMany(OrderItem,   { foreignKey: 'product_id', constraints: false });
+OrderItem.belongsTo(ProductVariant, { foreignKey: 'variant_id', as: 'Variant', constraints: false });
 
 Cart.belongsTo(Product, { foreignKey: 'productId', constraints: false });
 Product.hasMany(Cart,   { foreignKey: 'productId', constraints: false });
@@ -103,6 +105,7 @@ const syncRoutes            = require('./routes/syncRoutes');
 const billingRoutes         = require('./routes/billingRoutes');
 const productSpecificationRoutes = require('./routes/productSpecificationRoutes');
 const sizeChartRoutes = require('./routes/sizeChartRoutes');
+const deliveryZoneRoutes = require('./routes/deliveryZoneRoutes');
 
 const app = express();
 
@@ -152,6 +155,7 @@ app.use('/api/franchises',       franchiseRoutes);
 app.use('/api/shipping',         shippingRoutes);
 app.use('/api/sync',             syncRoutes);
 app.use('/api/billing',          billingRoutes);
+app.use('/api/delivery-zones',   deliveryZoneRoutes);
 
 // --- 6. SYNC & LISTEN ---
 const PORT = process.env.PORT || 5000;
@@ -189,10 +193,14 @@ const startServer = async () => {
     const ensureWishlistVariantColumns = require('./migrations/ensureWishlistVariantColumns');
     await ensureWishlistVariantColumns();
     await ensureWishlistVariantColumns.ensureCartVariantColumn();
+    startupStep = 'coupon max uses column migration';
+    await require('./migrations/ensureCouponMaxUsesColumn')();
+    startupStep = 'delivery zones migration';
+    await require('./migrations/ensureDeliveryZonesTable')();
     console.log('✅ MySQL Connected & Database Synced');
 
     startupStep = 'HTTP server startup';
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
     });
 

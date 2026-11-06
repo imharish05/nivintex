@@ -22,7 +22,9 @@ async function billingGet(path, params = {}, options = {}) {
   const queryKey = Object.keys(params).sort().map(key => `${key}=${String(params[key])}`).join('&');
   const key = `GET:${url}${queryKey ? `?${queryKey}` : ''}`;
   const configuredTtl = Number(process.env.BILLING_API_CATALOG_CACHE_TTL_MS);
-  const cacheTtlMs = options.cache === false ? 0 : Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 10000;
+  const cacheTtlMs = options.cache === false ? 0
+    : Number.isFinite(options.cacheTtlMs) && options.cacheTtlMs >= 0 ? options.cacheTtlMs
+      : Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 10000;
   const response = await billingRequestManager.request({
     method: 'GET', key, label: path,
     cacheTtlMs,
@@ -55,8 +57,8 @@ async function getVariants() {
   return billingGet('/varients');
 }
 
-async function getStocks() {
-  return billingGet('/stocks');
+async function getStocks(options = {}) {
+  return billingGet('/stocks', {}, { cache: options.cache !== false, fresh: options.fresh === true });
 }
 
 async function getProductDetails(productId) {
@@ -64,7 +66,11 @@ async function getProductDetails(productId) {
 }
 
 async function getEndpoint(path) {
-  return billingGet(path, {}, { cache: false });
+  // Keep category navigation fresh after changes in Billing while still
+  // deduplicating the frequent requests from the storefront and admin.
+  const configuredTtl = Number(process.env.BILLING_API_CATALOG_CACHE_TTL_MS);
+  const cacheTtlMs = Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 10000;
+  return billingGet(path, {}, { cacheTtlMs });
 }
 
 function productsFromResponse(payload) {
@@ -134,9 +140,9 @@ function stockValue(variant) {
   return null;
 }
 
-// The product catalog's total_stock is aggregated across locations. Billing's
-// invoice controller deducts Stock.quantity for one franchise_location_id, so
-// checkout only trusts a row that identifies both the variant and exact location.
+// Billing's catalog total_stock is aggregate and cannot prove a location can
+// fulfill an invoice. Only a row with exact variant, location, and quantity is
+// accepted for checkout preflight.
 function locationStockValue(variant, requestedLocationId) {
   if (!variant || !Object.prototype.hasOwnProperty.call(variant, 'franchise_location_id')) return null;
   const rowLocationId = variant.franchise_location_id == null || variant.franchise_location_id === ''
@@ -146,8 +152,36 @@ function locationStockValue(variant, requestedLocationId) {
   if (rowLocationId !== expectedLocationId) return null;
   const variantId = variant.product_variant_id ?? variant.product_varient_id ?? variant.variant_id ?? variant.id;
   if (variantId == null || !/^\d+$/.test(String(variantId))) return null;
-  const quantity = Number(variant.quantity);
+  const quantityValue = variant.quantity ?? variant.stock_quantity ?? variant.available_quantity ?? variant.available_qty;
+  const quantity = Number(quantityValue);
   return Number.isFinite(quantity) && quantity >= 0 ? quantity : null;
+}
+
+// The live Billing GET /stocks contract returns one row per sellable variant:
+// { id, variant_code, product, quantity, in_stock }. In this API that row is
+// the website/Central Admin stock view; it does not serialize a location ID.
+// Never infer this behavior for a configured franchise location.
+function websiteStockValue(stockRow, catalogVariant, requestedLocationId) {
+  if (!stockRow || !catalogVariant) return null;
+  if (Object.prototype.hasOwnProperty.call(stockRow, 'franchise_location_id')) {
+    const codeMatches = String(stockRow.variant_code || stockRow.sku || '').trim().toLowerCase()
+      === String(catalogVariant.variant_code || catalogVariant.sku || '').trim().toLowerCase();
+    if (!codeMatches) return null;
+    return locationStockValue(stockRow, requestedLocationId);
+  }
+  if (requestedLocationId !== null) return null;
+  const stockCode = String(stockRow.variant_code || stockRow.sku || '').trim().toLowerCase();
+  const catalogCode = String(catalogVariant.variant_code || catalogVariant.sku || '').trim().toLowerCase();
+  if (!stockCode || stockCode !== catalogCode) return null;
+  const stockProductCode = String(stockRow.product?.product_code || stockRow.product_code || '').trim().toLowerCase();
+  const catalogProductCode = String(catalogVariant.product_code || '').trim().toLowerCase();
+  if (stockProductCode && catalogProductCode && stockProductCode !== catalogProductCode) return null;
+  const markedOut = stockRow.in_stock === false || stockRow.in_stock === 0
+    || ['false', '0', 'no', 'out of stock'].includes(String(stockRow.in_stock ?? '').trim().toLowerCase());
+  if (markedOut) return 0;
+  const raw = stockRow.quantity ?? stockRow.stock_quantity ?? stockRow.available_quantity ?? stockRow.available_qty;
+  const quantity = Number(raw);
+  return Number.isFinite(quantity) && quantity >= 0 ? Math.floor(quantity) : null;
 }
 
 function assertResponseStatus(payload, endpoint) {
@@ -171,13 +205,14 @@ async function assertBillingStock(items, { locationId = configuredStockLocationI
     throw error;
   }
 
+  const stockLocationId = locationId === undefined ? configuredStockLocationId() : normalizeStockLocationId(locationId);
   const stockUrl = `${getBaseUrl()}/product_varients`;
-  orderFlowLog.logRequest('Billing stock preflight', 'GET', stockUrl, {});
+  orderFlowLog.logRequest('Billing stock preflight catalog', 'GET', stockUrl, {});
   let payload;
   try {
     payload = await getProductVariants({ fresh: true });
     assertResponseStatus(payload, '/product_varients');
-    orderFlowLog.logResponse('Billing stock preflight /product_varients', Number(payload?.status) || 200, requestedVariantSnapshot(payload, items));
+    orderFlowLog.logResponse('Billing stock preflight catalog /product_varients', Number(payload?.status) || 200, requestedVariantSnapshot(payload, items));
   } catch (cause) {
     orderFlowLog.logFailure('Billing stock preflight /product_varients', cause);
     const upstreamStatus = cause.response?.status || cause.status;
@@ -192,6 +227,24 @@ async function assertBillingStock(items, { locationId = configuredStockLocationI
     error.retryAfterMs = cause.retryAfterMs ?? null;
     error.cause = cause;
     throw error;
+  }
+
+  // Catalog totals can be aggregated across locations. Load the Billing stock
+  // rows separately and only accept them if their schema identifies variant,
+  // exact location, and quantity. Keep the catalog response as a fallback only
+  // when it itself embeds rows with that same complete schema.
+  let stockPayload = null;
+  const billingStocksUrl = `${getBaseUrl()}/stocks`;
+  orderFlowLog.logRequest('Billing stock preflight location rows', 'GET', billingStocksUrl, {});
+  try {
+    stockPayload = await billingGet('/stocks', {}, { cache: false, fresh: true });
+    assertResponseStatus(stockPayload, '/stocks');
+    orderFlowLog.logResponse('Billing stock preflight location rows /stocks', Number(stockPayload?.status) || 200, requestedVariantSnapshot(stockPayload, items));
+  } catch (cause) {
+    orderFlowLog.logFailure('Billing stock preflight location rows /stocks', cause);
+    // This route is not published by every Billing deployment. If unavailable,
+    // catalog-embedded location rows can still prove stock; aggregate-only
+    // catalog data will produce the actionable location-stock error below.
   }
 
   const nestedVariants = variantsFromResponse(payload);
@@ -210,6 +263,7 @@ async function assertBillingStock(items, { locationId = configuredStockLocationI
   const auxiliaryVariants = flatVariants;
   const variantsById = new Map();
   const locationStockRows = stocksFromResponse(payload);
+  const billingStockRows = stocksFromResponse(stockPayload);
   for (const variant of [...variants, ...auxiliaryVariants, ...locationStockRows]) {
     const id = variantIdOf(variant);
     if (id) {
@@ -225,6 +279,20 @@ async function assertBillingStock(items, { locationId = configuredStockLocationI
     for (const code of [variant?.variant_code, variant?.sku, variant?.barcode]) {
       if (code) byCode.set(String(code).trim().toLowerCase(), variant);
     }
+  }
+  const stocksByVariantId = new Map();
+  for (const stockRow of billingStockRows) {
+    const stockCode = String(stockRow?.variant_code || stockRow?.sku || '').trim().toLowerCase();
+    const explicitId = stockRow?.product_variant_id ?? stockRow?.product_varient_id ?? stockRow?.variant_id ?? stockRow?.productVariantId;
+    const candidateId = explicitId ?? (stockCode ? stockRow?.id : null);
+    const catalogVariant = candidateId != null ? byId.get(String(candidateId)) : byCode.get(stockCode);
+    if (!catalogVariant) continue;
+    const catalogId = variantIdOf(catalogVariant);
+    const codeMatches = stockCode && [catalogVariant.variant_code, catalogVariant.sku, catalogVariant.barcode]
+      .filter(Boolean).some(code => String(code).trim().toLowerCase() === stockCode);
+    if (stockCode && !codeMatches) continue;
+    if (!stocksByVariantId.has(catalogId)) stocksByVariantId.set(catalogId, []);
+    stocksByVariantId.get(catalogId).push(stockRow);
   }
   for (const product of allProducts) {
     const parentProductId = product?.id ?? product?.product_id;
@@ -244,7 +312,6 @@ async function assertBillingStock(items, { locationId = configuredStockLocationI
   }
 
   const requested = new Map();
-  const stockLocationId = locationId === undefined ? configuredStockLocationId() : normalizeStockLocationId(locationId);
   for (const item of items) {
     const variantId = item?.product_variant_id ?? item?.billingVariantId ?? item?.billing_variant_id;
     const variantCode = item?.variant_code ?? item?.sku;
@@ -290,10 +357,14 @@ async function assertBillingStock(items, { locationId = configuredStockLocationI
     const availabilityValues = (variantsById.get(mappedVariantId) || [variant])
       .map(row => locationStockValue(row, stockLocationId))
       .filter(value => value !== null);
+    for (const stockRow of stocksByVariantId.get(mappedVariantId) || []) {
+      const quantity = websiteStockValue(stockRow, variant, stockLocationId);
+      if (quantity !== null) availabilityValues.push(quantity);
+    }
     const available = availabilityValues.length ? Math.min(...availabilityValues) : null;
     if (available === null) {
       const locationLabel = stockLocationId === null ? 'Central Admin' : `stock location ${stockLocationId}`;
-      const error = new Error(`Billing returned aggregate product stock, but no sellable quantity for ${label} at ${locationLabel}. Payment was not started.`);
+      const error = new Error(`Billing lists ${label}, but no matching sellable quantity was returned by /stocks for ${locationLabel}. Payment was not started. Refresh Billing stock or verify that this SKU is assigned to the website stock location.`);
       error.status = 503;
       error.code = 'BILLING_LOCATION_STOCK_UNAVAILABLE';
       throw error;
@@ -311,7 +382,7 @@ async function assertBillingStock(items, { locationId = configuredStockLocationI
     throw error;
   }
 
-  const result = { checkedAt: new Date().toISOString(), stockLocationId, variantsChecked: requested.size, stockSourcesChecked: ['product_varients'], items: [...requested.values()].map(item => ({ product_id: item.productId ?? productIdByVariant.get(String(item.variantId)) ?? null, product_variant_id: item.variantId ?? null, variant_code: item.variantCode || null, quantity_requested: item.quantity, quantity_available: item.quantityAvailable ?? null })) };
+  const result = { checkedAt: new Date().toISOString(), stockLocationId, variantsChecked: requested.size, stockSourcesChecked: stockPayload ? ['product_varients', 'stocks'] : ['product_varients'], items: [...requested.values()].map(item => ({ product_id: item.productId ?? productIdByVariant.get(String(item.variantId)) ?? null, product_variant_id: item.variantId ?? null, variant_code: item.variantCode || null, quantity_requested: item.quantity, quantity_available: item.quantityAvailable ?? null })) };
   orderFlowLog.logResponse('Billing stock preflight result', 200, result);
   return result;
 }
@@ -339,14 +410,22 @@ function requestedVariantSnapshot(payload, items) {
 async function refreshLocalStockFromBilling(billingVariantIds) {
   const ids = [...new Set((billingVariantIds || []).map(value => String(value || '').trim()).filter(Boolean))];
   if (!ids.length) return { updatedVariants: 0, updatedProducts: 0 };
-  const payload = await getProductVariants({ fresh: true });
+  const [payload, stocksPayload] = await Promise.all([
+    getProductVariants({ fresh: true }),
+    getStocks({ fresh: true }),
+  ]);
   const billingById = new Map(variantsFromResponse(payload).map(variant => [String(variant.id), variant]));
+  const billingStocks = stocksFromResponse(stocksPayload);
+  const stockLocationId = configuredStockLocationId();
   const localVariants = await ProductVariant.findAll({ where: { billingVariantId: { [Op.in]: ids } } });
   const touchedProducts = new Set();
   let updatedVariants = 0;
   for (const local of localVariants) {
     const current = billingById.get(String(local.billingVariantId));
-    const stock = current ? stockValue(current) : null;
+    const stockValues = current ? billingStocks
+      .map(row => websiteStockValue(row, current, stockLocationId))
+      .filter(value => value !== null) : [];
+    const stock = stockValues.length ? Math.min(...stockValues) : null;
     if (stock === null) continue;
     await local.update({ stock }, { hooks: false });
     touchedProducts.add(local.productId);

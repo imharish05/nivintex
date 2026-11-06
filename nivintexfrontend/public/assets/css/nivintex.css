@@ -82,12 +82,15 @@ h6.sub-title {
   background-color: #C9A84C !important;
 }
 
-/* Input focus border */
+/* Input focus border & text color reset */
 input:focus,
 textarea:focus,
 select:focus {
   border-color: #1B6153 !important;
   outline: none;
+}
+input:not([type="submit"]):not([type="button"]):not([type="reset"]):focus {
+  color: inherit;
 }
 
 /* Consistent soft corners across storefront boxes, controls, and buttons.
@@ -178,8 +181,20 @@ body,
   }
 
   #root .shop-page-header {
-    padding-top: 40px !important;
-    padding-bottom: 28px !important;
+    padding-top: 20px !important;
+    padding-bottom: 12px !important;
+  }
+
+  #root .shop-page-content {
+    padding-top: 0 !important;
+  }
+
+  #root .shop-page-content .shop-active-filters {
+    margin-bottom: 8px !important;
+  }
+
+  #root .shop-page-content .row.g-4 {
+    --bs-gutter-y: 12px;
   }
 
   #root .shop-page-header h1 {

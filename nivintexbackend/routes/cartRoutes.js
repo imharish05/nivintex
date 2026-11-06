@@ -71,7 +71,7 @@ router.get('/customer/:customerId', async (req, res) => {
             include: [
                 {
                     model: Product,
-                    attributes: ['id', 'billingProductId', 'productName', 'franchise_price_final', 'salesPrice', 'isBuyOneGetOne'],
+                    attributes: ['id', 'billingProductId', 'productName', 'franchise_price_final', 'salesPrice', 'isBuyOneGetOne', 'mrpGstType', 'shipping_weight_kg', 'shipping_length_cm', 'shipping_width_cm', 'shipping_height_cm'],
                 },
                 { model: ProductVariant, as: 'Variant', attributes: ['id', 'billingVariantId', 'franchise_price_final'] },
             ],

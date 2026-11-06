@@ -1,4 +1,4 @@
-// models/Coupon.js
+﻿// models/Coupon.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db'); // your sequelize instance
 
@@ -28,6 +28,10 @@ const Coupon = sequelize.define('Coupon', {
   max_discount: {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: null, // null = no cap
+  },
+  max_uses_per_user: {
+    type: DataTypes.INTEGER,
+    defaultValue: null, // null = unlimited
   },
   is_active: {
     type: DataTypes.BOOLEAN,

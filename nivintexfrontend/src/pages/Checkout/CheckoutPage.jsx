@@ -919,6 +919,9 @@ const CheckoutPage = () => {
           zip: String(selectedBillingAddress?.zip || form.zip || '').trim(),
           country: String(selectedBillingAddress?.country || form.country || 'India').trim(),
         },
+        shippingAddress: {
+          zip: String(form.zip || '').trim(),
+        },
         billingPayload,
       });
       if (!createdPayment?.success || !createdPayment.orderId || !createdPayment.key) {
@@ -1174,155 +1177,312 @@ const CheckoutPage = () => {
           color: ${BRAND}; font-weight: 600;
           text-decoration: underline; text-underline-offset: 2px;
         }
-        .ck-policy-text a:hover { color: #C9933A; }
+        .ck-policy-text a:hover { color: ${BRAND}; }
 
-        /* ── Coupon ── */
+        /* ── Coupon (Modern Luxury Voucher Styling) ── */
         .ck-coupon {
-          margin: 14px 0 20px;
-          padding: 16px;
-          background: #FAFDF9;
-          border: 1px solid #D8E5D3;
-          border-radius: 10px;
+          margin: 16px 0 22px;
+          padding: 18px;
+          background: #FFFFFF;
+          border: 1px solid #E5E7EB;
+          border-radius: 12px;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+          transition: border-color 0.2s ease;
         }
         .ck-coupon-head {
-          display: flex; align-items: center; gap: 8px;
-          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 14px;
           font-family: ${F.main};
-          font-size: 11px; font-weight: 600;
-          letter-spacing: 1.6px; text-transform: uppercase;
+          font-size: 11.5px;
+          font-weight: 700;
+          letter-spacing: 1.4px;
+          text-transform: uppercase;
+          color: #1F2937;
+        }
+        .ck-coupon-head i {
+          font-size: 13px;
           color: ${BRAND};
         }
-        .ck-coupon-head i { font-size: 13px; color: #C9933A; }
 
         .ck-coupon-input-group {
-          display: flex; align-items: stretch;
-          height: 46px;
-          background: #fff;
-          border: 1px solid #D8E5D3;
+          display: flex;
+          align-items: center;
+          height: 44px;
+          background: #FAF9F6;
+          border: 1.5px solid #E5E7EB;
           border-radius: 8px;
-          overflow: hidden;
-          transition: border-color 0.2s, box-shadow 0.2s;
+          padding: 3px;
+          transition: all 0.2s ease;
         }
         .ck-coupon-input-group:focus-within {
-          border-color: #C9933A;
-          box-shadow: 0 0 0 3px rgba(201,147,58,0.12);
+          border-color: ${BRAND};
+          background: #FFFFFF;
+          box-shadow: 0 0 0 3px rgba(15, 84, 71, 0.10);
         }
         .ck-coupon-input-group.has-error {
-          border-color: #e74c3c;
-          box-shadow: 0 0 0 3px rgba(231,76,60,0.10);
+          border-color: #EF4444;
+          background: #FEF2F2;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.10);
+        }
+        .ck-coupon-input-icon {
+          font-size: 13px;
+          color: #9CA3AF;
+          margin-left: 10px;
+          flex-shrink: 0;
         }
         .ck-coupon-input-group input {
-          flex: 1; min-width: 0;
-          border: none; outline: none; background: transparent;
-          padding: 0 14px;
+          flex: 1;
+          min-width: 0;
+          border: none;
+          outline: none;
+          background: transparent;
+          padding: 0 10px;
           font-family: ${F.main};
-          font-size: 13px; font-weight: 500;
-          letter-spacing: 1.5px; text-transform: uppercase;
-          color: #1A1A1A;
-        }
-        .ck-coupon-input-group input::placeholder {
-          font-weight: 400; letter-spacing: 0.5px; text-transform: none; color: #9AA8A0;
-        }
-        .ck-coupon-input-group button {
-          border: none; cursor: pointer;
-          padding: 0 22px;
-          background: ${BRAND}; color: #fff;
-          font-family: ${F.main};
-          font-size: 11px; font-weight: 600;
-          letter-spacing: 1.5px; text-transform: uppercase;
-          transition: background 0.2s;
-        }
-        .ck-coupon-input-group button:not(:disabled):hover { background: #C9933A; }
-        .ck-coupon-input-group button:disabled { opacity: 0.6; cursor: not-allowed; }
-
-        .ck-coupon-error {
-          display: flex; align-items: center; gap: 6px;
-          margin: 8px 0 0;
-          font-family: ${F.sub}; font-size: 12px; color: #c0392b;
-        }
-
-        .ck-coupon-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-        .ck-coupon-list-title {
-          font-family: ${F.main};
-          font-size: 10px; font-weight: 600;
-          letter-spacing: 1.5px; text-transform: uppercase;
-          color: #8FA88A;
-        }
-        .ck-coupon-card {
-          display: flex; align-items: center; gap: 12px;
-          padding: 10px 12px;
-          background: #fff;
-          border: 1px dashed #B9CDB1;
-          border-radius: 8px;
-          transition: border-color 0.2s, background 0.2s;
-        }
-        .ck-coupon-card:hover { border-color: #C9933A; background: #FFFCF6; }
-        .ck-coupon-card-code {
-          flex-shrink: 0;
-          padding: 5px 10px;
-          background: rgba(15,84,71,0.07);
-          border-radius: 6px;
-          font-family: ${F.main};
-          font-size: 12px; font-weight: 600;
-          letter-spacing: 1.4px;
+          font-size: 12.5px;
+          font-weight: 600;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
           color: ${BRAND};
         }
+        .ck-coupon-input-group input::placeholder {
+          font-weight: 400;
+          letter-spacing: 0.3px;
+          text-transform: none;
+          color: #9CA3AF;
+        }
+        .ck-coupon-input-group button {
+          height: 36px;
+          border: none;
+          cursor: pointer;
+          padding: 0 20px;
+          background: ${BRAND};
+          color: #FFFFFF;
+          border-radius: 6px;
+          font-family: ${F.main};
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
+          transition: all 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .ck-coupon-input-group button:not(:disabled):hover {
+          background: #145041;
+          box-shadow: 0 2px 8px rgba(15, 84, 71, 0.25);
+        }
+        .ck-coupon-input-group button:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+
+        .ck-coupon-error {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin: 10px 0 0;
+          padding: 8px 12px;
+          background: #FEF2F2;
+          border: 1px solid #FECACA;
+          border-radius: 6px;
+          font-family: ${F.sub};
+          font-size: 12px;
+          color: #B91C1C;
+        }
+
+        .ck-coupon-list {
+          margin-top: 16px;
+          padding-top: 14px;
+          border-top: 1px dashed #E5E7EB;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .ck-coupon-list-title {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-family: ${F.main};
+          font-size: 10.5px;
+          font-weight: 700;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
+          color: #6B7280;
+        }
+        .ck-coupon-list-title i {
+          font-size: 11px;
+          color: ${BRAND};
+        }
+
+        .ck-coupon-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 14px;
+          background: #FAF9F6;
+          border: 1px solid #E5E7EB;
+          border-left: 3.5px solid ${BRAND};
+          border-radius: 8px;
+          transition: all 0.2s ease;
+        }
+        .ck-coupon-card:hover {
+          background: #F4F8F4;
+          border-color: ${BRAND};
+          border-left-color: ${BRAND};
+          box-shadow: 0 3px 12px rgba(15, 84, 71, 0.08);
+          transform: translateY(-1px);
+        }
+        .ck-coupon-card-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+          flex: 1;
+        }
+        .ck-coupon-card-code {
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 6px 12px;
+          background: #FFFFFF;
+          border: 1px dashed rgba(15, 84, 71, 0.45);
+          border-radius: 6px;
+          font-family: ${F.main};
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 1.4px;
+          color: ${BRAND};
+          text-transform: uppercase;
+        }
         .ck-coupon-card-info {
-          flex: 1; min-width: 0;
-          display: flex; flex-direction: column; gap: 2px;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
         }
         .ck-coupon-card-info strong {
-          font-family: ${F.sub}; font-size: 12.5px; font-weight: 700; color: #1A1A1A;
+          font-family: ${F.sub};
+          font-size: 13px;
+          font-weight: 700;
+          color: #111827;
+          line-height: 1.3;
         }
         .ck-coupon-card-info span {
-          font-family: ${F.sub}; font-size: 11px; color: #6B7F73;
+          font-family: ${F.sub};
+          font-size: 11px;
+          color: #6B7280;
+          line-height: 1.2;
         }
         .ck-coupon-card-apply {
           flex-shrink: 0;
-          background: transparent; border: none; cursor: pointer;
-          padding: 6px 4px;
+          background: #FFFFFF;
+          border: 1.5px solid ${BRAND};
+          border-radius: 6px;
+          padding: 6px 14px;
           font-family: ${F.main};
-          font-size: 11px; font-weight: 700;
-          letter-spacing: 1.2px; text-transform: uppercase;
-          color: #B07A22;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          color: ${BRAND};
+          cursor: pointer;
+          transition: all 0.2s ease;
         }
-        .ck-coupon-card-apply:hover:not(:disabled) { color: ${BRAND}; text-decoration: underline; text-underline-offset: 3px; }
-        .ck-coupon-card-apply:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ck-coupon-card-apply:hover:not(:disabled) {
+          background: ${BRAND};
+          color: #FFFFFF;
+          box-shadow: 0 2px 6px rgba(15, 84, 71, 0.2);
+        }
+        .ck-coupon-card-apply:focus-visible {
+          outline: 2px solid ${BRAND};
+          outline-offset: 2px;
+        }
+        .ck-coupon-card-apply:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        @media (max-width: 420px) {
+          .ck-coupon-card {
+            padding: 10px 12px;
+            gap: 10px;
+          }
+          .ck-coupon-card-code {
+            font-size: 11px;
+            padding: 5px 8px;
+            letter-spacing: 1px;
+          }
+          .ck-coupon-card-apply {
+            padding: 5px 10px;
+            font-size: 10px;
+          }
+        }
 
         .ck-coupon-applied {
-          display: flex; align-items: center; gap: 12px;
-          padding: 12px 14px;
-          background: rgba(162,197,121,0.16);
-          border: 1px dashed #6B9A45;
-          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 16px;
+          background: #F0FDF4;
+          border: 1.5px solid #86EFAC;
+          border-radius: 10px;
         }
         .ck-coupon-applied-icon {
-          width: 28px; height: 28px; flex-shrink: 0;
-          display: inline-flex; align-items: center; justify-content: center;
+          width: 32px;
+          height: 32px;
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           border-radius: 50%;
-          background: ${BRAND}; color: #fff; font-size: 12px;
+          background: ${BRAND};
+          color: #FFFFFF;
+          font-size: 13px;
         }
         .ck-coupon-applied-meta {
-          flex: 1; min-width: 0;
-          display: flex; flex-direction: column; gap: 2px;
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
         }
         .ck-coupon-applied-meta strong {
-          font-family: ${F.main}; font-size: 13px; font-weight: 600;
-          letter-spacing: 1.4px; color: ${BRAND};
+          font-family: ${F.main};
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: 1.4px;
+          color: ${BRAND};
         }
         .ck-coupon-applied-meta span {
-          font-family: ${F.sub}; font-size: 11.5px; color: #3F6B2A;
+          font-family: ${F.sub};
+          font-size: 12px;
+          font-weight: 500;
+          color: #15803D;
         }
         .ck-coupon-remove {
           flex-shrink: 0;
-          background: transparent; border: none; cursor: pointer;
-          padding: 6px 4px;
+          background: transparent;
+          border: 1px solid #FECACA;
+          border-radius: 6px;
+          padding: 5px 12px;
           font-family: ${F.main};
-          font-size: 11px; font-weight: 700;
-          letter-spacing: 1px; text-transform: uppercase;
+          font-size: 10.5px;
+          font-weight: 700;
+          letter-spacing: 1px;
+          text-transform: uppercase;
           color: #DC2626;
+          cursor: pointer;
+          transition: all 0.2s ease;
         }
-        .ck-coupon-remove:hover { text-decoration: underline; text-underline-offset: 3px; }
+        .ck-coupon-remove:hover {
+          background: #FEF2F2;
+          border-color: #DC2626;
+        }
 
         .ck-subtotal-row {
           align-items: center;
@@ -2553,7 +2713,7 @@ const CheckoutPage = () => {
                               <div className="ck-coupon-applied-meta">
                                 <strong>{appliedCoupon.code}</strong>
                                 <span>
-                                  You saved ₹{formattedCouponDiscount}
+                                  Coupon applied! You saved ₹{formattedCouponDiscount}
                                   {appliedCoupon.label ? ` · ${appliedCoupon.label}` : ''}
                                 </span>
                               </div>
@@ -2568,6 +2728,7 @@ const CheckoutPage = () => {
                           ) : (
                             <>
                               <div className={`ck-coupon-input-group${couponError ? ' has-error' : ''}`}>
+                                <i className="fa-solid fa-tag ck-coupon-input-icon" aria-hidden="true" />
                                 <input
                                   type="text"
                                   placeholder="Enter coupon code"
@@ -2581,7 +2742,11 @@ const CheckoutPage = () => {
                                   disabled={couponApplying || subtotal <= 0}
                                   onClick={() => handleApplyCoupon()}
                                 >
-                                  {couponApplying ? 'Applying…' : 'Apply'}
+                                  {couponApplying ? (
+                                    <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 6 }} />Applying</>
+                                  ) : (
+                                    'Apply'
+                                  )}
                                 </button>
                               </div>
 
@@ -2593,13 +2758,22 @@ const CheckoutPage = () => {
 
                               {availableCoupons.length > 0 && (
                                 <div className="ck-coupon-list">
-                                  <span className="ck-coupon-list-title">Available offers</span>
+                                  <span className="ck-coupon-list-title">
+                                    <i className="fa-solid fa-sparkles" aria-hidden="true" />
+                                    Available Offers
+                                  </span>
                                   {availableCoupons.slice(0, 4).map(c => (
                                     <div key={c.code} className="ck-coupon-card">
-                                      <span className="ck-coupon-card-code">{c.code}</span>
-                                      <div className="ck-coupon-card-info">
-                                        <strong>{c.type === 'percent' ? `${Number(c.value)}% OFF` : `₹${Number(c.value)} OFF`}</strong>
-                                        {Number(c.min_order) > 0 && <span>Min order ₹{Number(c.min_order).toLocaleString('en-IN')}</span>}
+                                      <div className="ck-coupon-card-left">
+                                        <span className="ck-coupon-card-code">{c.code}</span>
+                                        <div className="ck-coupon-card-info">
+                                          <strong>{c.type === 'percent' ? `${Number(c.value)}% OFF` : `₹${Number(c.value)} OFF`}</strong>
+                                          {Number(c.min_order) > 0 ? (
+                                            <span>Min order ₹{Number(c.min_order).toLocaleString('en-IN')}</span>
+                                          ) : (
+                                            <span>No minimum order required</span>
+                                          )}
+                                        </div>
                                       </div>
                                       <button
                                         type="button"

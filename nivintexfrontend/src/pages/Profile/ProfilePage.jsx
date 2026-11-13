@@ -203,7 +203,7 @@ const ProfilePage = () => {
 
   const getTab = () => {
     const h = (location.hash || window.location.hash || '').replace('#', '').toLowerCase();
-    if (['orders', 'wishlist', 'cart'].includes(h)) return h;
+    if (['orders', 'wishlist'].includes(h)) return h;
     return 'profile';
   };
 
@@ -333,14 +333,14 @@ const ProfilePage = () => {
     { id: 'profile',  icon: 'fa-regular fa-user',        label: 'Personal Info',  badge: null },
     { id: 'orders',   icon: 'fa-solid fa-truck',         label: 'My Orders',      badge: myOrders?.length || 0 },
     { id: 'wishlist', icon: 'fa-regular fa-heart',       label: 'My Wishlist',    badge: wishlistCount || 0 },
-    { id: 'cart',     icon: 'fa-solid fa-cart-shopping', label: 'Shopping Bag',   badge: cartCount || 0 },
+    // { id: 'cart',     icon: 'fa-solid fa-cart-shopping', label: 'Shopping Bag',   badge: cartCount || 0 },
   ];
 
   const pageHeaders = {
     profile:  { title: 'Personal Information', sub: 'Manage your personal details and account security' },
     orders:   { title: 'My Orders',            sub: 'Track shipments and view past purchases' },
     wishlist: { title: 'My Wishlist',          sub: 'Saved items you love and cherish' },
-    cart:     { title: 'Shopping Bag',         sub: 'Review selected items before proceeding to checkout' },
+    // cart:     { title: 'Shopping Bag',         sub: 'Review selected items before proceeding to checkout' },
   };
 
   const currentHeader = pageHeaders[activeTab] || pageHeaders.profile;
@@ -1015,7 +1015,7 @@ const ProfilePage = () => {
 
             <span className="profile-stat-divider" aria-hidden="true" />
 
-            <button
+            {/* <button
               type="button"
               className="profile-stat-item"
               onClick={() => handleTabChange('cart')}
@@ -1024,7 +1024,7 @@ const ProfilePage = () => {
             >
               <span className="profile-stat-number">{cartCount || 0}</span>
               <span className="profile-stat-label">In Bag</span>
-            </button>
+            </button> */}
           </div>
         </section>
 
@@ -1217,7 +1217,7 @@ const ProfilePage = () => {
                       cursor: 'pointer', fontFamily: F.main, fontWeight: 600,
                       display: 'flex', alignItems: 'center', gap: '6px',
                     }}
-                    onClick={() => navigate('/orders')}
+                    onClick={() => navigate('/profile#orders')}
                   >
                     <span>Full Orders View</span>
                     <i className="fa-solid fa-arrow-right" style={{ fontSize: '10px' }} />
@@ -1432,7 +1432,7 @@ const ProfilePage = () => {
               </section>
             )}
 
-            {activeTab === 'cart' && (
+            {/* {activeTab === 'cart' && (
               <section className="profile-content-card">
                 <div className="profile-card-header">
                   <div className="profile-card-header-left">
@@ -1592,7 +1592,7 @@ const ProfilePage = () => {
                   </div>
                 )}
               </section>
-            )}
+            )} */}
 
           </main>
         </div>

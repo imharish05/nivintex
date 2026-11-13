@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { ShopProvider } from './context/ShopContext';
 import { loadAllScripts } from './utils/loadScripts';
 
@@ -10,26 +10,25 @@ import CategorySection from './components/CategorySection';
 import NewArrivals from './components/NewArrivals';
 import BestSeller from './components/BestSeller';
 
-import OrdersPage from './pages/Orders/OrdersPage';
-import OrderDetailsPage from './pages/Orders/OrderDetailsPage';
-import ProfilePage from './pages/Profile/ProfilePage';
-import ShopGridPage from './pages/ShopGrid/ShopGridPage';
-import ProductDetailsPage from './pages/ProductDetails/ProductDetailsPage';
-import AboutPage from './pages/About/AboutPage';
-import ContactPage from './pages/Contact/ContactPage';
-import CheckoutPage from './pages/Checkout/CheckoutPage';
-import LoginPage from './pages/Login/LoginPage';
-import RegisterPage from './pages/Register/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPassword/ForgotPasswordPage';
-import VerifyOTPPage from './pages/ForgotPassword/VerifyOTPPage';
-import ResetPasswordPage from './pages/ForgotPassword/ResetPasswordPage';
-
-import PrivacyPolicyPage from './pages/PrivacyPolicy/PrivacyPolicyPage';
-import TermsOfServicePage from './pages/TermsOfService/TermsOfServicePage';
-import ShippingPolicyPage from './pages/ShippingPolicy/ShippingPolicyPage';
-import RefundCancellationPolicyPage from './pages/RefundCancellationPolicy/RefundCancellationPolicyPage';
-import ContactInformationPage from './pages/ContactInformation/ContactInformationPage';
-import PaymentPolicyPage from './pages/PaymentPolicy/PaymentPolicyPage';
+const OrdersPage = lazy(() => import('./pages/Orders/OrdersPage'));
+const OrderDetailsPage = lazy(() => import('./pages/Orders/OrderDetailsPage'));
+const ProfilePage = lazy(() => import('./pages/Profile/ProfilePage'));
+const ShopGridPage = lazy(() => import('./pages/ShopGrid/ShopGridPage'));
+const ProductDetailsPage = lazy(() => import('./pages/ProductDetails/ProductDetailsPage'));
+const AboutPage = lazy(() => import('./pages/About/AboutPage'));
+const ContactPage = lazy(() => import('./pages/Contact/ContactPage'));
+const CheckoutPage = lazy(() => import('./pages/Checkout/CheckoutPage'));
+const LoginPage = lazy(() => import('./pages/Login/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/Register/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPassword/ForgotPasswordPage'));
+const VerifyOTPPage = lazy(() => import('./pages/ForgotPassword/VerifyOTPPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ForgotPassword/ResetPasswordPage'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicy/PrivacyPolicyPage'));
+const TermsOfServicePage = lazy(() => import('./pages/TermsOfService/TermsOfServicePage'));
+const ShippingPolicyPage = lazy(() => import('./pages/ShippingPolicy/ShippingPolicyPage'));
+const RefundCancellationPolicyPage = lazy(() => import('./pages/RefundCancellationPolicy/RefundCancellationPolicyPage'));
+const ContactInformationPage = lazy(() => import('./pages/ContactInformation/ContactInformationPage'));
+const PaymentPolicyPage = lazy(() => import('./pages/PaymentPolicy/PaymentPolicyPage'));
 
 import CartDrawer from './components/CartDrawer';
 import WishlistDrawer from './components/WishlistDrawer';
@@ -136,6 +135,7 @@ function AppContent() {
   return (
     <ShopProvider>
       <ScrollToTopOnNavigation />
+      <Suspense fallback={<div style={{ minHeight: '50vh', display: 'grid', placeItems: 'center', color: '#0f5447' }}>Loading page…</div>}>
       <Routes>
         <Route path="/" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
         <Route path="/home" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
@@ -164,6 +164,7 @@ function AppContent() {
         <Route path="/contact-information" element={withHeader(ContactInformationPage)} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </Suspense>
       <CartDrawer open={cartOpen} onClose={closeCart} />
       <WishlistDrawer open={wishOpen} onClose={closeWish} onOpenCart={openCart} />
       <ScrollToTop />

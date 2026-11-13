@@ -16,8 +16,11 @@ export default function ImageUploadPreview({
   helpText = '',
   previewMaxHeight = 140,
   className = 'km-field km-field-full',
+  fitDimensions = null,
 }) {
   const [objectUrl, setObjectUrl] = useState(null);
+  const [imageDimensions, setImageDimensions] = useState(null);
+  const [isFitting, setIsFitting] = useState(false);
   const inputRef = useRef(null);
 
   // Manage blob URL lifecycle for newly selected file
@@ -33,6 +36,63 @@ export default function ImageUploadPreview({
       URL.revokeObjectURL(url);
     };
   }, [file]);
+
+  useEffect(() => {
+    if (!objectUrl) {
+      setImageDimensions(null);
+      return;
+    }
+    const image = new Image();
+    image.onload = () => setImageDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+    image.src = objectUrl;
+  }, [objectUrl]);
+
+  const handleFitToSize = async () => {
+    if (!file || !fitDimensions || !objectUrl || isFitting) return;
+    setIsFitting(true);
+    try {
+      const image = new Image();
+      image.src = objectUrl;
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+      });
+      const { width, height } = fitDimensions;
+      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+      const sourceWidth = width / scale;
+      const sourceHeight = height / scale;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(
+        image,
+        (image.naturalWidth - sourceWidth) / 2,
+        (image.naturalHeight - sourceHeight) / 2,
+        sourceWidth,
+        sourceHeight,
+        0,
+        0,
+        width,
+        height,
+      );
+      const type = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const blob = await new Promise((resolve, reject) => canvas.toBlob(
+        result => result ? resolve(result) : reject(new Error('Image resize failed')),
+        type,
+        0.92,
+      ));
+      const fittedFile = new File(
+        [blob],
+        file.name.replace(/\.[^.]+$/, '') + (type === 'image/png' ? '.png' : '.jpg'),
+        { type },
+      );
+      onChange?.(fittedFile);
+    } catch {
+      // Keep the selected original file if local fitting is unavailable.
+    } finally {
+      setIsFitting(false);
+    }
+  };
 
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0];
@@ -105,9 +165,20 @@ export default function ImageUploadPreview({
             </div>
             <div className="km-preview-meta">
               {isNew
-                ? `${formatFileSize(file?.size)} · Ready to upload`
+                ? `${formatFileSize(file?.size)} · ${imageDimensions ? `${imageDimensions.width} × ${imageDimensions.height}px · ` : ''}Ready to upload`
                 : 'Currently saved image (click below to replace)'}
             </div>
+            {isNew && fitDimensions && (
+              <button
+                type="button"
+                className="action-btn btn-edit"
+                onClick={handleFitToSize}
+                disabled={isFitting}
+                style={{ alignSelf: 'flex-start', marginTop: 2 }}
+              >
+                {isFitting ? 'Preparing…' : `Fit to ${fitDimensions.width} × ${fitDimensions.height}px`}
+              </button>
+            )}
             {isNew && (
               <button
                 type="button"

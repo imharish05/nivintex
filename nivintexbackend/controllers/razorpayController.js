@@ -14,12 +14,16 @@ exports.createOrder = async (req, res) => {
     const flowId = `razorpay-create ${req.body?.billingPayload?.items?.map(item => item.product_variant_id).join(',') || `request-${Date.now()}`}`;
     orderFlowLog.attachOrderApiResponseLogger(req, res, flowId);
     try {
-        const { amount, courierId, billingPayload } = req.body;
+        const { amount, courierId, billingPayload, shippingAddress } = req.body;
         const amountValue = Number(amount);
         const isCustomDelivery = !courierId || courierId === 'custom' || courierId === 'custom_delivery' || courierId === 0 || courierId === '0';
         const selectedCourierId = isCustomDelivery ? 0 : Number(courierId);
         if (!Number.isFinite(amountValue) || amountValue <= 0 || (!isCustomDelivery && (!Number.isInteger(selectedCourierId) || selectedCourierId <= 0))) {
             return res.status(400).json({ success: false, message: 'A valid payment amount is required.' });
+        }
+        const shippingPincode = String(shippingAddress?.zip || shippingAddress?.postcode || shippingAddress?.pincode || '').trim();
+        if (!/^[1-9]\d{5}$/.test(shippingPincode)) {
+            return res.status(400).json({ success: false, code: 'INVALID_SHIPPING_PINCODE', message: 'Enter a valid 6-digit Indian shipping pincode.' });
         }
 
         const billingItems = billingPayload?.items;

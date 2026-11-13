@@ -169,6 +169,9 @@ export default function Banners({ showToast }) {
   };
 
   const isReq = formData.section === 'new_arrivals' || formData.section === 'best_sellers';
+  const bannerDimensions = formData.section === 'hero'
+    ? { width: 1920, height: 600 }
+    : { width: 600, height: 800 };
 
   return (
     <div>
@@ -204,12 +207,11 @@ export default function Banners({ showToast }) {
                 existingUrl={existingImage ? getImageUrl(existingImage) : null}
                 onChange={setImageFile}
                 onRemove={() => setImageFile(null)}
+                fitDimensions={bannerDimensions}
                 helpText={
                   formData.section === 'hero'
-                    ? 'Recommended: 1920x600 widescreen banner'
-                    : formData.section === 'new_arrivals'
-                    ? 'Recommended: 600x800 (3:4 portrait)'
-                    : 'Recommended: 600x1100 portrait banner'
+                    ? 'Recommended: 1920 × 600 px (wide). Select an image, then use Fit to size for a quick centered crop.'
+                    : 'Recommended: 600 × 800 px (3:4 portrait). Select an image, then use Fit to size for a quick centered crop.'
                 }
                 previewMaxHeight={180}
               />
@@ -406,7 +408,9 @@ export default function Banners({ showToast }) {
               </td>
               <td>
                 <button className="action-btn btn-edit" onClick={() => handleEditClick(row)}>Edit</button>
-                <button className="action-btn btn-del"  onClick={() => handleDelete(row.id)}>Delete</button>
+                {(row.section !== 'new_arrivals' && row.section !== 'best_sellers') && (
+                  <button className="action-btn btn-del" onClick={() => handleDelete(row.id)}>Delete</button>
+                )}
               </td>
             </tr>
           );

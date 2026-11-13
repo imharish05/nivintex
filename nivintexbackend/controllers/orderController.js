@@ -113,6 +113,12 @@ const createOrder = async (req, res) => {
             });
         }
 
+        const shippingAddressData = parseJson(shipping_address);
+        const shippingPincode = String(shippingAddressData?.zip || shippingAddressData?.postcode || shippingAddressData?.postalCode || '').trim();
+        if (!/^[1-9]\d{5}$/.test(shippingPincode)) {
+            return res.status(400).json({ success: false, message: 'Enter a valid 6-digit Indian shipping pincode.' });
+        }
+
         // Repair cart references after a product was re-imported by resolving
         // its durable Billing IDs, then store canonical local IDs on the order.
         for (const item of items) {
@@ -369,10 +375,19 @@ const createOrder = async (req, res) => {
                 if (item.variantId) {
                     if (decrementedLocalVariants.has(String(item.variantId))) continue;
                     decrementedLocalVariants.add(String(item.variantId));
-                    const variant = await ProductVariant.findByPk(item.variantId);
+                    const variant = await ProductVariant.findByPk(item.variantId, {
+                        transaction,
+                        lock: transaction.LOCK.UPDATE,
+                    });
                     if (variant) {
                         if (!variant.billingVariantId) {
-                            const newStock = Math.max(0, (variant.stock || 0) - (requestedStockByVariant.get(String(item.variantId)) || quantity));
+                            const requestedQuantity = requestedStockByVariant.get(String(item.variantId)) || quantity;
+                            if (Number(variant.stock) < requestedQuantity) {
+                                const stockError = new Error(`Only ${Number(variant.stock) || 0} unit${Number(variant.stock) === 1 ? '' : 's'} available for ${item.name || 'this product'}.`);
+                                stockError.code = 'INSUFFICIENT_STOCK';
+                                throw stockError;
+                            }
+                            const newStock = Number(variant.stock) - requestedQuantity;
                             await variant.update({ stock: newStock }, { transaction });
                         }
                         variantUpdated = true;
@@ -381,14 +396,22 @@ const createOrder = async (req, res) => {
                 
                 if (!variantUpdated) {
                     if (item.billingVariantId || item.billing_variant_id) continue;
-                    const product  = await Product.findByPk(item.product_id || item.id);
+                    const product  = await Product.findByPk(item.product_id || item.id, {
+                        transaction,
+                        lock: transaction.LOCK.UPDATE,
+                    });
                     if (product) {
                         const key = String(product.id);
                         if (!decrementedLocalVariants.has(`product:${key}`)) {
                             decrementedLocalVariants.add(`product:${key}`);
-                            const productQuantity = items.filter(candidate => !candidate.variantId && String(candidate.product_id || candidate.id) === key)
+                            const productQuantity = requestedStockByProduct.get(key) || items.filter(candidate => !candidate.variantId && String(candidate.product_id || candidate.id) === key)
                                 .reduce((sum, candidate) => sum + Math.max(1, parseInt(candidate.quantity, 10) || 1), 0);
-                            const newStock = Math.max(0, (product.stock || 0) - productQuantity);
+                            if (Number(product.stock) < productQuantity) {
+                                const stockError = new Error(`Only ${Number(product.stock) || 0} unit${Number(product.stock) === 1 ? '' : 's'} available for ${item.name || 'this product'}.`);
+                                stockError.code = 'INSUFFICIENT_STOCK';
+                                throw stockError;
+                            }
+                            const newStock = Number(product.stock) - productQuantity;
                             await product.update({ stock: newStock }, { transaction });
                         }
                     }
@@ -396,6 +419,17 @@ const createOrder = async (req, res) => {
             }
 
             await transaction.commit();
+
+            try {
+                require('../services/adminOrderEvents').publishNewOrder({
+                    id: order.id,
+                    customerName: order.customer_name,
+                    total: Number(order.total) || 0,
+                    createdAt: order.createdAt || new Date().toISOString(),
+                });
+            } catch (notificationError) {
+                console.error('New order admin notification failed:', notificationError.message);
+            }
 
             // Billing creates the invoice and decrements its own stock atomically.
             // Never call /stocks/decrement here as that would subtract inventory twice.
@@ -607,6 +641,9 @@ const createOrder = async (req, res) => {
 
         } catch (txErr) {
             await transaction.rollback();
+            if (txErr.code === 'INSUFFICIENT_STOCK') {
+                return res.status(409).json({ success: false, message: txErr.message, stockConflict: true });
+            }
             require('fs').appendFileSync('error.log', new Date().toISOString() + ' TX Error: ' + txErr.message + '\n');
             console.error('⚠️ createOrder transaction failed:', txErr);
             return res.status(500).json({ success: false, message: 'Order creation failed', error: txErr.message });

@@ -106,6 +106,7 @@ const billingRoutes         = require('./routes/billingRoutes');
 const productSpecificationRoutes = require('./routes/productSpecificationRoutes');
 const sizeChartRoutes = require('./routes/sizeChartRoutes');
 const deliveryZoneRoutes = require('./routes/deliveryZoneRoutes');
+const adminEventRoutes = require('./routes/adminEventRoutes');
 
 const app = express();
 
@@ -156,6 +157,7 @@ app.use('/api/shipping',         shippingRoutes);
 app.use('/api/sync',             syncRoutes);
 app.use('/api/billing',          billingRoutes);
 app.use('/api/delivery-zones',   deliveryZoneRoutes);
+app.use('/api/admin-events',     adminEventRoutes);
 
 // --- 6. SYNC & LISTEN ---
 const PORT = process.env.PORT || 5000;

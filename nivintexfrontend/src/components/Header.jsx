@@ -1069,7 +1069,7 @@ const Header = ({ onOpenCart, onOpenWishlist }) => {
                     </div>
                     <div style={styles.menuList}>
                       <DropItem icon="fa-solid fa-user"               label="My Profile" onClick={() => { navigate('/profile'); closeAccountMenu(); }} />
-                      <DropItem icon="fa-solid fa-truck"              label="My Orders"  onClick={() => { navigate('/orders');  closeAccountMenu(); }} />
+                      <DropItem icon="fa-solid fa-truck"              label="My Orders"  onClick={() => { navigate('/profile#orders');  closeAccountMenu(); }} />
                       <div style={styles.dropDivider} />
                       <DropItem icon="fa-solid fa-right-from-bracket" label="Logout"     onClick={() => { closeAccountMenu(); logout(); }} danger />
                     </div>
@@ -1331,7 +1331,7 @@ const Header = ({ onOpenCart, onOpenWishlist }) => {
                   <i className="fa-solid fa-user" style={{ width: '16px', color: C.brand }} /> My Profile
                 </Link>
                 <Link
-                  to="/orders"
+                  to="/profile#orders"
                   onClick={() => setMobileNavOpen(false)}
                   style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', color: '#2C2F33', textDecoration: 'none', fontSize: '12px', letterSpacing: '1px' }}
                 >

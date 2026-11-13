@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Topbar.css';
 import logo from '../../assets/logo.png';
 
@@ -6,6 +7,7 @@ const API = process.env.REACT_APP_API_URL;
 const STORAGE_KEY = 'kalpana_low_stock_threshold';
 
 export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick, onMenuClick }) {
+  const navigate = useNavigate();
   const savedThreshold = parseInt(localStorage.getItem(STORAGE_KEY)) || 10;
 
   const [alerts, setAlerts]       = useState({ lowStock: [], outOfStock: [], summary: { lowStockCount: 0, outOfStockCount: 0, totalAlerts: 0 } });
@@ -14,8 +16,33 @@ export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick, o
   const [dropOpen, setDropOpen]   = useState(false);
   const [activeTab, setActiveTab] = useState('low');
   const [loading, setLoading]     = useState(false);
+  const [newOrders, setNewOrders] = useState([]);
+  const [unreadOrders, setUnreadOrders] = useState(() => Number(localStorage.getItem('adminUnreadNewOrders')) || 0);
+  const [ordersDropOpen, setOrdersDropOpen] = useState(false);
   const dropRef                   = useRef(null);
   const alertListRef              = useRef(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('adminToken');
+    if (!token || !API || typeof EventSource === 'undefined') return undefined;
+    const source = new EventSource(`${API}/admin-events/orders?token=${encodeURIComponent(token)}`);
+    source.addEventListener('new-orders', event => {
+      try {
+        const orders = JSON.parse(event.data);
+        if (!Array.isArray(orders) || orders.length === 0) return;
+        setNewOrders(current => [...orders.slice().reverse(), ...current].slice(0, 10));
+        setUnreadOrders(current => {
+          const next = current + orders.length;
+          localStorage.setItem('adminUnreadNewOrders', String(next));
+          return next;
+        });
+        window.dispatchEvent(new CustomEvent('admin-new-orders', { detail: orders }));
+      } catch (error) {
+        console.error('Could not read new order notification:', error);
+      }
+    });
+    return () => source.close();
+  }, []);
 
   const fetchAlerts = useCallback((t) => {
     setLoading(true);
@@ -223,6 +250,42 @@ export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick, o
               {!loading && totalAlerts === 0 && (
                 <EmptyMsg text="✅ All products are well stocked!" />
               )}
+            </div>
+          )}
+        </div>
+
+        <div className="notifWrapper" style={{ position: 'relative' }}>
+          <button
+            type="button"
+            className="orderNotifBtn"
+            aria-label={`New order notifications: ${unreadOrders}`}
+            title="New order notifications"
+            onClick={() => {
+              setOrdersDropOpen(open => !open);
+              setUnreadOrders(0);
+              localStorage.setItem('adminUnreadNewOrders', '0');
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 2-1.6L22 8H6" />
+              <circle cx="10" cy="21" r="1" /><circle cx="19" cy="21" r="1" />
+            </svg>
+            {unreadOrders > 0 && <span className="bellBadge badgeRed">{unreadOrders > 99 ? '99+' : unreadOrders}</span>}
+          </button>
+          {ordersDropOpen && (
+            <div style={{ position: 'absolute', top: 50, right: 0, width: 330, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.14)', zIndex: 10000, overflow: 'hidden' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', fontSize: 13, fontWeight: 700, color: '#0f172a' }}>New Orders</div>
+              {newOrders.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#64748b', fontSize: 12 }}>New orders will appear here in real time.</div>
+              ) : newOrders.map(order => (
+                <button key={order.id} type="button" onClick={() => { setOrdersDropOpen(false); navigate('/orders'); }} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', gap: 12, padding: '12px 16px', background: '#fff', border: 0, borderBottom: '1px solid #f1f5f9', textAlign: 'left', cursor: 'pointer' }}>
+                  <span style={{ minWidth: 0 }}>
+                    <strong style={{ display: 'block', color: '#0f172a', fontSize: 12 }}>Order #{order.id}</strong>
+                    <span style={{ color: '#64748b', fontSize: 11 }}>{order.customerName || 'Customer'}</span>
+                  </span>
+                  <strong style={{ color: '#0f5447', fontSize: 12, whiteSpace: 'nowrap' }}>₹{Number(order.total || 0).toLocaleString('en-IN')}</strong>
+                </button>
+              ))}
             </div>
           )}
         </div>

@@ -135,6 +135,25 @@ export default function App() {
   useEffect(() => () => window.clearTimeout(toastTimerRef.current), []);
 
   useEffect(() => {
+    const onNewOrders = event => {
+      const orders = Array.isArray(event.detail) ? event.detail : [];
+      if (!orders.length) return;
+      const latestOrder = orders[orders.length - 1];
+      const message = orders.length === 1
+        ? `Order #${latestOrder.id} · ${latestOrder.customerName || 'Customer'}`
+        : `${orders.length} new orders received`;
+      setToast({ show: true, title: 'New Order Received', msg: message });
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = window.setTimeout(() => setToast({ show: false, title: '', msg: '' }), 5000);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('New order received', { body: message });
+      }
+    };
+    window.addEventListener('admin-new-orders', onNewOrders);
+    return () => window.removeEventListener('admin-new-orders', onNewOrders);
+  }, []);
+
+  useEffect(() => {
     const token = localStorage.getItem('adminToken');
     if (token) {
       try {

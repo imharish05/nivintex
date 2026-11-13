@@ -294,11 +294,11 @@ const CartDrawer = ({ open, onClose }) => {
                 fontFamily: F.main, letterSpacing: '1px',
               }}>{fmt(subtotal)}</span>
             </div>
-            {cartItems.some(item => String(item.mrpGstType || 'With GST').toLowerCase() !== 'without gst') && (
+            {/* {cartItems.some(item => String(item.mrpGstType || 'With GST').toLowerCase() !== 'without gst') && (
               <p style={{ margin: '-12px 0 14px', textAlign: 'right', color: C.muted, fontSize: 10, fontFamily: F.sub }}>
                 5% GST is included in the product price and shown at checkout.
               </p>
-            )}
+            )} */}
 
             <button onClick={() => { 
               sessionStorage.removeItem('buyNowItem');

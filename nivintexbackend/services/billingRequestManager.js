@@ -8,6 +8,17 @@ const positiveInt = (value, fallback, max = Number.MAX_SAFE_INTEGER) => {
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
 };
 
+const TRANSIENT_NETWORK_CODES = new Set([
+  'EACCES',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ECONNABORTED',
+  'EAI_AGAIN',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'EPIPE',
+]);
+
 function retryAfterMs(value, now = Date.now()) {
   if (value === undefined || value === null || value === '') return null;
   const seconds = Number(value);
@@ -17,11 +28,12 @@ function retryAfterMs(value, now = Date.now()) {
 }
 
 function createBillingRequestManager({
-  getConcurrency = () => positiveInt(process.env.BILLING_API_MAX_CONCURRENT_REQUESTS, 1, 20),
+  getConcurrency = () => positiveInt(process.env.BILLING_API_MAX_CONCURRENT_REQUESTS, 3, 20),
   getMaxQueued = () => positiveInt(process.env.BILLING_API_MAX_QUEUED_REQUESTS, 40, 1000),
   getGetRetries = () => positiveInt(String(Number(process.env.BILLING_API_GET_RETRIES ?? 1) + 1), 2, 3) - 1,
   getMaxRetryDelayMs = () => positiveInt(process.env.BILLING_API_MAX_RETRY_DELAY_MS, 5000, 60000),
   getFallbackCooldownMs = () => positiveInt(process.env.BILLING_API_429_COOLDOWN_MS, 1000, 60000),
+  getStaleMaxAgeMs = () => positiveInt(process.env.BILLING_API_STALE_FALLBACK_MS, 15 * 60 * 1000, 60 * 60 * 1000),
   now = () => Date.now(),
   wait = sleep,
   random = Math.random,
@@ -62,11 +74,17 @@ function createBillingRequestManager({
     });
   }
 
-  function cacheRead(key) {
+  function cacheRead(key, { allowStale = false } = {}) {
     const record = cache.get(key);
     if (!record) return undefined;
-    if (record.expiresAt <= now()) {
-      cache.delete(key);
+    const current = now();
+    if (record.expiresAt <= current) {
+      if (allowStale && record.staleUntil > current) {
+        return record.value;
+      }
+      if (record.staleUntil <= current) {
+        cache.delete(key);
+      }
       return undefined;
     }
     // Touch for bounded LRU eviction.
@@ -77,19 +95,34 @@ function createBillingRequestManager({
 
   function cacheWrite(key, value, ttlMs) {
     if (!Number.isFinite(ttlMs) || ttlMs <= 0) return;
-    for (const [cacheKey, record] of cache) if (record.expiresAt <= now()) cache.delete(cacheKey);
+    const current = now();
+    for (const [cacheKey, record] of cache) {
+      if (record.staleUntil <= current) cache.delete(cacheKey);
+    }
     cache.delete(key);
-    cache.set(key, { value, expiresAt: now() + ttlMs });
+    cache.set(key, {
+      value,
+      expiresAt: current + ttlMs,
+      staleUntil: current + Math.max(ttlMs, getStaleMaxAgeMs()),
+    });
     const maxEntries = positiveInt(process.env.BILLING_API_CACHE_MAX_ENTRIES, 100, 1000);
     while (cache.size > maxEntries) cache.delete(cache.keys().next().value);
+  }
+
+  function canUseStaleFallback(error) {
+    const status = Number(error?.response?.status || error?.status);
+    if (status === 429 || status >= 500) return true;
+    if (!status && (TRANSIENT_NETWORK_CODES.has(error?.code) || error?.code)) return true;
+    return false;
   }
 
   async function request({ method = 'GET', key, cacheTtlMs = 0, bypassCache = false, execute, label = 'billing' }) {
     const normalizedMethod = String(method).toUpperCase();
     const requestKey = key || `${normalizedMethod}:${crypto.randomUUID()}`;
     const meta = { correlationId: crypto.randomUUID(), method: normalizedMethod, endpoint: label };
+    const allowCachedRead = normalizedMethod === 'GET' && cacheTtlMs > 0 && !bypassCache;
 
-    if (normalizedMethod === 'GET' && cacheTtlMs > 0 && !bypassCache) {
+    if (allowCachedRead) {
       const cached = cacheRead(requestKey);
       if (cached !== undefined) {
         emit('BILLING_CATALOG_CACHE_HIT', meta);
@@ -104,54 +137,72 @@ function createBillingRequestManager({
     const startedAt = now();
     const operation = enqueue(async () => {
       let attempt = 0;
-      while (true) {
-        const waitForCooldown = cooldownUntil - now();
-        if (waitForCooldown > 0) {
-          const error = new Error('Billing is rate-limiting requests. Please wait and try again.');
-          error.status = 429;
-          error.code = 'BILLING_COOLDOWN';
-          error.retryAfterMs = waitForCooldown;
-          emit('BILLING_COOLDOWN_REJECTED', { ...meta, retryAfterMs: waitForCooldown });
-          throw error;
+      try {
+        while (true) {
+          const waitForCooldown = cooldownUntil - now();
+          if (waitForCooldown > 0) {
+            const error = new Error('Billing is rate-limiting requests. Please wait and try again.');
+            error.status = 429;
+            error.code = 'BILLING_COOLDOWN';
+            error.retryAfterMs = waitForCooldown;
+            emit('BILLING_COOLDOWN_REJECTED', { ...meta, retryAfterMs: waitForCooldown });
+            throw error;
+          }
+          try {
+            emit('BILLING_REQUEST', { ...meta, attempt: attempt + 1 });
+            const result = await execute();
+            const payloadStatus = Number(result?.data?.status);
+            if (Number.isFinite(payloadStatus) && payloadStatus >= 400) {
+              const error = new Error(result.data?.message || `Billing returned application status ${payloadStatus}.`);
+              error.response = { status: payloadStatus, data: result.data, headers: result.headers };
+              throw error;
+            }
+            const status = result?.status ?? 200;
+            emit('BILLING_RESPONSE', { ...meta, status, durationMs: now() - startedAt, retries: attempt });
+            if (allowCachedRead) cacheWrite(requestKey, result, cacheTtlMs);
+            return result;
+          } catch (error) {
+            const status = Number(error.response?.status || error.status);
+            const isTransientNetwork = !status && TRANSIENT_NETWORK_CODES.has(error.code);
+            if (isTransientNetwork && normalizedMethod === 'GET' && attempt < getGetRetries()) {
+              attempt += 1;
+              emit('BILLING_NETWORK_RETRY', { ...meta, code: error.code, retries: attempt });
+              await wait(350);
+              continue;
+            }
+            if (status !== 429) {
+              emit('BILLING_REQUEST_FAILED', { ...meta, status: status || null, code: error.code || null, durationMs: now() - startedAt, retries: attempt });
+              throw error;
+            }
+            const headerDelay = retryAfterMs(error.response?.headers?.['retry-after'], now());
+            const cooldown = headerDelay ?? getFallbackCooldownMs();
+            cooldownUntil = Math.max(cooldownUntil, now() + cooldown);
+            const maxWait = getMaxRetryDelayMs();
+            if (normalizedMethod !== 'GET' || attempt >= getGetRetries() || cooldown > maxWait) {
+              error.retryAfterMs = cooldown;
+              emit('BILLING_RATE_LIMIT', { ...meta, status: 429, retryAfterMs: cooldown, retries: attempt, durationMs: now() - startedAt });
+              throw error;
+            }
+            const exponential = Math.min(maxWait, 250 * (2 ** attempt));
+            const baseDelay = headerDelay ?? exponential;
+            const jitteredDelay = headerDelay === null
+              ? Math.min(maxWait, Math.round(baseDelay * (0.75 + random() * 0.5)))
+              : headerDelay;
+            attempt += 1;
+            emit('BILLING_RATE_LIMIT_RETRY', { ...meta, status: 429, retryAfterMs: jitteredDelay, retries: attempt });
+            await wait(jitteredDelay);
+            cooldownUntil = Math.min(cooldownUntil, now());
+          }
         }
-        try {
-          emit('BILLING_REQUEST', { ...meta, attempt: attempt + 1 });
-          const result = await execute();
-          const payloadStatus = Number(result?.data?.status);
-          if (Number.isFinite(payloadStatus) && payloadStatus >= 400) {
-            const error = new Error(result.data?.message || `Billing returned application status ${payloadStatus}.`);
-            error.response = { status: payloadStatus, data: result.data, headers: result.headers };
-            throw error;
+      } catch (error) {
+        if (allowCachedRead && canUseStaleFallback(error)) {
+          const stale = cacheRead(requestKey, { allowStale: true });
+          if (stale !== undefined) {
+            emit('BILLING_STALE_CACHE_FALLBACK', { ...meta, status: Number(error?.response?.status || error?.status) || null, code: error?.code || null });
+            return stale;
           }
-          const status = result?.status ?? 200;
-          emit('BILLING_RESPONSE', { ...meta, status, durationMs: now() - startedAt, retries: attempt });
-          if (normalizedMethod === 'GET' && cacheTtlMs > 0 && !bypassCache) cacheWrite(requestKey, result, cacheTtlMs);
-          return result;
-        } catch (error) {
-          const status = Number(error.response?.status || error.status);
-          if (status !== 429) {
-            emit('BILLING_REQUEST_FAILED', { ...meta, status: status || null, code: error.code || null, durationMs: now() - startedAt, retries: attempt });
-            throw error;
-          }
-          const headerDelay = retryAfterMs(error.response?.headers?.['retry-after'], now());
-          const cooldown = headerDelay ?? getFallbackCooldownMs();
-          cooldownUntil = Math.max(cooldownUntil, now() + cooldown);
-          const maxWait = getMaxRetryDelayMs();
-          if (normalizedMethod !== 'GET' || attempt >= getGetRetries() || cooldown > maxWait) {
-            error.retryAfterMs = cooldown;
-            emit('BILLING_RATE_LIMIT', { ...meta, status: 429, retryAfterMs: cooldown, retries: attempt, durationMs: now() - startedAt });
-            throw error;
-          }
-          const exponential = Math.min(maxWait, 250 * (2 ** attempt));
-          const baseDelay = headerDelay ?? exponential;
-          const jitteredDelay = headerDelay === null
-            ? Math.min(maxWait, Math.round(baseDelay * (0.75 + random() * 0.5)))
-            : headerDelay;
-          attempt += 1;
-          emit('BILLING_RATE_LIMIT_RETRY', { ...meta, status: 429, retryAfterMs: jitteredDelay, retries: attempt });
-          await wait(jitteredDelay);
-          cooldownUntil = Math.min(cooldownUntil, now());
         }
+        throw error;
       }
     }, meta);
 

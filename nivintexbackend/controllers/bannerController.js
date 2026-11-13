@@ -142,7 +142,7 @@ const addBanner = async (req, res) => {
 
     // Validate character and word limits
     const fieldsToValidate = [
-      { value: title, fieldName: 'Title', required: isRequired, maxChars: 40, maxWords: 6 },
+      { value: title, fieldName: 'Title', required: true, maxChars: 40, maxWords: 6 },
       { value: subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 50, maxWords: 8 },
       { value: link, fieldName: 'Link/URL', required: isRequired, maxChars: 255 },
     ];
@@ -210,7 +210,7 @@ const updateBanner = async (req, res) => {
 
     // Validate character and word limits if fields are provided
     const fieldsToValidate = [
-      { value: title !== undefined ? title : banner.title, fieldName: 'Title', required: isRequired, maxChars: 40, maxWords: 6 },
+      { value: title !== undefined ? title : banner.title, fieldName: 'Title', required: true, maxChars: 40, maxWords: 6 },
       { value: subtitle !== undefined ? subtitle : banner.subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 50, maxWords: 8 },
       { value: link !== undefined ? link : banner.link, fieldName: 'Link/URL', required: isRequired, maxChars: 255 },
     ];

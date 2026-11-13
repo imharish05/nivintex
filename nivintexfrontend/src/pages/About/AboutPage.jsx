@@ -128,9 +128,9 @@ const styles = `
   /* ── Section titles ── */
   .nv-section-title {
     font-family: ${F.main};
-    font-size: 20px; font-weight: 300;
+    font-size: clamp(17px, 4.4vw, 20px); font-weight: 300;
     color: ${C.brand}; margin-bottom: 1rem;
-    letter-spacing: 6px; text-transform: uppercase;
+    letter-spacing: clamp(2px, 1vw, 6px); text-transform: uppercase;
     text-align: center;
   }
   .nv-section-title span { color: ${C.goldText}; }
@@ -156,7 +156,7 @@ const styles = `
   /* ── Category Showcase ── */
   .nv-category-showcase {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
     gap: 20px; margin-bottom: 3rem;
   }
   .nv-category-card {
@@ -332,9 +332,9 @@ const styles = `
   .nv-franchise-icon { font-size: 36px; color: ${C.gold}; margin-bottom: 20px; }
   .nv-franchise-title {
     font-family: ${F.main};
-    font-size: 22px; font-weight: 300;
+    font-size: clamp(18px, 4.8vw, 22px); font-weight: 300;
     color: #F9F6F0; margin-bottom: 16px;
-    letter-spacing: 5px; text-transform: uppercase;
+    letter-spacing: clamp(2px, 1vw, 5px); text-transform: uppercase;
   }
   .nv-franchise-sub {
     font-family: ${F.sub};
@@ -426,9 +426,9 @@ const styles = `
   }
   .nv-cta-title {
     font-family: ${F.main};
-    font-size: 22px; font-weight: 300;
+    font-size: clamp(18px, 4.8vw, 22px); font-weight: 300;
     color: #F9F6F0; margin-bottom: 12px;
-    letter-spacing: 5px; text-transform: uppercase;
+    letter-spacing: clamp(2px, 1vw, 5px); text-transform: uppercase;
   }
   .nv-cta-sub {
     font-family: ${F.sub};
@@ -454,7 +454,9 @@ const styles = `
     .nv-stats { grid-template-columns: repeat(2, 1fr); }
     .nv-values { grid-template-columns: repeat(2, 1fr); }
     .nv-testimonials { grid-template-columns: 1fr; }
-    .nv-category-showcase { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .nv-category-showcase { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+    .nv-breadcrumb { font-size: 14px; }
+    .nv-breadcrumb a { padding: 6px 0; display: inline-block; }
     .nv-content { padding-top: 12px; }
     .nv-page-top-gap { height: 0; }
     .nv-franchise-features { grid-template-columns: 1fr; }

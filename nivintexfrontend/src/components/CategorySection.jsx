@@ -152,13 +152,13 @@ const catStyles = `
     .cat-label { font-size: 12px; font-weight: 600; line-height: 1.3; }
     .cat-track { gap: 16px; }
     .cat-arr {
-      width: 30px;
-      height: 30px;
+      width: 36px;
+      height: 36px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.18);
     }
     .cat-arr.prev { left: 4px; }
     .cat-arr.next { right: 4px; }
-    .cat-arr svg { width: 12px; height: 12px; }
+    .cat-arr svg { width: 14px; height: 14px; }
   }
   @media (max-width: 480px) {
     .cat-section { padding: 16px 12px 12px; }
@@ -178,6 +178,7 @@ export default function CategorySection() {
   const scrollRef = React.useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [brokenIds, setBrokenIds] = useState(() => new Set());
 
   const checkScroll = () => {
     if (!scrollRef.current) return;
@@ -263,24 +264,28 @@ export default function CategorySection() {
                     aria-label={`Browse ${cat.name}`}
                   >
                     <div className="cat-circle">
-                      {imgUrl ? (
+                      {imgUrl && !brokenIds.has(cat.id) ? (
                         <img
                           src={imgUrl}
                           alt={cat.name}
                           loading="lazy"
                           decoding="async"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                          onError={() => {
+                            setBrokenIds(prev => {
+                              const next = new Set(prev);
+                              next.add(cat.id);
+                              return next;
+                            });
                           }}
                         />
-                      ) : null}
-                      <div
-                        className="cat-circle-placeholder"
-                        style={{ display: imgUrl ? 'none' : 'flex', background: '#126354' }}
-                      >
-                        <img src={logo} alt="Default Logo" style={{ width: '75%', height: 'auto', objectFit: 'contain' }} />
-                      </div>
+                      ) : (
+                        <div
+                          className="cat-circle-placeholder"
+                          style={{ display: 'flex', background: '#126354' }}
+                        >
+                          <img src={logo} alt={cat.name || 'Category'} style={{ width: '75%', height: 'auto', objectFit: 'contain' }} />
+                        </div>
+                      )}
                     </div>
                     <span className="cat-label">{cat.name}</span>
                   </div>

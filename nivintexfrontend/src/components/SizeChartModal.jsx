@@ -41,7 +41,7 @@ export default function SizeChartModal({ isOpen, onClose, productName, productIm
       <section role="dialog" aria-modal="true" aria-labelledby="size-chart-title" onClick={event => event.stopPropagation()} style={{ background: '#fff', borderRadius: 10, width: 'min(1080px, 94vw)', maxHeight: '88vh', overflow: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,.25)' }}>
         <header style={{ position: 'sticky', top: 0, zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 16px', background: '#fff', borderBottom: `1px solid ${BORDER}` }}>
           <div><h2 id="size-chart-title" style={{ margin: 0, color: BRAND, fontSize: 16 }}>{chart?.title || 'Size guide'}</h2><p style={{ margin: '3px 0 0', color: '#667085', fontSize: 12 }}>{productName}</p></div>
-          <button type="button" onClick={onClose} aria-label="Close size chart" style={{ flex: '0 0 38px', height: 38, border: 0, borderRadius: 20, background: '#f1f5f9', color: BRAND, fontSize: 24, cursor: 'pointer' }}>×</button>
+          <button type="button" onClick={onClose} aria-label="Close size chart" style={{ flex: '0 0 40px', height: 40, border: 0, borderRadius: 20, background: '#f1f5f9', color: BRAND, fontSize: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
         </header>
         <div className="size-chart-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, .82fr) minmax(0, 1.18fr)', alignItems: 'start', gap: 18, padding: 14, boxSizing: 'border-box' }}>
           <div style={{ minHeight: 0, maxHeight: '68vh', aspectRatio: '4 / 5', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 8, background: '#f7f7f3' }}>
@@ -52,9 +52,9 @@ export default function SizeChartModal({ isOpen, onClose, productName, productIm
               <div style={{ color: BRAND, fontWeight: 700, fontSize: 14, letterSpacing: 1.5, textTransform: 'uppercase' }}>Find your perfect fit</div>
               <p style={{ margin: '5px 0 0', color: '#59645f', lineHeight: 1.5, fontSize: 12 }}>{chart?.description || 'Compare these measurements with a similar garment that fits you well.'}</p>
             </div>
-            <div aria-label="Measurement units" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <div aria-label="Measurement units" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
               <span style={{ color: '#667085', fontSize: 11, marginRight: 3 }}>Show measurements in</span>
-              {['IN', 'CM'].map(value => <button type="button" key={value} onClick={() => setUnit(value)} aria-pressed={shownUnit === value} style={{ minWidth: 42, padding: '6px 12px', borderRadius: 18, border: `1px solid ${shownUnit === value ? '#111827' : BORDER}`, color: shownUnit === value ? '#fff' : '#475569', background: shownUnit === value ? '#111827' : '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 11 }}>{value}</button>)}
+              {['IN', 'CM'].map(value => <button type="button" key={value} onClick={() => setUnit(value)} aria-pressed={shownUnit === value} style={{ minWidth: 44, minHeight: 36, padding: '6px 12px', borderRadius: 18, border: `1px solid ${shownUnit === value ? '#111827' : BORDER}`, color: shownUnit === value ? '#fff' : '#475569', background: shownUnit === value ? '#111827' : '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 11 }}>{value}</button>)}
               {/* <span style={{ color: '#667085', fontSize: 10, marginLeft: 3 }}>1 in = 2.54 cm</span> */}
             </div>
             {rows.length && columns.length ? <div style={{ overflowX: 'auto', border: '1px solid #dce2f4' }}>

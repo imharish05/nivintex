@@ -182,8 +182,8 @@ export default function CourierSelectModal({
             onClick={onClose}
             aria-label="Close courier selection"
             style={{
-              width: 34,
-              height: 34,
+              width: 40,
+              height: 40,
               borderRadius: '50%',
               border: `1px solid ${BORDER}`,
               background: '#fff',
@@ -194,6 +194,7 @@ export default function CourierSelectModal({
               cursor: 'pointer',
               fontSize: 14,
               transition: 'all 0.2s',
+              flexShrink: 0,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = '#f1f5f9';
@@ -372,7 +373,7 @@ export default function CourierSelectModal({
                         letterSpacing: 0.5,
                       }}
                     >
-                      ₹{Number(courier.rate).toFixed(2)}
+                      ₹{Math.floor(Number(courier.rate) || 0).toLocaleString('en-IN')}
                     </div>
                     <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>Standard fee</div>
                   </div>
@@ -402,7 +403,7 @@ export default function CourierSelectModal({
                 <span style={{ color: '#94A3B8' }}>Selected: </span>
                 <strong style={{ color: BRAND }}>{currentSelectedCourier.courierName}</strong>
                 <span style={{ color: BRAND, fontWeight: 700, marginLeft: 6 }}>
-                  (₹{Number(currentSelectedCourier.rate).toFixed(2)})
+                  (₹{Math.floor(Number(currentSelectedCourier.rate) || 0).toLocaleString('en-IN')})
                 </span>
               </div>
             ) : (
@@ -502,7 +503,7 @@ export default function CourierSelectModal({
               padding: 14px 16px !important;
             }
             .ck-courier-modal-footer {
-              padding: 14px 16px !important;
+              padding: 14px 16px max(14px, env(safe-area-inset-bottom)) !important;
               flex-direction: column !important;
               align-items: stretch !important;
               gap: 10px !important;
@@ -514,6 +515,7 @@ export default function CourierSelectModal({
             }
             .ck-courier-modal-footer > div:last-child button {
               flex: 1 !important;
+              min-height: 44px !important;
               padding: 12px 16px !important;
               text-align: center !important;
               justify-content: center !important;

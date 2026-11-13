@@ -2,6 +2,12 @@ import { useNavigate } from 'react-router-dom';
 import React, { useState } from "react";
 import Footer from "../../components/Footer";
 import { contactApi } from "../../utils/api";
+import {
+  sanitizeIndianPhone,
+  validateEmail,
+  validateIndianPhone,
+  validateName,
+} from "../../utils/formValidation";
 
 
 
@@ -15,19 +21,22 @@ const F = {
 const Contact = () => {
   const navigate = useNavigate();
 
-  const [submitted, setSubmitted] = useState(false);
-  const [sending,   setSending]   = useState(false);
-  const [error,     setError]     = useState('');
-  const [form,      setForm]      = useState({ name: '', email: '', phone: '', subject: '', message: '' });
+  const [submitted,   setSubmitted]   = useState(false);
+  const [sending,     setSending]     = useState(false);
+  const [error,       setError]       = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [form,        setForm]        = useState({ name: '', email: '', phone: '', subject: '', message: '' });
 
   const setField = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
+    setFieldErrors((errs) => (errs[key] ? { ...errs, [key]: '' } : errs));
     setError('');
   };
 
   const handlePhoneChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+    const val = sanitizeIndianPhone(e.target.value);
     setForm((f) => ({ ...f, phone: val }));
+    setFieldErrors((errs) => (errs.phone ? { ...errs, phone: '' } : errs));
     setError('');
   };
 
@@ -35,27 +44,35 @@ const Contact = () => {
     e.preventDefault();
     const name = form.name.trim();
     const email = form.email.trim();
-    const phone = form.phone.trim();
+    const phone = sanitizeIndianPhone(form.phone);
     const subject = form.subject.trim();
     const message = form.message.trim();
 
-    if (!name || !email || !phone || !subject || !message) {
-      setError('Please fill in all fields.');
+    const errs = {};
+    const nameErr = validateName(name, 'Full name');
+    if (nameErr) errs.name = nameErr;
+    const emailErr = validateEmail(email);
+    if (emailErr) errs.email = emailErr;
+    const phoneErr = validateIndianPhone(phone);
+    if (phoneErr) errs.phone = phoneErr;
+    if (!subject) {
+      errs.subject = 'Please enter a subject.';
+    } else if (subject.length < 2) {
+      errs.subject = 'Subject must be at least 2 characters.';
+    }
+    if (!message) {
+      errs.message = 'Please enter your message.';
+    } else if (message.length < 5) {
+      errs.message = 'Message must be at least 5 characters.';
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setError(Object.values(errs)[0]);
       return;
     }
 
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-
-    const phoneRegex = /^[6-9]\d{9}$/;
-    if (!phoneRegex.test(phone)) {
-      setError('Phone number must be a 10-digit number starting with 9, 8, 7, or 6.');
-      return;
-    }
-
+    setFieldErrors({});
     setSending(true);
     setError('');
     try {
@@ -356,12 +373,24 @@ const Contact = () => {
           transition: background-color 5000s ease-in-out 0s;
         }
         .cp-textarea { resize: none; min-height: 100px; }
+        .cp-input-error {
+          border-color: #c0392b !important;
+          background: #fff8f7 !important;
+        }
+        .cp-field-error {
+          font-size: 11px;
+          color: #c0392b;
+          font-family: ${F.sub};
+          font-weight: 400;
+          margin-top: 2px;
+        }
 
-        .cp-submit { margin-top: 24px; display: flex; align-items: center; gap: 12px; }
+        .cp-submit { margin-top: 24px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
         .cp-btn {
           background: #0f5447;
           color: #fff;
           border: none;
+          min-height: 44px;
           padding: 12px 28px;
           border-radius: 8px;
           font-family: ${F.main};
@@ -463,6 +492,7 @@ const Contact = () => {
           .cp-info { padding: 28px 24px; }
           .cp-top-gap { height: 8px; }
           .cp-body { padding: 0 20px 60px; }
+          .cp-input { font-size: 16px; }
         }
         @media (max-width: 480px) {
           .cp-top-gap { height: 6px; }
@@ -470,6 +500,7 @@ const Contact = () => {
           .cp-info { padding: 20px 14px; }
           .cp-body { padding: 0 14px 40px; }
           .cp-input { font-size: 16px; }
+          .cp-map iframe { height: 300px !important; }
           .cp-top-row { margin-bottom: 14px; }
           .cp-section-label { margin-bottom: 8px; }
           .cp-grid { gap: 18px; }
@@ -497,25 +528,25 @@ const Contact = () => {
               <div className="cp-info-heading">Reach Us</div>
               <div className="cp-info-sub">Always here to help</div>
                             {[
-                { icon: "📞", label: "Phone", href: "tel:+919629122122", value: "+91 96291 22122" },
-                // { icon: "📧", label: "Email", href: "mailto:Fashion%20Aura@gmail.com", value: "Fashion Aura@gmail.com" },
+                { icon: "fa-solid fa-phone", label: "Phone", href: "tel:+919629122122", value: "+91 96291 22122" },
+                // { icon: "fa-regular fa-envelope", label: "Email", href: "mailto:Fashion%20Aura@gmail.com", value: "Fashion Aura@gmail.com" },
               ].map(({ icon, label, href, value }) => (
                 <div className="cp-info-item" key={label}>
-                  <div className="cp-info-icon">{icon}</div>
+                  <div className="cp-info-icon"><i className={icon} /></div>
                   <div>
                     <div className="cp-info-label">{label}</div>
-                    <div className="cp-info-value"><a href={href}>{value}</a></div>
+                    <div className="cp-info-value"><a href={href} style={{ display: 'inline-block', padding: '4px 0' }}>{value}</a></div>
                   </div>
                 </div>
               ))}
 
 
               {[
-                { icon: "📍", label: "Address",       value: "Fashion Aura\nFirst floor, NSR Rd, Saibaba Colony,\nKuppakonam Pudur, Coimbatore,\nTamil Nadu 641038 India" },
-                { icon: "🕒", label: "Working Hours", value: "Monday – Saturday\n9:00 AM – 7:00 PM" },
+                { icon: "fa-solid fa-location-dot", label: "Address",       value: "Fashion Aura\nFirst floor, NSR Rd, Saibaba Colony,\nKuppakonam Pudur, Coimbatore,\nTamil Nadu 641038 India" },
+                { icon: "fa-regular fa-clock", label: "Working Hours", value: "Monday – Saturday\n9:00 AM – 7:00 PM" },
               ].map(({ icon, label, value }) => (
                 <div className="cp-info-item" key={label}>
-                  <div className="cp-info-icon">{icon}</div>
+                  <div className="cp-info-icon"><i className={icon} /></div>
                   <div>
                     <div className="cp-info-label">{label}</div>
                     <div className="cp-info-value" style={{ whiteSpace: "pre-line" }}>{value}</div>
@@ -542,15 +573,33 @@ const Contact = () => {
               <div className="cp-form-heading">Send a Message</div>
               <div className="cp-form-sub">Our team will get back to you shortly.</div>
 
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} noValidate>
                 <div className="cp-row">
                   <div className="cp-field">
                     <label className="cp-label">Full Name</label>
-                    <input type="text" placeholder="e.g. Priya Sharma" className="cp-input" value={form.name} onChange={setField('name')} required />
+                    <input
+                      type="text"
+                      placeholder="e.g. Priya"
+                      className={`cp-input ${fieldErrors.name ? 'cp-input-error' : ''}`}
+                      value={form.name}
+                      onChange={setField('name')}
+                      aria-invalid={fieldErrors.name ? 'true' : 'false'}
+                      required
+                    />
+                    {fieldErrors.name && <span className="cp-field-error" role="alert">{fieldErrors.name}</span>}
                   </div>
                   <div className="cp-field">
                     <label className="cp-label">Email Address</label>
-                    <input type="email" placeholder="you@example.com" className="cp-input" value={form.email} onChange={setField('email')} required />
+                    <input
+                      type="email"
+                      placeholder="you@example.com"
+                      className={`cp-input ${fieldErrors.email ? 'cp-input-error' : ''}`}
+                      value={form.email}
+                      onChange={setField('email')}
+                      aria-invalid={fieldErrors.email ? 'true' : 'false'}
+                      required
+                    />
+                    {fieldErrors.email && <span className="cp-field-error" role="alert">{fieldErrors.email}</span>}
                   </div>
                 </div>
 
@@ -561,28 +610,47 @@ const Contact = () => {
                     inputMode="numeric"
                     maxLength={10}
                     placeholder="10-digit mobile number (e.g. 9876543210)"
-                    className="cp-input"
+                    className={`cp-input ${fieldErrors.phone ? 'cp-input-error' : ''}`}
                     value={form.phone}
                     onChange={handlePhoneChange}
+                    aria-invalid={fieldErrors.phone ? 'true' : 'false'}
                     required
                   />
+                  {fieldErrors.phone && <span className="cp-field-error" role="alert">{fieldErrors.phone}</span>}
                 </div>
 
                 <div className="cp-field" style={{ marginBottom: 16 }}>
                   <label className="cp-label">Subject</label>
-                  <input type="text" placeholder="How can we help you?" className="cp-input" value={form.subject} onChange={setField('subject')} required />
+                  <input
+                    type="text"
+                    placeholder="How can we help you?"
+                    className={`cp-input ${fieldErrors.subject ? 'cp-input-error' : ''}`}
+                    value={form.subject}
+                    onChange={setField('subject')}
+                    aria-invalid={fieldErrors.subject ? 'true' : 'false'}
+                    required
+                  />
+                  {fieldErrors.subject && <span className="cp-field-error" role="alert">{fieldErrors.subject}</span>}
                 </div>
 
                 <div className="cp-field">
                   <label className="cp-label">Message</label>
-                  <textarea placeholder="Write your message here..." className="cp-input cp-textarea" value={form.message} onChange={setField('message')} required />
+                  <textarea
+                    placeholder="Write your message here..."
+                    className={`cp-input cp-textarea ${fieldErrors.message ? 'cp-input-error' : ''}`}
+                    value={form.message}
+                    onChange={setField('message')}
+                    aria-invalid={fieldErrors.message ? 'true' : 'false'}
+                    required
+                  />
+                  {fieldErrors.message && <span className="cp-field-error" role="alert">{fieldErrors.message}</span>}
                 </div>
 
                 <div className="cp-submit">
                   <button type="submit" className="cp-btn" disabled={sending}>
                     <span>{sending ? 'Sending…' : 'Send Message →'}</span>
                   </button>
-                  {error && <span className="cp-sent" style={{ color: '#c0392b' }}>{error}</span>}
+                  {error && <span className="cp-sent" role="alert" style={{ color: '#c0392b' }}>{error}</span>}
                   {submitted && <span className="cp-sent">✓ Sent successfully</span>}
                 </div>
               </form>
@@ -592,12 +660,12 @@ const Contact = () => {
           {/* ── Feature Cards ── */}
           <div className="cp-features">
             {[
-              { icon: "🚚", title: "Fast Delivery",   desc: "Quick & reliable shipping across India" },
-              { icon: "🎧", title: "24/7 Support",    desc: "Dedicated support team always ready" },
-              { icon: "🔒", title: "Secure Payments", desc: "Protected & trusted payment methods" },
+              { icon: "fa-solid fa-truck-fast",   title: "Fast Delivery",   desc: "Quick & reliable shipping across India" },
+              { icon: "fa-solid fa-headset",      title: "24/7 Support",    desc: "Dedicated support team always ready" },
+              { icon: "fa-solid fa-shield-halved",title: "Secure Payments", desc: "Protected & trusted payment methods" },
             ].map(({ icon, title, desc }) => (
               <div className="cp-feat" key={title}>
-                <div className="cp-feat-icon">{icon}</div>
+                <div className="cp-feat-icon"><i className={icon} style={{ color: '#0f5447' }} /></div>
                 <div>
                   <h3>{title}</h3>
                   <p>{desc}</p>

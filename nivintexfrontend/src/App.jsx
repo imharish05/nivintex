@@ -38,7 +38,7 @@ import WhatsAppFloat from './components/WhatsAppFloat';
 import ScrollToTop from './components/ScrollToTop';
 import ScrollToTopOnNavigation from './components/ScrollToTopOnNavigation';
 
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 
 function HomePage({ onOpenCart, onOpenWishlist }) {
   useEffect(() => {
@@ -66,18 +66,65 @@ function HomePage({ onOpenCart, onOpenWishlist }) {
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [cartOpen, setCartOpen] = useState(false);
   const [wishOpen, setWishOpen] = useState(false);
 
   const openCart     = () => { setCartOpen(true);  setWishOpen(false); };
   const openWishlist = () => { setWishOpen(true);  setCartOpen(false); };
-  const closeCart    = () => setCartOpen(false);
-  const closeWish    = () => setWishOpen(false);
+  const closeCart    = () => {
+    setCartOpen(false);
+    if (location.pathname === '/cart') {
+      navigate('/home');
+    }
+  };
+  const closeWish    = () => {
+    setWishOpen(false);
+    if (location.pathname === '/wishlist') {
+      navigate('/home');
+    }
+  };
 
   useEffect(() => {
-    if (location.pathname === '/cart')     { setCartOpen(true); setWishOpen(false); }
-    if (location.pathname === '/wishlist') { setWishOpen(true); setCartOpen(false); }
+    if (location.pathname === '/cart') {
+      setCartOpen(true);
+      setWishOpen(false);
+    } else if (location.pathname === '/wishlist') {
+      setWishOpen(true);
+      setCartOpen(false);
+    } else {
+      setCartOpen(false);
+      setWishOpen(false);
+    }
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleOpenCart = () => openCart();
+    const handleOpenWish = () => openWishlist();
+    window.addEventListener('openCartDrawer', handleOpenCart);
+    window.addEventListener('openWishlistDrawer', handleOpenWish);
+    return () => {
+      window.removeEventListener('openCartDrawer', handleOpenCart);
+      window.removeEventListener('openWishlistDrawer', handleOpenWish);
+    };
+  }, []);
+
+  const NotFoundPage = () => (
+    <>
+      <Header onOpenCart={openCart} onOpenWishlist={openWishlist} />
+      <main style={{ minHeight: '65vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 20px', textAlign: 'center', background: '#F4F0E8' }}>
+        <p style={{ fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', color: '#C9933A', marginBottom: 8 }}>404</p>
+        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(28px, 4vw, 42px)', color: '#0f5447', margin: '0 0 12px' }}>Page Not Found</h1>
+        <p style={{ color: '#6B6B8A', fontSize: 14, maxWidth: 420, marginBottom: 24 }}>
+          The page you are looking for does not exist or may have moved.
+        </p>
+        <a href="/shop" onClick={e => { e.preventDefault(); window.location.assign('/shop'); }} style={{ padding: '12px 28px', background: '#0f5447', color: '#fff', textDecoration: 'none', borderRadius: 6, fontSize: 12, letterSpacing: 2, textTransform: 'uppercase' }}>
+          Browse Collection
+        </a>
+      </main>
+      <Footer />
+    </>
+  );
 
   const withHeader = (PageComponent, extraProps = {}) => (
     <>
@@ -99,23 +146,23 @@ function AppContent() {
         <Route path="/about" element={withHeader(AboutPage)} />
         <Route path="/contact" element={withHeader(ContactPage)} />
         <Route path="/checkout" element={withHeader(CheckoutPage)} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/login" element={withHeader(LoginPage)} />
+        <Route path="/register" element={withHeader(RegisterPage)} />
         <Route path="/cart" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
         <Route path="/wishlist" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/verify-otp" element={<VerifyOTPPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/forgot-password" element={withHeader(ForgotPasswordPage)} />
+        <Route path="/verify-otp" element={withHeader(VerifyOTPPage)} />
+        <Route path="/reset-password" element={withHeader(ResetPasswordPage)} />
         <Route path="/privacy-policy" element={withHeader(PrivacyPolicyPage)} />
         <Route path="/terms-of-service" element={withHeader(TermsOfServicePage)} />
         <Route path="/shipping-policy" element={withHeader(ShippingPolicyPage)} />
         <Route path="/payment-policy" element={withHeader(PaymentPolicyPage)} />
         <Route path="/refund-cancellation" element={withHeader(RefundCancellationPolicyPage)} />
         <Route path="/contact-information" element={withHeader(ContactInformationPage)} />
-        <Route path="*" element={<HomePage onOpenCart={openCart} onOpenWishlist={openWishlist} />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <CartDrawer open={cartOpen} onClose={closeCart} />
       <WishlistDrawer open={wishOpen} onClose={closeWish} onOpenCart={openCart} />

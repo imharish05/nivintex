@@ -12,7 +12,7 @@ const GREEN  = '#0f5447';
 const BG     = '#F4F0E8';
 const BORDER = '#EAE4D6';
 const CARD   = '#FFFFFF';
-const GOLD   = '#C9933A';
+const GOLD   = '#0f5447';
 const ACCENT = '#A2C579';
 
 const F = {
@@ -32,7 +32,7 @@ const Stars = ({ rating = 0, count = null }) => (
     {count > 0 && [...Array(5)].map((_, i) => (
       <i key={i}
         className={i < Math.round(rating) ? 'fa-solid fa-star' : 'fa-regular fa-star'}
-        style={{ color: GOLD, fontSize: 11 }} />
+        style={{ color: '#F59E0B', fontSize: 11 }} />
     ))}
     {count !== null && (
       <span style={{ fontFamily: F.sub, color: '#888', fontSize: 11, fontWeight: 200, letterSpacing: 0.5 }}>
@@ -87,6 +87,45 @@ const ProductDetailsPage = () => {
     navigate(`/product/${product.slug || slugifyProductName(product.productName || product.name, product.id)}`);
     window.scrollTo(0, 0);
   };
+
+  const getProductDisplayTitle = (p) => {
+    const rawName = (p?.productName || p?.name || '').trim();
+    const rawDesc = (p?.shortDescription || p?.description || '').trim();
+
+    const isGeneric = !rawName || /^(3\s*pcs?|salwar|rdy\s*salwar|suit)$/i.test(rawName);
+
+    if (isGeneric && rawDesc) {
+      return rawDesc;
+    }
+    if (!rawName && rawDesc) return rawDesc;
+    if (!rawDesc) return rawName || 'Fashion Aura Garment';
+
+    if (/^3\s*pcs?/i.test(rawName)) {
+      return rawDesc;
+    }
+
+    if (rawName.length <= 12 && rawDesc && !rawName.toLowerCase().includes(rawDesc.toLowerCase())) {
+      return `${rawName} · ${rawDesc}`;
+    }
+
+    return rawName;
+  };
+
+  const getProductSizesList = (p) => {
+    const vars = p?.Variants || p?.variants || [];
+    const sizes = [];
+    vars.forEach(v => {
+      const s = (v.size || '').trim();
+      if (s && !sizes.includes(s)) sizes.push(s);
+    });
+    if (sizes.length === 0 && p?.sizes) {
+      if (Array.isArray(p.sizes)) return p.sizes;
+      if (typeof p.sizes === 'string') {
+        try { return JSON.parse(p.sizes); } catch {}
+      }
+    }
+    return sizes;
+  };
   const [qty, setQty]                         = useState(1);
   const [selectedImgIdx, setSelectedImgIdx]   = useState(0);
   const [showImageModal, setShowImageModal]   = useState(false);
@@ -99,9 +138,7 @@ const ProductDetailsPage = () => {
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [loading, setLoading]                 = useState(true);
-  const [addedToCart, setAddedToCart]         = useState(false);
   const [addingToCart, setAddingToCart]       = useState(false);
-  const [showSticky, setShowSticky]           = useState(false);
   const [hoveredThumb, setHoveredThumb]       = useState(null);
   const [showReviewForm, setShowReviewForm]   = useState(false);
   const [reviewRating, setReviewRating]       = useState(0);
@@ -116,6 +153,22 @@ const ProductDetailsPage = () => {
   const [sizeChart, setSizeChart] = useState(null);
   const [showSizeChart, setShowSizeChart] = useState(false);
   const addToCartRef                          = useRef(null);
+  const recScrollRef                          = useRef(null);
+  const [canRecScrollLeft, setCanRecScrollLeft] = useState(false);
+  const [canRecScrollRight, setCanRecScrollRight] = useState(true);
+
+  const checkRecScroll = () => {
+    if (!recScrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = recScrollRef.current;
+    setCanRecScrollLeft(scrollLeft > 10);
+    setCanRecScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+  };
+
+  const scrollRec = (direction) => {
+    if (!recScrollRef.current) return;
+    const scrollAmount = direction * 320;
+    recScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     let active = true;
@@ -128,7 +181,7 @@ const ProductDetailsPage = () => {
     return () => { active = false; };
   }, []);
 
-  const { addToCart, toggleWishlist, isWishlisted, user } = useShop();
+  const { cartItems = [], addToCart, toggleWishlist, isWishlisted, user } = useShop();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -183,6 +236,9 @@ const ProductDetailsPage = () => {
                 })
               : billingVariants.map(current => {
                   const liveStock = getSyncedStock(current);
+                  const rawPrice = current.franchise_price_final ?? current.prices?.franchise ?? null;
+                  const gstEnabled = String(data.mrpGstType || data.mrp_gst_type || 'With GST').toLowerCase() !== 'without gst';
+                  const displayPrice = rawPrice == null ? null : Math.ceil((Number(rawPrice) * (gstEnabled ? 1.05 : 1)) - 1e-9);
                   return {
                     ...current,
                     id: null,
@@ -190,7 +246,10 @@ const ProductDetailsPage = () => {
                     stock: liveStock.quantity,
                     billingStockVerified: liveStock.verified,
                     billingStockLoading: false,
-                    franchise_price_final: current.franchise_price_final ?? current.prices?.franchise ?? null,
+                    storefrontGstInclusive: true,
+                    franchise_price_final: displayPrice,
+                    salesPrice: displayPrice ?? 0,
+                    mrp: displayPrice ?? 0,
                     size: current.size || '',
                     color: current.color || '',
                   };
@@ -226,13 +285,24 @@ const ProductDetailsPage = () => {
             .catch(error => { console.error('Failed to load size chart:', error); setSizeChart(null); });
           productApi.getAllFast()
             .then(all => {
-              if (data.categoryId) {
-                setRelatedProducts(all.filter(p => p.categoryId === data.categoryId && p.id !== data.id).slice(0, 8));
-              } else {
-                setRelatedProducts([]);
+              if (!Array.isArray(all)) { setRelatedProducts([]); return; }
+              const catId = data.categoryId ?? data.category_id;
+              let list = [];
+              if (catId != null) {
+                list = all.filter(p => {
+                  const pCat = p.categoryId ?? p.category_id;
+                  return pCat != null && String(pCat) === String(catId) && String(p.id) !== String(data.id);
+                });
               }
+              // If none or fewer than 4 in same category, include more products so slider is full and interactive
+              if (list.length < 4) {
+                const others = all.filter(p => String(p.id) !== String(data.id) && !list.some(l => String(l.id) === String(p.id)));
+                list = [...list, ...others];
+              }
+              setRelatedProducts(list);
             })
-            .catch(() => {
+            .catch(err => {
+              console.error('Failed to load related products:', err);
               setRelatedProducts([]);
             });
         })
@@ -242,15 +312,11 @@ const ProductDetailsPage = () => {
   }, [slug]);
 
   useEffect(() => {
-    const handleScroll = () => {
-      if (addToCartRef.current) {
-        const rect = addToCartRef.current.getBoundingClientRect();
-        setShowSticky(rect.bottom < 0);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    if (relatedProducts.length > 0) {
+      const timer = setTimeout(checkRecScroll, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [relatedProducts]);
 
   useEffect(() => {
     if (!product) return;
@@ -366,7 +432,37 @@ const ProductDetailsPage = () => {
   const selectedVariantSize = selectedVariant?.size || selectedSize;
   const selectedVariantColour = selectedVariant?.color || selectedColour;
 
+  const hasVariants = Array.isArray(product?.Variants) && product.Variants.length > 0;
+  const activeVariantMatchesSelection = !hasVariants || (
+    Boolean(selectedVariant)
+    && (!selectedSize || selectedVariant.size === selectedSize)
+    && (!selectedColour || selectedVariant.color === selectedColour)
+    && (!selectedFabric || selectedVariant.fabric === selectedFabric)
+  );
+  const currentProductId = product?.id != null ? String(product.id) : '';
+  const isSelectedVariantInCart = Boolean(currentProductId) && activeVariantMatchesSelection && cartItems.some(item => {
+    if (String(item.productId ?? '') !== currentProductId) return false;
+    if (hasVariants) {
+      if (selectedVariant?.id != null && item.variantId != null) {
+        return String(item.variantId) === String(selectedVariant.id);
+      }
+      if (selectedVariant?.billingVariantId != null && item.billingVariantId != null) {
+        return String(item.billingVariantId) === String(selectedVariant.billingVariantId);
+      }
+      return (
+        String(item.size || '').trim().toLowerCase() === String(selectedVariant?.size || selectedSize || '').trim().toLowerCase()
+        && String(item.color || '').trim().toLowerCase() === String(selectedVariant?.color || selectedColour || '').trim().toLowerCase()
+        && String(item.fabric || '').trim().toLowerCase() === String(selectedVariant?.fabric || selectedFabric || '').trim().toLowerCase()
+      );
+    }
+    return item.variantId == null || item.variantId === '';
+  });
+
   const handleAddToCart = async () => {
+    if (isSelectedVariantInCart) {
+      window.dispatchEvent(new CustomEvent('openCartDrawer'));
+      return;
+    }
     if (addingToCart || !inStock || qty > stock) return;
     const parts = [];
     if (selectedColour) parts.push(selectedColour);
@@ -380,6 +476,9 @@ const ProductDetailsPage = () => {
       productId: product?.id,
       variantId: selectedVariant?.id,
       billingVariantId: selectedVariant?.billingVariantId,
+      color: selectedColour || selectedVariant?.color || '',
+      size: selectedSize || selectedVariant?.size || '',
+      fabric: selectedFabric || selectedVariant?.fabric || '',
       name: productName,
       price: salesPrice,
       mrpGstType: productGstType,
@@ -395,8 +494,7 @@ const ProductDetailsPage = () => {
     
     setAddingToCart(false);
     if (added) {
-      setAddedToCart(true);
-      setTimeout(() => setAddedToCart(false), 2000);
+      window.dispatchEvent(new CustomEvent('openCartDrawer'));
     }
   };
 
@@ -453,9 +551,10 @@ const ProductDetailsPage = () => {
       <style>{`
         .pdp-gallery-sticky {
           position: sticky;
-          top: 84px;
+          top: 96px;
           align-self: flex-start;
-          z-index: 2;
+          z-index: 5;
+          transition: top 0.2s ease;
         }
         .pdp-gallery-wrap {
           display: flex;
@@ -485,10 +584,300 @@ const ProductDetailsPage = () => {
           position: relative;
           transition: border-color 0.2s, transform 0.18s;
         }
+        .pdp-main-image-box {
+          position: relative;
+          flex: 1;
+          overflow: hidden;
+          background: #fff;
+          border: 1px solid ${BORDER};
+        }
         .pdp-main-image {
           animation: pdp-image-enter 260ms ease both;
           height: min(700px, calc(100vh - 100px));
           cursor: zoom-in;
+        }
+        .pdp-main-img-arrow {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid ${BORDER};
+          color: ${BRAND};
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          cursor: pointer;
+          opacity: 0;
+          transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+          z-index: 4;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+        .pdp-main-image-box:hover .pdp-main-img-arrow {
+          opacity: 1;
+        }
+        .pdp-main-img-arrow:hover {
+          background: ${BRAND};
+          color: #fff;
+          transform: translateY(-50%) scale(1.08);
+        }
+        .pdp-main-img-prev { left: 12px; }
+        .pdp-main-img-next { right: 12px; }
+
+        /* ── Recommended Products Section ── */
+        .pdp-rec-section {
+          margin-top: 48px;
+          padding: 36px 0 20px;
+          border-top: 1px solid ${BORDER};
+        }
+        .pdp-rec-header {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          margin-bottom: 24px;
+          gap: 16px;
+        }
+        .pdp-rec-title-wrap {
+          text-align: left;
+        }
+        .pdp-rec-label {
+          font-family: ${F.main};
+          font-size: 10px;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          color: #71717A;
+          font-weight: 600;
+          display: block;
+          margin-bottom: 4px;
+        }
+        .pdp-rec-title {
+          font-family: 'Cormorant Garamond', 'Playfair Display', serif;
+          font-size: clamp(22px, 2.6vw, 30px);
+          color: ${BRAND};
+          font-weight: 700;
+          margin: 0;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+        }
+        .pdp-rec-arrows {
+          display: flex;
+          gap: 8px;
+        }
+        .pdp-rec-arrow-btn {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          border: 1px solid ${BORDER};
+          background: #fff;
+          color: ${BRAND};
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .pdp-rec-arrow-btn:hover:not(:disabled) {
+          background: ${BRAND};
+          color: #fff;
+          border-color: ${BRAND};
+          transform: scale(1.05);
+        }
+        .pdp-rec-arrow-btn:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+        }
+        .pdp-rec-slider-track {
+          display: flex;
+          gap: 16px;
+          overflow-x: auto;
+          scroll-behavior: smooth;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          padding: 6px 2px 20px;
+          scroll-snap-type: x mandatory;
+        }
+        .pdp-rec-slider-track::-webkit-scrollbar {
+          display: none;
+        }
+
+        /* Clean Minimal Recommended Card - EXACT SAME DESIGN AS SHOP GRID */
+        .pdp-rec-card {
+          flex: 0 0 220px;
+          scroll-snap-align: start;
+          background: transparent;
+          border: none;
+          border-radius: 0;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          box-shadow: none;
+          transition: transform 0.25s ease;
+          position: relative;
+        }
+        .pdp-rec-card:hover {
+          transform: translateY(-3px);
+        }
+        .pdp-rec-card .pdp-rec-img-wrap {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 3/4;
+          overflow: hidden;
+          border-radius: 6px;
+          background: #EFEFEF;
+        }
+        .pdp-rec-card .pdp-rec-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: top;
+          transition: transform 0.4s ease;
+          display: block;
+        }
+        .pdp-rec-card:hover .pdp-rec-img {
+          transform: scale(1.04);
+        }
+        .pdp-rec-card .product-badge {
+          position: absolute;
+          bottom: 10px;
+          left: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          z-index: 10;
+        }
+        .pdp-rec-card .product-badge span {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 10px;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          color: #fff;
+          border-radius: 0 3px 3px 0;
+        }
+        .pdp-rec-card .badge-sale { background: #0f5447; }
+        .pdp-rec-card .badge-bogo { background: #0b3a31; }
+        .pdp-rec-card .product-card-actions {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          z-index: 10;
+        }
+        .pdp-rec-card .product-action-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.95);
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+          transition: all 0.2s;
+          cursor: pointer;
+        }
+        .pdp-rec-card .product-action-btn:hover {
+          background: #0f5447;
+          color: #ffffff !important;
+          border-color: #0f5447;
+        }
+        .pdp-rec-card-body {
+          padding: 10px 0 0;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          text-align: left;
+          background: transparent;
+        }
+        .pdp-rec-cat-text {
+          font-family: 'Josefin Sans', 'Raleway', sans-serif;
+          font-size: 11px;
+          font-weight: 500;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          color: #71717A;
+          display: block;
+          margin-bottom: 3px;
+        }
+        .pdp-rec-card-name {
+          font-family: 'Josefin Sans', 'Raleway', sans-serif;
+          font-size: 13.5px;
+          font-weight: 600;
+          color: #1F2937;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          line-height: 1.35;
+          min-height: 36px;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          margin: 0 0 6px;
+        }
+        .pdp-rec-card:hover .pdp-rec-card-name {
+          color: #0f5447;
+        }
+        .pdp-rec-meta-sub {
+          font-family: 'Raleway', sans-serif;
+          font-size: 11.5px;
+          color: #6B7280;
+          font-weight: 400;
+          margin-bottom: 8px;
+          line-height: 1.3;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .pdp-rec-price-row {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          margin-top: auto;
+          padding-top: 4px;
+        }
+        .pdp-rec-price {
+          font-family: 'Raleway', sans-serif;
+          font-size: 15px;
+          font-weight: 700;
+          color: #0f5447;
+          letter-spacing: 0.3px;
+        }
+        .pdp-rec-mrp {
+          font-family: 'Raleway', sans-serif;
+          font-size: 12px;
+          color: #9CA3AF;
+          text-decoration: line-through;
+        }
+        .pdp-rec-discount-badge {
+          font-family: 'Raleway', sans-serif;
+          font-size: 11px;
+          font-weight: 600;
+          color: #0f5447;
+        }
+        @media (max-width: 576px) {
+          .pdp-rec-card {
+            flex: 0 0 160px;
+          }
+          .pdp-rec-card-name {
+            font-size: 12px;
+            min-height: 32px;
+          }
+          .pdp-rec-meta-sub {
+            font-size: 10.5px;
+          }
+          .pdp-rec-price {
+            font-size: 13.5px;
+          }
         }
         .pdp-action-btn-primary {
           flex: 1;
@@ -609,7 +998,7 @@ const ProductDetailsPage = () => {
             height: 78px;
           }
           .pdp-main-image {
-            height: min(440px, 60vh) !important;
+            height: min(420px, 56svh) !important;
           }
           .pdp-card-wrap {
             border: none !important;
@@ -620,19 +1009,35 @@ const ProductDetailsPage = () => {
           .pdp-action-btn-primary, .pdp-action-btn-outline {
             font-size: 11px;
             font-weight: 600;
-            letter-spacing: 1.2px;
-            padding: 12px 6px;
+            letter-spacing: 1px;
+            padding: 12px 8px;
             min-height: 44px;
+            white-space: nowrap;
+          }
+          .pdp-rec-card {
+            flex: 0 0 190px;
           }
         }
         @media (max-width: 575.98px) {
           .pdp-zoom-backdrop { padding: 12px; }
-          .pdp-zoom-dialog { width: 100%; height: 88vh; gap: 10px; }
-          .pdp-zoom-control { width: 38px; height: 38px; font-size: 20px; }
-          .pdp-zoom-close { width: 38px; height: 38px; }
+          .pdp-zoom-dialog { width: 100%; height: 88svh; gap: 10px; }
+          .pdp-zoom-control { width: 40px; height: 40px; font-size: 20px; }
+          .pdp-zoom-close { width: 40px; height: 40px; }
           .pdp-zoom-thumb { width: 46px; height: 56px; }
           .pdp-card-wrap { padding: 10px 0 !important; }
           .pdp-summary-bar { padding: 16px 12px !important; gap: 16px !important; }
+          .pdp-summary-divider { display: none !important; }
+          .pdp-review-form { padding: 20px 16px !important; }
+          .pdp-actions-row { flex-wrap: wrap !important; }
+          .pdp-rec-card {
+            flex: 0 0 160px;
+          }
+          .pdp-rec-card-name {
+            font-size: 11.5px;
+          }
+          .pdp-rec-price {
+            font-size: 12.5px;
+          }
         }
         @media (prefers-reduced-motion: reduce) {
           .pdp-main-image, .pdp-zoom-backdrop, .pdp-zoom-dialog, .pdp-zoom-photo { animation: none; }
@@ -642,11 +1047,11 @@ const ProductDetailsPage = () => {
       {/* ── Breadcrumb ── */}
       <div style={{ background: BG, padding: '10px 0', borderBottom: `1px solid ${BORDER}` }}>
         <div className="container">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: F.sub, fontSize: 11, color: '#888', fontWeight: 200, letterSpacing: 0.5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px 8px', fontFamily: F.sub, fontSize: 11, color: '#888', fontWeight: 200, letterSpacing: 0.5 }}>
             <a href="#home" onClick={e => { e.preventDefault(); navigate('/home'); }}
-              style={{ color: GOLD, textDecoration: 'none', fontFamily: F.main, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: 400 }}>Home</a>
+              style={{ color: GOLD, textDecoration: 'none', fontFamily: F.main, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: 400, padding: '6px 0' }}>Home</a>
             <span style={{ color: GOLD }}>›</span>
-            <span style={{ fontFamily: F.main, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: BRAND, fontWeight: 400 }}>{productName}</span>
+            <span style={{ fontFamily: F.main, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: BRAND, fontWeight: 400, overflowWrap: 'anywhere' }}>{productName}</span>
           </div>
         </div>
       </div>
@@ -654,10 +1059,10 @@ const ProductDetailsPage = () => {
       {/* ── Main content ── */}
       <div style={{ background: BG, minHeight: '80vh', padding: '24px 0 60px' }}>
         <div className="container">
-          <div className="row g-3">
+          <div className="row g-4 align-items-stretch">
 
-            {/* ── Left: thumbnails + main image ── */}
-            <div className="col-lg-6">
+            {/* ── Left: thumbnails + main image (Sticky gallery) ── */}
+            <div className="col-lg-6" style={{ position: 'relative' }}>
               <div className="pdp-gallery-sticky pdp-gallery-wrap">
 
                 {allImages.length > 0 && (
@@ -693,13 +1098,42 @@ const ProductDetailsPage = () => {
                       setShowImageModal(true);
                     }
                   }}
-                  style={{ flex: 1, overflow: 'hidden', background: '#fff', border: `1px solid ${BORDER}`, cursor: currentImgSrc ? 'zoom-in' : 'default' }}>
+                  className="pdp-main-image-box"
+                  style={{ cursor: currentImgSrc ? 'zoom-in' : 'default' }}>
                   {currentImgSrc ? (
-                    <img src={currentImgSrc} alt={productName}
-                      key={selectedImgIdx}
-                      className="pdp-main-image"
-                      decoding="async"
-                      style={{ width: '100%', objectFit: 'cover', display: 'block' }} />
+                    <>
+                      <img src={currentImgSrc} alt={productName}
+                        key={selectedImgIdx}
+                        className="pdp-main-image"
+                        decoding="async"
+                        style={{ width: '100%', objectFit: 'cover', display: 'block' }} />
+                      {allImages.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            className="pdp-main-img-arrow pdp-main-img-prev"
+                            aria-label="Previous image"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedImgIdx(idx => (idx - 1 + allImages.length) % allImages.length);
+                            }}
+                          >
+                            <i className="fa-solid fa-chevron-left" />
+                          </button>
+                          <button
+                            type="button"
+                            className="pdp-main-img-arrow pdp-main-img-next"
+                            aria-label="Next image"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedImgIdx(idx => (idx + 1) % allImages.length);
+                            }}
+                          >
+                            <i className="fa-solid fa-chevron-right" />
+                          </button>
+                        </>
+                      )}
+                    </>
                   ) : (
                     <div className="pdp-main-image" style={{ width: '100%', background: '#126354', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                       <img src={defaultLogo} alt="Fashion Aura" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
@@ -731,7 +1165,7 @@ const ProductDetailsPage = () => {
                 {/* Price */}
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
                   <span style={{ fontFamily: F.main, fontSize: '1.4rem', fontWeight: 300, color: BRAND, letterSpacing: 2 }}>
-                    ₹{salesPrice.toLocaleString('en-IN')}.00
+                    ₹{Math.ceil(salesPrice - 1e-9).toLocaleString('en-IN')}
                   </span>
                   {showOldPrice && (
                     <del style={{ fontFamily: F.sub, fontSize: 13, color: '#aaa', fontWeight: 200 }}>₹{mrp.toLocaleString('en-IN')}</del>
@@ -774,7 +1208,7 @@ const ProductDetailsPage = () => {
                 )}
 
                 <p style={{ fontFamily: F.sub, fontSize: 11, color: '#888', marginBottom: 12, fontWeight: 200, letterSpacing: 0.5 }}>
-                  {productHasInclusiveGst ? '5% GST added at checkout. ' : ''}Shipping calculated at checkout.
+                  {productHasInclusiveGst ? '5% GST included. ' : ''} Shipping charges will be added at checkout.
                 </p>
 
                 {/* Size selector */}
@@ -833,32 +1267,32 @@ const ProductDetailsPage = () => {
                 )}
 
                 {/* Quantity */}
-                <div style={{ marginBottom: 12 }} ref={addToCartRef}>
+                <div style={{ marginBottom: 12 }}>
                   <p style={{ fontFamily: F.main, fontSize: 9, fontWeight: 400, color: BRAND, marginBottom: 8, letterSpacing: 2.5, textTransform: 'uppercase' }}>Quantity</p>
                   <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${BORDER}`, overflow: 'hidden', width: 'fit-content', background: 'transparent', borderRadius: 4 }}>
-                    <button type="button" onClick={() => setQty(q => Math.max(1, q - 1))} disabled={!inStock || qty <= 1}
-                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: !inStock || qty <= 1 ? 'not-allowed' : 'pointer', opacity: !inStock || qty <= 1 ? 0.45 : 1, fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+                    <button type="button" aria-label="Decrease quantity" onClick={() => setQty(q => Math.max(1, q - 1))} disabled={!inStock || qty <= 1}
+                      style={{ width: 40, height: 40, background: 'transparent', border: 'none', cursor: !inStock || qty <= 1 ? 'not-allowed' : 'pointer', opacity: !inStock || qty <= 1 ? 0.45 : 1, fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
                     <span style={{ width: 42, textAlign: 'center', fontFamily: F.main, fontWeight: 400, color: BRAND, fontSize: 13, letterSpacing: 1 }}>{qty}</span>
-                    <button type="button" onClick={() => setQty(q => Math.min(stock, q + 1))} disabled={!inStock || qty >= stock}
-                      style={{ width: 34, height: 34, background: 'transparent', border: 'none', cursor: !inStock || qty >= stock ? 'not-allowed' : 'pointer', opacity: !inStock || qty >= stock ? 0.45 : 1, fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+                    <button type="button" aria-label="Increase quantity" onClick={() => setQty(q => Math.min(stock, q + 1))} disabled={!inStock || qty >= stock}
+                      style={{ width: 40, height: 40, background: 'transparent', border: 'none', cursor: !inStock || qty >= stock ? 'not-allowed' : 'pointer', opacity: !inStock || qty >= stock ? 0.45 : 1, fontSize: 16, color: BRAND, fontFamily: F.main, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                   </div>
                   {stockLoading && <p role="status" aria-live="polite" style={{ color: '#64748b', fontSize: 12, margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: 7 }}><i className="fa-solid fa-spinner fa-spin" aria-hidden="true" />Checking availability…</p>}
                   {stockVerified && stock <= 0 && <p role="status" style={{ color: '#a33a2b', fontSize: 12, margin: '8px 0 0' }}>This varient is out of stock</p>}
                 </div>
 
                 {/* Add to Cart + Buy Now + Wishlist */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-                  <button onClick={handleAddToCart} disabled={!inStock || addingToCart}
+                <div ref={addToCartRef} className="pdp-actions-row" style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+                  <button onClick={handleAddToCart} disabled={addingToCart || (!isSelectedVariantInCart && !inStock)}
                     className="pdp-action-btn-primary"
                     style={{
-                      background: addedToCart ? GOLD : inStock ? BRAND : '#ccc',
+                      background: isSelectedVariantInCart ? GOLD : inStock ? BRAND : '#ccc',
                       color: '#fff',
-                      cursor: inStock && !addingToCart ? 'pointer' : 'not-allowed',
+                      cursor: (isSelectedVariantInCart || inStock) && !addingToCart ? 'pointer' : 'not-allowed',
                       borderRadius: 8,
                     }}>
                     {addingToCart ? (
                       <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} />Adding...</>
-                    ) : addedToCart ? (
+                    ) : isSelectedVariantInCart ? (
                       '✓ Added'
                     ) : stockLoading ? (
                       'Checking...'
@@ -879,7 +1313,7 @@ const ProductDetailsPage = () => {
                   <button onClick={() => toggleWishlist({ id: product.id, productId: product.id, variantId: selectedVariant?.id || null, name: productName, price: salesPrice, image: currentImgSrc, subtitle: [selectedColour, selectedSize, selectedFabric].filter(Boolean).join(' - ') || categoryName, color: selectedColour, size: selectedSize, fabric: selectedFabric, isBuyOneGetOne: !!product.isBuyOneGetOne })}
                     aria-label="Wishlist"
                     style={{
-                      width: 42, height: 42, flexShrink: 0,
+                      width: 44, height: 44, flexShrink: 0,
                       border: `1px solid ${BORDER}`,
                       background: wished ? '#fce4e4' : 'transparent',
                       color: '#c0392b', cursor: 'pointer', fontSize: 14,
@@ -936,7 +1370,7 @@ const ProductDetailsPage = () => {
                           .map(item => ({ label: item.label, value: item.value })),
                         { 
                           label: 'Availability', 
-                          value: inStock ? (stock ? `In Stock (${stock} units)` : 'In Stock') : 'Out of Stock',
+                          value: inStock ? (stock ? `In Stock (${stock} ${stock === 1 ? 'unit' : 'units'})` : 'In Stock') : 'Out of Stock',
                           isStock: true,
                           inStock: !!inStock,
                         },
@@ -1088,7 +1522,161 @@ const ProductDetailsPage = () => {
             </div>
           </div>
 
+          {/* ── Recommended Products (Same Category Slider - LiliumByShrivha Style) ── */}
+          {relatedProducts.length > 0 && (
+            <section className="pdp-rec-section" aria-label="Recommended Products">
+              <div className="pdp-rec-header">
+                <div className="pdp-rec-title-wrap">
+                  <span className="pdp-rec-label">Similar Styles</span>
+                  <h3 className="pdp-rec-title">Recommended Products</h3>
+                </div>
+                <div className="pdp-rec-arrows">
+                  <button
+                    type="button"
+                    onClick={() => scrollRec(-1)}
+                    disabled={!canRecScrollLeft}
+                    className="pdp-rec-arrow-btn"
+                    aria-label="Previous products"
+                  >
+                    <i className="fa-solid fa-chevron-left" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollRec(1)}
+                    disabled={!canRecScrollRight}
+                    className="pdp-rec-arrow-btn"
+                    aria-label="Next products"
+                  >
+                    <i className="fa-solid fa-chevron-right" />
+                  </button>
+                </div>
+              </div>
 
+              <div
+                className="pdp-rec-slider-track"
+                ref={recScrollRef}
+                onScroll={checkRecScroll}
+              >
+                {relatedProducts.map(rel => {
+                  const relImg = getImageUrl(rel.image);
+                  const relMrp = Number(rel.mrp || 0);
+                  const relPrice = [rel.franchise_price_final, rel.salesPrice, rel.mrp].map(Number).find(p => Number.isFinite(p) && p > 0) || 0;
+                  const discount = relMrp > relPrice ? Math.round(((relMrp - relPrice) / relMrp) * 100) : 0;
+                  const relCategory = rel.Category?.name || rel.SubCategory?.name || categoryName || '';
+                  const relWished = isWishlisted(rel.id);
+                  const displayTitle = getProductDisplayTitle(rel);
+                  const sizesList = getProductSizesList(rel);
+                  const variantCount = (rel.Variants || rel.variants || []).length;
+
+                  return (
+                    <div
+                      key={rel.id}
+                      className="pdp-rec-card"
+                      onClick={() => goToProduct(rel)}
+                    >
+                      <div className="pdp-rec-img-wrap">
+                        {relImg ? (
+                          <img
+                            src={relImg}
+                            alt={displayTitle}
+                            className="pdp-rec-img"
+                            loading="lazy"
+                            decoding="async"
+                            onError={e => {
+                              e.target.style.display = 'none';
+                              if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div style={{ width: '100%', height: '100%', display: relImg ? 'none' : 'flex', background: BRAND, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                          <img src={defaultLogo} alt="Fashion Aura" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
+                        </div>
+
+                        {/* Badges */}
+                        <div className="product-badge">
+                          {discount > 0 && (
+                            <span className="badge-sale">
+                              <i className="fa-solid fa-tag" style={{ fontSize: 9 }} /> {discount}% OFF
+                            </span>
+                          )}
+                          {rel.isBuyOneGetOne && (
+                            <span className="badge-bogo">
+                              <i className="fa-solid fa-gift" style={{ fontSize: 9 }} /> Buy 1 Get 1
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Floating Actions */}
+                        <div className="product-card-actions">
+                          <button
+                            type="button"
+                            className="product-action-btn"
+                            aria-label={relWished ? 'Remove from wishlist' : 'Add to wishlist'}
+                            onClick={e => {
+                              e.stopPropagation();
+                              toggleWishlist({
+                                id: rel.id,
+                                productId: rel.id,
+                                name: rel.productName,
+                                price: relPrice,
+                                image: relImg,
+                                subtitle: relCategory,
+                                isBuyOneGetOne: !!rel.isBuyOneGetOne,
+                              });
+                            }}
+                            style={{ color: relWished ? '#E05252' : BRAND }}
+                          >
+                            <i className={`${relWished ? 'fa-solid' : 'fa-regular'} fa-heart`} style={{ fontSize: 14 }} />
+                          </button>
+                          <button
+                            type="button"
+                            className="product-action-btn"
+                            aria-label="View product details"
+                            onClick={e => {
+                              e.stopPropagation();
+                              goToProduct(rel);
+                            }}
+                          >
+                            <i className="fa-solid fa-cart-plus" style={{ fontSize: 14 }} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="pdp-rec-card-body">
+                        <div className="fa-hd-cat-row">
+                          <span className="pdp-rec-cat-text">
+                            {relCategory || 'FASHION AURA'}
+                          </span>
+                        </div>
+
+                        <h5 className="pdp-rec-card-name" title={displayTitle}>
+                          {displayTitle}
+                        </h5>
+
+                        {(variantCount > 0 || sizesList.length > 0) && (
+                          <div className="pdp-rec-meta-sub">
+                            {variantCount > 0 && `${variantCount} ${variantCount === 1 ? 'Option' : 'Options'}`}
+                            {variantCount > 0 && sizesList.length > 0 && ' · '}
+                            {sizesList.length > 0 && `Sizes: ${sizesList.join(', ')}`}
+                          </div>
+                        )}
+
+                        <div className="pdp-rec-price-row">
+                          <span className="pdp-rec-price">₹{Math.ceil(relPrice - 1e-9).toLocaleString('en-IN')}</span>
+                          {discount > 0 && (
+                            <del className="pdp-rec-mrp">₹{relMrp.toLocaleString('en-IN')}</del>
+                          )}
+                          {discount > 0 && (
+                            <span className="pdp-rec-discount-badge">({discount}% off)</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* ── Customer Reviews ── */}
           <div style={{ marginTop: 60, padding: '40px 0', borderTop: `1px solid ${BORDER}`, textAlign: 'center' }}>
@@ -1110,7 +1698,7 @@ const ProductDetailsPage = () => {
                 {reviews.length > 0 && <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
                   {[...Array(5)].map((_, i) => {
                     return (
-                      <i key={i} className={i < Math.round(averageReviewRating) ? "fa-solid fa-star" : "fa-regular fa-star"} style={{ color: GOLD, fontSize: 18 }} />
+                      <i key={i} className={i < Math.round(averageReviewRating) ? "fa-solid fa-star" : "fa-regular fa-star"} style={{ color: '#F59E0B', fontSize: 18 }} />
                     );
                   })}
                   <span style={{ marginLeft: 8, fontSize: 14, color: '#333', fontWeight: 600 }}>
@@ -1121,10 +1709,11 @@ const ProductDetailsPage = () => {
                   {reviews.length ? '' : 'Be the first to write a review'}
                 </p>
               </div>
-              <div style={{ width: 1, height: 48, background: BORDER }} />
+              <div className="pdp-summary-divider" style={{ width: 1, height: 48, background: BORDER }} />
               <button
                 onClick={() => { setShowReviewForm(o => !o); setReviewSubmitted(false); setReviewError(''); }}
                 style={{
+                  minHeight: 44,
                   padding: '10px 28px', background: BRAND, color: '#fff',
                   border: 'none', cursor: 'pointer',
                   fontFamily: F.main, fontSize: 10, fontWeight: 300,
@@ -1136,7 +1725,7 @@ const ProductDetailsPage = () => {
 
             {/* Review Form */}
             {showReviewForm && !reviewSubmitted && (
-              <div style={{
+              <div className="pdp-review-form" style={{
                 maxWidth: 620, margin: '24px auto 0',
                 padding: '32px',
                 border: `1px solid ${BORDER}`,
@@ -1156,7 +1745,7 @@ const ProductDetailsPage = () => {
                       <i
                         key={star}
                         className={star <= (reviewHover || reviewRating) ? 'fa-solid fa-star' : 'fa-regular fa-star'}
-                        style={{ fontSize: 22, color: GOLD, cursor: 'pointer', transition: 'transform 0.1s' }}
+                        style={{ fontSize: 22, color: '#F59E0B', cursor: 'pointer', transition: 'transform 0.1s' }}
                         onClick={() => setReviewRating(star)}
                         onMouseEnter={() => setReviewHover(star)}
                         onMouseLeave={() => setReviewHover(0)}
@@ -1274,8 +1863,8 @@ const ProductDetailsPage = () => {
                       borderRadius: 8,
                       boxShadow: '0 4px 16px rgba(31,92,68,0.06)' 
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <div style={{ display: 'flex', gap: 2, color: GOLD, fontSize: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                        <div style={{ display: 'flex', gap: 2, color: '#F59E0B', fontSize: 12 }}>
                           {[...Array(5)].map((_, i) => (
                             <i key={i} className={i < r.rating ? "fa-solid fa-star" : "fa-regular fa-star"} />
                           ))}

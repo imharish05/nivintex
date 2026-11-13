@@ -212,6 +212,11 @@ const createOrder = async (req, res) => {
         const checkoutSubtotal = Number(subtotal) || 0;
         const checkoutBillingDiscount = Math.max(0, Number(req.body.billing_discount_amount ?? discount) || 0);
         const checkoutTax = Number(tax) || 0;
+        // The storefront's item prices already include GST. Convert the
+        // merchandise total to its pre-tax amount for Billing, then add the
+        // extracted GST component back once when calculating the invoice total.
+        const checkoutNetSubtotal = Math.max(0, checkoutSubtotal - checkoutTax);
+        const checkoutNetAfterDiscount = Math.max(0, checkoutNetSubtotal - checkoutBillingDiscount);
         const billingPayload = {
             bill_number: '',
             franchise_location_id: configuredStockLocationId(),
@@ -230,11 +235,11 @@ const createOrder = async (req, res) => {
             // All coupon and offer reductions are sent as one bill-level
             // discount; every invoice item keeps discount_amount at zero.
             bill_discount_amount: checkoutBillingDiscount,
-            paid_amount: payment_status === 'paid' ? Math.max(0, checkoutSubtotal - checkoutBillingDiscount + checkoutTax) : 0,
-            subtotal: Math.max(0, checkoutSubtotal - checkoutBillingDiscount),
+            paid_amount: payment_status === 'paid' ? checkoutNetAfterDiscount + checkoutTax : 0,
+            subtotal: checkoutNetAfterDiscount,
             gst_amount: checkoutTax,
             delivery_charge: Number(delivery_charge) || 0,
-            total: Math.max(0, checkoutSubtotal - checkoutBillingDiscount + checkoutTax),
+            total: checkoutNetAfterDiscount + checkoutTax,
             balance: payment_status === 'paid' ? 0 : Math.max(0, checkoutSubtotal - (Number(req.body.paid_amount) || 0)),
             submission_action: 'complete',
         };

@@ -185,9 +185,9 @@ const qvStyles = `
     box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   }
   .badge-new   { background: #E05252; }
-  .badge-sale  { background: #E05252; }
+  .badge-sale  { background: #0f5447; }
   .badge-combo { background: #0f5447; }
-  .badge-bogo  { background: #C47D00; }
+  .badge-bogo  { background: #0b3a31; }
   .qv-close-btn {
     position: absolute;
     top: 20px; right: 20px;
@@ -273,15 +273,46 @@ const qvStyles = `
   }
   @media (max-width: 768px) {
     .qv-content {
-      padding: 28px 18px 18px;
+      padding: 28px 16px 18px;
       width: min(95%, 520px);
       max-height: 92vh;
       border-radius: 12px;
     }
     .qv-close-btn {
-      top: 12px; right: 12px;
-      width: 32px; height: 32px;
-      font-size: 14px;
+      top: 10px; right: 10px;
+      width: 40px; height: 40px;
+      font-size: 16px;
+    }
+    .qv-main-img-box {
+      height: clamp(220px, 38vh, 300px) !important;
+    }
+    .shop-sale-tabs {
+      gap: 6px !important;
+    }
+    .shop-sale-tab-btn {
+      flex: 1 1 0 !important;
+      padding: 10px 8px !important;
+      font-size: 11px !important;
+      letter-spacing: 0.8px !important;
+      min-height: 44px;
+      text-align: center;
+      line-height: 1.3;
+    }
+    .shop-list-card {
+      flex-wrap: wrap !important;
+      gap: 12px !important;
+      padding: 12px !important;
+    }
+    .shop-list-card-info {
+      min-width: 140px;
+    }
+    .shop-list-card-actions {
+      width: 100%;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      border-top: 1px solid #EAF0E2;
+      padding-top: 10px;
     }
   }
   .mobile-filter-backdrop {
@@ -311,10 +342,178 @@ const qvStyles = `
     transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   }
   @media (max-width: 576px) {
-    .product-action-btn { width: 30px; height: 30px; }
-    .product-action-btn i { font-size: 13px !important; }
+    .product-action-btn { width: 34px; height: 34px; }
+    .product-action-btn i { font-size: 14px !important; }
     .product-card-actions { top: 6px !important; right: 6px !important; gap: 5px !important; }
     .product-badge span { font-size: 9px; padding: 3px 8px 3px 10px; }
+  }
+
+  /* Clean Minimal Product Card (Simple & Modern) */
+  .fa-hd-product-card {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin-bottom: 28px;
+    cursor: pointer;
+    box-shadow: none;
+    transition: transform 0.25s ease;
+    position: relative;
+  }
+  .fa-hd-product-card:hover {
+    transform: translateY(-3px);
+  }
+  .fa-hd-product-card .product-card-image-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3/4;
+    overflow: hidden;
+    border-radius: 6px;
+    background: #EFEFEF;
+  }
+  .fa-hd-product-card .product-card-main-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    display: block;
+    transition: transform 0.4s ease;
+  }
+  .fa-hd-product-card:hover .product-card-main-img {
+    transform: scale(1.04);
+  }
+  .fa-hd-product-card .product-card-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+  }
+  .fa-hd-product-card .product-action-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .fa-hd-product-card .product-action-btn:hover {
+    background: #0f5447;
+    color: #ffffff !important;
+    border-color: #0f5447;
+  }
+  .fa-hd-product-body {
+    padding: 10px 0 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    text-align: left;
+    background: transparent;
+  }
+  .fa-hd-cat-row {
+    margin-bottom: 3px;
+  }
+  .fa-hd-cat-text {
+    font-family: 'Josefin Sans', 'Raleway', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #71717A;
+    display: block;
+  }
+  .fa-hd-product-title {
+    font-family: 'Josefin Sans', 'Raleway', sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1F2937;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    line-height: 1.35;
+    min-height: 36px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 0 0 6px;
+    transition: color 0.2s;
+  }
+  .fa-hd-product-card:hover .fa-hd-product-title {
+    color: #0f5447;
+  }
+  .fa-hd-meta-sub {
+    font-family: 'Raleway', sans-serif;
+    font-size: 11.5px;
+    color: #6B7280;
+    font-weight: 400;
+    margin-bottom: 8px;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .fa-hd-price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 4px;
+  }
+  .fa-hd-current-price {
+    font-family: 'Raleway', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f5447;
+    letter-spacing: 0.3px;
+  }
+  .fa-hd-old-price {
+    font-family: 'Raleway', sans-serif;
+    font-size: 12px;
+    color: #9CA3AF;
+    text-decoration: line-through;
+  }
+  .fa-hd-discount-badge {
+    font-family: 'Raleway', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0f5447;
+  }
+  @media (max-width: 576px) {
+    .fa-hd-product-card {
+      margin-bottom: 18px;
+    }
+    .fa-hd-product-title {
+      font-size: 12px;
+      min-height: 32px;
+      margin-bottom: 4px;
+    }
+    .fa-hd-cat-text {
+      font-size: 9.5px;
+    }
+    .fa-hd-meta-sub {
+      font-size: 10.5px;
+      margin-bottom: 4px;
+    }
+    .fa-hd-current-price {
+      font-size: 13.5px;
+    }
+    .fa-hd-old-price {
+      font-size: 11px;
+    }
+    .fa-hd-discount-badge {
+      font-size: 10px;
+    }
+  }
   }
 `;
 
@@ -775,6 +974,45 @@ export default function ShopGridPage({ saleOnly = false }) {
     return categories.find(c => String(c.id) === String(p.categoryId || p.category_id))?.name || '';
   };
 
+  const getProductDisplayTitle = (p) => {
+    const rawName = (p?.productName || p?.name || '').trim();
+    const rawDesc = (p?.shortDescription || p?.description || '').trim();
+
+    const isGeneric = !rawName || /^(3\s*pcs?|salwar|rdy\s*salwar|suit)$/i.test(rawName);
+
+    if (isGeneric && rawDesc) {
+      return rawDesc;
+    }
+    if (!rawName && rawDesc) return rawDesc;
+    if (!rawDesc) return rawName || 'Fashion Aura Garment';
+
+    if (/^3\s*pcs?/i.test(rawName)) {
+      return rawDesc;
+    }
+
+    if (rawName.length <= 12 && rawDesc && !rawName.toLowerCase().includes(rawDesc.toLowerCase())) {
+      return `${rawName} · ${rawDesc}`;
+    }
+
+    return rawName;
+  };
+
+  const getProductSizesList = (p) => {
+    const vars = p.Variants || p.variants || [];
+    const sizes = [];
+    vars.forEach(v => {
+      const s = (v.size || '').trim();
+      if (s && !sizes.includes(s)) sizes.push(s);
+    });
+    if (sizes.length === 0 && p.sizes) {
+      if (Array.isArray(p.sizes)) return p.sizes;
+      if (typeof p.sizes === 'string') {
+        try { return JSON.parse(p.sizes); } catch {}
+      }
+    }
+    return sizes;
+  };
+
   const getReviewSummary = (p) => {
     const reviews = Array.isArray(p.Reviews) ? p.Reviews : Array.isArray(p.reviews) ? p.reviews : [];
     const count = Number(p.reviewCount ?? p.review_count ?? p.reviewsCount ?? reviews.length) || 0;
@@ -1167,7 +1405,7 @@ export default function ShopGridPage({ saleOnly = false }) {
             type="button"
             aria-expanded={showFullDesc}
             onClick={() => setShowFullDesc(current => !current)}
-            style={{ display: 'block', border: 0, padding: 0, background: 'none', fontSize: 14, textDecoration: 'underline', cursor: 'pointer', fontFamily: F.sub, margin: '4px 0 0', color: BRAND }}
+            style={{ display: 'inline-block', border: 0, padding: '6px 0', minHeight: '36px', background: 'none', fontSize: 14, textDecoration: 'underline', cursor: 'pointer', fontFamily: F.sub, margin: '4px 0 0', color: BRAND }}
           >
             {showFullDesc ? 'Show less' : 'Show more'}
           </button>
@@ -1209,7 +1447,7 @@ export default function ShopGridPage({ saleOnly = false }) {
               )}
 
               {saleOnly && (
-                <div style={{
+                <div className="shop-sale-tabs" style={{
                   display: 'flex',
                   gap: 16,
                   marginBottom: 28,
@@ -1217,6 +1455,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                   paddingBottom: 6
                 }}>
                   <button
+                    className="shop-sale-tab-btn"
                     onClick={() => { setSaleViewMode('single'); setPage(1); }}
                     style={{
                       background: 'none',
@@ -1237,6 +1476,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                     Single Product Offers
                   </button>
                   <button
+                    className="shop-sale-tab-btn"
                     onClick={() => { setSaleViewMode('combos'); setPage(1); }}
                     style={{
                       background: 'none',
@@ -1267,9 +1507,9 @@ export default function ShopGridPage({ saleOnly = false }) {
                       Loading <Skeleton as="span" width={90} height={14} style={{ display: 'inline-block' }} />
                     </span>
                   ) : saleViewMode === 'combos' ? (
-                    <>Showing <strong>{paginatedChildren.length}</strong> of <strong>{filteredChildren.length}</strong> combo packs</>
+                    <>Showing <strong>{filteredChildren.length === 0 ? 0 : (page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filteredChildren.length)}</strong> of <strong>{filteredChildren.length}</strong> combo packs</>
                   ) : (
-                    <>Showing <strong>{paginated.length}</strong> of <strong>{filtered.length}</strong> products</>
+                    <>Showing <strong>{filtered.length === 0 ? 0 : (page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)}</strong> of <strong>{filtered.length}</strong> products</>
                   )}
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1280,7 +1520,8 @@ export default function ShopGridPage({ saleOnly = false }) {
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 6,
-                      padding: '7px 14px',
+                      minHeight: 40,
+                      padding: '8px 14px',
                       background: '#fff',
                       border: '1px solid #E0E8D8',
                       borderRadius: 6,
@@ -1511,7 +1752,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                                   onMouseEnter={e => { if (!addedCombosFeedback[child.id]) e.currentTarget.style.background = '#0b3a31'; }}
                                   onMouseLeave={e => { if (!addedCombosFeedback[child.id]) e.currentTarget.style.background = '#0f5447'; }}
                                   style={{
-                                    background: addedCombosFeedback[child.id] ? '#C9A84C' : '#0f5447',
+                                    background: addedCombosFeedback[child.id] ? '#1b4332' : '#0f5447',
                                     color: addedCombosFeedback[child.id] ? BRAND : '#fff',
                                     border: 'none',
                                     borderRadius: 6,
@@ -1576,36 +1817,48 @@ export default function ShopGridPage({ saleOnly = false }) {
                         isBuyOneGetOne: !!p.isBuyOneGetOne,
                       };
 
+                      const displayTitle = getProductDisplayTitle(p);
+                      const sizesList = getProductSizesList(p);
+                      const variantCount = (p.Variants || p.variants || []).length;
+                      const inStock = p.billingStockVerified && p.stock > 0;
+
                       return activeTab === 'grid' ? (
-                        /* ── Grid card ── */
+                        /* ── HD Luxury Grid card ── */
                         <div key={p.id} className="col-xxl-3 col-xl-4 col-md-6 col-6">
                           <div
+                            className="fa-hd-product-card"
                             onClick={() => goToProduct(p)}
-                            style={{ transition: 'transform 0.2s', cursor: 'pointer', marginBottom: '28px' }}
-                            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                            onMouseLeave={e => e.currentTarget.style.transform = 'none'}
                           >
-                            <div className="product-card-image-wrap" style={{ position: 'relative', overflow: 'hidden', background: '#f5f5f5', width: '100%', borderRadius: '8px' }}>
+                            <div className="product-card-image-wrap">
                               {imgSrc ? (
-                                <img src={imgSrc} alt={p.productName || ''}
+                                <img
+                                  src={imgSrc}
+                                  alt={displayTitle}
                                   loading="lazy"
                                   decoding="async"
-                                  style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', objectPosition: 'top', display: 'block', transition: 'transform 0.4s ease' }}
-                                  onMouseEnter={e => e.target.style.transform = 'scale(1.04)'}
-                                  onMouseLeave={e => e.target.style.transform = 'scale(1)'}
-                                  onError={e => { e.target.style.display = 'none'; }}
+                                  className="product-card-main-img"
+                                  onError={e => {
+                                    e.target.style.display = 'none';
+                                    if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'flex';
+                                  }}
                                 />
-                              ) : (
-                                <PlaceholderImg style={{ width: '100%', aspectRatio: '3/4' }} />
-                              )}
+                              ) : null}
+                              <div style={{ width: '100%', height: '100%', display: imgSrc ? 'none' : 'flex' }}>
+                                <PlaceholderImg style={{ width: '100%', height: '100%' }} />
+                              </div>
 
                               {/* Badges */}
                               <div className="product-badge">
                                 {!p.billingStockVerified ? (
-                                  <span style={{ background: '#9A6B24' }}>Stock Unavailable</span>
+                                  <span style={{ background: '#52525B' }}>Stock Unavailable</span>
                                 ) : p.stock <= 0 ? (
                                   <span style={{ background: '#A83232' }}>Out of Stock</span>
                                 ) : null}
+                                {discount > 0 && (
+                                  <span className="badge-sale">
+                                    <i className="fa-solid fa-tag" style={{ fontSize: 9 }} /> {discount}% OFF
+                                  </span>
+                                )}
                                 {p.isBuyOneGetOne && (
                                   <span className="badge-bogo">
                                     <i className="fa-solid fa-gift" style={{ fontSize: 9 }} /> Buy 1 Get 1
@@ -1613,87 +1866,62 @@ export default function ShopGridPage({ saleOnly = false }) {
                                 )}
                               </div>
 
-                              <div className="product-card-actions" style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 8, opacity: 1, zIndex: 10 }}>
+                              {/* Floating Actions */}
+                              <div className="product-card-actions">
                                 <button
+                                  type="button"
                                   className="product-action-btn"
                                   onClick={(e) => { e.stopPropagation(); ctxToggleWishlist(wishItem); }}
+                                  aria-label={wished ? 'Remove from wishlist' : 'Add to wishlist'}
                                   style={{
-                                    color: wished ? '#E05252' : '#333',
+                                    color: wished ? '#E05252' : BRAND,
                                   }}
                                   onMouseEnter={e => { e.currentTarget.style.background = '#FCE8E8'; e.currentTarget.style.color = '#E05252'; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = wished ? '#E05252' : '#333'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.95)'; e.currentTarget.style.color = wished ? '#E05252' : BRAND; }}
                                 >
-                                  <i className={wished ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{ fontSize: 15 }} />
+                                  <i className={wished ? "fa-solid fa-heart" : "fa-regular fa-heart"} style={{ fontSize: 14 }} />
                                 </button>
                                 <button
+                                  type="button"
                                   className="product-action-btn"
-                                  onClick={(e) => { e.stopPropagation(); if (!p.billingStockVerified || p.stock <= 0) return; handleOpenQuickView(p); }}
-                                  disabled={!p.billingStockVerified || p.stock <= 0 || addingProductId === p.id}
-                                  aria-label={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : 'Add to cart'}
-                                  title={!p.billingStockVerified ? 'Stock unavailable' : p.stock <= 0 ? 'Out of stock' : (p.Variants || []).length > 1 ? 'Choose size and options' : 'Choose options and add to cart'}
-                                  style={{ opacity: !p.billingStockVerified || p.stock <= 0 ? 0.45 : 1, cursor: !p.billingStockVerified || p.stock <= 0 ? 'not-allowed' : 'pointer' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = BRAND; e.currentTarget.style.color = '#fff'; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#333'; }}
+                                  onClick={(e) => { e.stopPropagation(); if (!inStock) return; handleOpenQuickView(p); }}
+                                  disabled={!inStock || addingProductId === p.id}
+                                  aria-label={!inStock ? 'Out of stock' : 'Choose options'}
+                                  title={!inStock ? 'Out of stock' : variantCount > 1 ? 'Choose size and options' : 'Choose options and add to cart'}
+                                  style={{ opacity: !inStock ? 0.45 : 1, cursor: !inStock ? 'not-allowed' : 'pointer' }}
                                 >
-                                  <i className={`fa-solid ${addingProductId === p.id ? 'fa-spinner fa-spin' : 'fa-cart-plus'}`} style={{ fontSize: 15 }} />
+                                  <i className={`fa-solid ${addingProductId === p.id ? 'fa-spinner fa-spin' : 'fa-cart-plus'}`} style={{ fontSize: 14 }} />
                                 </button>
                               </div>
                             </div>
-                            <div style={{ padding: '12px 0 0' }}>
-                              {p.Brand?.brandName && (
-                                <p style={{ fontSize: '11px', color: '#999', margin: '0 0 3px', letterSpacing: '0.2px', textTransform: 'uppercase', fontFamily: F.sub }}>
-                                  {p.Brand.brandName}
-                                </p>
-                              )}
-                              <h5
-                                style={{
-                                  fontSize: 13,
-                                  fontWeight: 500,
-                                  color: BRAND,
-                                  marginBottom: 6,
-                                  lineHeight: 1.3,
-                                  fontFamily: F.main,
-                                  letterSpacing: '1.5px',
-                                  textTransform: 'uppercase',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {p.productName}
+
+                            <div className="fa-hd-product-body">
+                              <div className="fa-hd-cat-row">
+                                <span className="fa-hd-cat-text">
+                                  {catName || 'FASHION AURA'}
+                                </span>
+                              </div>
+
+                              <h5 className="fa-hd-product-title" title={displayTitle}>
+                                {displayTitle}
                               </h5>
 
-          {(p.Variants || []).length > 0 && (
-                                <button type="button" onClick={e => { e.stopPropagation(); handleOpenQuickView(p); }} style={{ border: 0, background: 'transparent', color: ACCENT, padding: 0, margin: '0 0 8px', fontFamily: F.sub, fontSize: 12, textAlign: 'left', cursor: 'pointer' }}>
-                                  <i className="fa-solid fa-layer-group" style={{ marginRight: 6 }} />
-                                  {(p.Variants || []).length === 1 ? '1 option available' : `Choose from ${(p.Variants || []).length} options`}
-                                </button>
+                              {(variantCount > 0 || sizesList.length > 0) && (
+                                <div className="fa-hd-meta-sub">
+                                  {variantCount > 0 && `${variantCount} ${variantCount === 1 ? 'Option' : 'Options'}`}
+                                  {variantCount > 0 && sizesList.length > 0 && ' · '}
+                                  {sizesList.length > 0 && `Sizes: ${sizesList.join(', ')}`}
+                                </div>
                               )}
 
-                              {p.shortDescription && (
-                                <p
-                                  style={{
-                                    fontSize: 11,
-                                    color: '#666',
-                                    fontFamily: F.sub,
-                                    margin: '0 0 10px',
-                                    fontWeight: 300,
-                                    lineHeight: 1.4,
-                                    display: '-webkit-box',
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: 'vertical',
-                                    overflow: 'hidden',
-                                    height: '2.8em',
-                                  }}
-                                >
-                                  {p.shortDescription}
-                                </p>
-                              )}
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                                <div>
-                                  <span style={{ color: BRAND, fontWeight: 700, fontSize: 15, fontFamily: F.sub, letterSpacing: '0.5px' }}>{price}</span>
-                                  {oldPrice && (
-                                    <del style={{ color: '#aaa', fontSize: 12, marginLeft: 6, fontFamily: F.sub, fontWeight: 300 }}>{oldPrice}</del>
-                                  )}
-                                </div>
+                              <div className="fa-hd-price-row">
+                                <span className="fa-hd-current-price">{price}</span>
+                                {oldPrice && (
+                                  <del className="fa-hd-old-price">{oldPrice}</del>
+                                )}
+                                {discount > 0 && (
+                                  <span className="fa-hd-discount-badge">({discount}% off)</span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1702,6 +1930,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                         /* ── List row ── */
                         <div
                           key={p.id}
+                          className="shop-list-card"
                           onClick={() => goToProduct(p)}
                           style={{ display: 'flex', gap: 20, alignItems: 'center', padding: 16, background: '#fff', borderRadius: 12, border: '1px solid #E0E8D8', marginBottom: 12, cursor: 'pointer' }}
                         >
@@ -1712,7 +1941,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                             }
                           </div>
 
-                          <div style={{ flex: 1 }}>
+                          <div className="shop-list-card-info" style={{ flex: 1, minWidth: 0 }}>
                             <h5
                               style={{
                                 fontSize: 14, fontWeight: 500, color: BRAND, margin: '6px 0 6px',
@@ -1729,7 +1958,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                             )}
                           </div>
 
-                          <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
+                          <div className="shop-list-card-actions" style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
                             <div style={{ color: BRAND, fontWeight: 700, fontSize: 17, fontFamily: F.sub, letterSpacing: '0.5px' }}>{price}</div>
                             {oldPrice && <del style={{ color: '#aaa', fontSize: 12, fontFamily: F.sub, fontWeight: 300, marginBottom: 12 }}>{oldPrice}</del>}
                             <div style={{ display: 'flex', gap: '8px', marginTop: 12 }}>
@@ -1774,19 +2003,19 @@ export default function ShopGridPage({ saleOnly = false }) {
 
               {/* Pagination */}
               {(saleViewMode === 'combos' ? totalComboPages : totalPages) > 1 && (
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 40 }}>
-                  <button onClick={() => changePage(Math.max(1, page - 1))} disabled={page === 1}
-                    style={{ width: 38, height: 38, border: '1px solid #E0E8D8', borderRadius: 8, background: page === 1 ? '#F4F8F0' : '#fff', color: page === 1 ? '#ccc' : BRAND, cursor: page === 1 ? 'default' : 'pointer', fontSize: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginTop: 40 }}>
+                  <button onClick={() => changePage(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page"
+                    style={{ width: 40, height: 40, border: '1px solid #E0E8D8', borderRadius: 8, background: page === 1 ? '#F4F8F0' : '#fff', color: page === 1 ? '#ccc' : BRAND, cursor: page === 1 ? 'default' : 'pointer', fontSize: 14 }}>
                     <i className="fa-solid fa-chevron-left" />
                   </button>
                   {[...Array(saleViewMode === 'combos' ? totalComboPages : totalPages)].map((_, i) => (
                     <button key={i} onClick={() => changePage(i + 1)}
-                      style={{ width: 38, height: 38, border: `1px solid ${page === i + 1 ? BRAND : '#E0E8D8'}`, borderRadius: 8, background: page === i + 1 ? BRAND : '#fff', color: page === i + 1 ? '#fff' : '#4a5a44', cursor: 'pointer', fontWeight: page === i + 1 ? 700 : 400, fontFamily: F.sub }}>
+                      style={{ width: 40, height: 40, border: `1px solid ${page === i + 1 ? BRAND : '#E0E8D8'}`, borderRadius: 8, background: page === i + 1 ? BRAND : '#fff', color: page === i + 1 ? '#fff' : '#4a5a44', cursor: 'pointer', fontWeight: page === i + 1 ? 700 : 400, fontFamily: F.sub }}>
                       {i + 1}
                     </button>
                   ))}
-                  <button onClick={() => changePage(Math.min(saleViewMode === 'combos' ? totalComboPages : totalPages, page + 1))} disabled={page === (saleViewMode === 'combos' ? totalComboPages : totalPages)}
-                    style={{ width: 38, height: 38, border: '1px solid #E0E8D8', borderRadius: 8, background: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? '#F4F8F0' : '#fff', color: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? '#ccc' : BRAND, cursor: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? 'default' : 'pointer', fontSize: 14 }}>
+                  <button onClick={() => changePage(Math.min(saleViewMode === 'combos' ? totalComboPages : totalPages, page + 1))} disabled={page === (saleViewMode === 'combos' ? totalComboPages : totalPages)} aria-label="Next page"
+                    style={{ width: 40, height: 40, border: '1px solid #E0E8D8', borderRadius: 8, background: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? '#F4F8F0' : '#fff', color: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? '#ccc' : BRAND, cursor: page === (saleViewMode === 'combos' ? totalComboPages : totalPages) ? 'default' : 'pointer', fontSize: 14 }}>
                     <i className="fa-solid fa-chevron-right" />
                   </button>
                 </div>
@@ -1806,13 +2035,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                 Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
               </h5>
 
-                            {(p.Variants || []).length > 0 && (
-                              <button type="button" onClick={e => { e.stopPropagation(); handleOpenQuickView(p); }} style={{ border: 0, background: 'transparent', color: ACCENT, padding: 0, margin: '0 0 8px', fontFamily: F.sub, fontSize: 12, cursor: 'pointer' }}>
-                                <i className="fa-solid fa-layer-group" style={{ marginRight: 6 }} />
-                                {(p.Variants || []).length === 1 ? '1 option available' : `Choose from ${(p.Variants || []).length} options`}
-                              </button>
-                            )}
-              <button onClick={() => setMobileFiltersOpen(false)} style={{ background: 'none', border: 'none', fontSize: 18, color: BRAND, cursor: 'pointer', padding: 4 }}>
+              <button onClick={() => setMobileFiltersOpen(false)} aria-label="Close filters" style={{ background: 'none', border: 'none', fontSize: 18, color: BRAND, cursor: 'pointer', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <i className="fa-solid fa-xmark" />
               </button>
             </div>
@@ -1940,7 +2163,7 @@ export default function ShopGridPage({ saleOnly = false }) {
               <div className="row g-4">
                 {/* Image Section */}
                 <div className="col-md-6 d-flex flex-column gap-3">
-                  <div style={{ width: '100%', height: 380, borderRadius: 12, overflow: 'hidden', background: '#f5f5f5', border: '1px solid #E0E8D8' }}>
+                  <div className="qv-main-img-box" style={{ width: '100%', height: 380, borderRadius: 12, overflow: 'hidden', background: '#f5f5f5', border: '1px solid #E0E8D8' }}>
                     {currentQvImg ? (
                       <img src={currentQvImg} alt={p.productName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
@@ -2020,8 +2243,8 @@ export default function ShopGridPage({ saleOnly = false }) {
                     </div>
                     
                     {/* Stock Status */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, fontSize: 13, fontFamily: F.sub, color: !selectedVariantStockVerified ? '#9a6b24' : selectedVariantStock > 0 ? '#4a5a44' : '#c00' }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: !selectedVariantStockVerified ? '#c9933a' : selectedVariantStock > 0 ? ACCENT : '#c00' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, fontSize: 13, fontFamily: F.sub, color: !selectedVariantStockVerified ? '#6B7280' : selectedVariantStock > 0 ? '#4a5a44' : '#c00' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: !selectedVariantStockVerified ? '#6B7280' : selectedVariantStock > 0 ? ACCENT : '#c00' }} />
                       {!selectedVariantStockVerified ? 'Stock unavailable' : selectedVariantStock > 0 ? `In Stock (${selectedVariantStock} units)` : 'Out of Stock'}
                     </div>
 
@@ -2077,16 +2300,16 @@ export default function ShopGridPage({ saleOnly = false }) {
                   
                   {/* Actions */}
                   <div style={{ borderTop: '1px solid #E0E8D8', paddingTop: 20, marginTop: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, color: !selectedVariantStockVerified ? '#9a6b24' : selectedVariantStock > 0 ? '#4a5a44' : '#c00', fontFamily: F.sub, fontSize: 13 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, color: !selectedVariantStockVerified ? '#6B7280' : selectedVariantStock > 0 ? '#4a5a44' : '#c00', fontFamily: F.sub, fontSize: 13 }}>
                       <i className={`fa-solid ${!selectedVariantStockVerified ? 'fa-circle-exclamation' : selectedVariantStock > 0 ? 'fa-circle-check' : 'fa-circle-xmark'}`} />
                       {!selectedVariantStockVerified ? 'Availability is being checked' : selectedVariantStock > 0 ? `Available now${selectedVariantStock <= 5 ? ` · only ${selectedVariantStock} left` : ''}` : 'This option is out of stock'}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                       <span style={{ fontFamily: F.sub, fontSize: 13, color: BRAND }}>Quantity</span>
                       <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #D6D6D6' }}>
-                        <button type="button" aria-label="Decrease quantity" onClick={() => setQvQty(value => Math.max(1, value - 1))} style={{ width: 34, height: 34, background: '#fff', border: 0, fontSize: 18 }}>−</button>
-                        <span style={{ minWidth: 28, textAlign: 'center', fontFamily: F.main }}>{qvQty}</span>
-                        <button type="button" aria-label="Increase quantity" onClick={() => setQvQty(value => Math.min(selectedVariantStock || 1, value + 1))} style={{ width: 34, height: 34, background: '#fff', border: 0, fontSize: 18 }}>+</button>
+                        <button type="button" aria-label="Decrease quantity" onClick={() => setQvQty(value => Math.max(1, value - 1))} style={{ width: 40, height: 40, background: '#fff', border: 0, fontSize: 18 }}>−</button>
+                        <span style={{ minWidth: 32, textAlign: 'center', fontFamily: F.main }}>{qvQty}</span>
+                        <button type="button" aria-label="Increase quantity" onClick={() => setQvQty(value => Math.min(selectedVariantStock || 1, value + 1))} style={{ width: 40, height: 40, background: '#fff', border: 0, fontSize: 18 }}>+</button>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -2194,7 +2417,7 @@ export default function ShopGridPage({ saleOnly = false }) {
               <div className="row g-4">
                 {/* Left Side: Combo Cover Image */}
                 <div className="col-md-6">
-                  <div style={{ width: '100%', height: 380, borderRadius: 12, overflow: 'hidden', background: '#f5f5f5', border: '1px solid #E0E8D8' }}>
+                  <div className="qv-main-img-box" style={{ width: '100%', height: 380, borderRadius: 12, overflow: 'hidden', background: '#f5f5f5', border: '1px solid #E0E8D8' }}>
                     {childImgSrc ? (
                       <img src={childImgSrc} alt={child.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
@@ -2230,7 +2453,7 @@ export default function ShopGridPage({ saleOnly = false }) {
                           <del style={{ fontSize: 15, color: '#aaa', fontFamily: F.sub }}>
                             ₹{Number(child.originalPrice).toLocaleString('en-IN')}
                           </del>
-                          <span style={{ fontSize: 12, background: '#0f5447', color: '#fff', border: '1px solid #C9A84C', padding: '2px 8px', borderRadius: 6, fontWeight: 700, fontFamily: F.main }}>
+                          <span style={{ fontSize: 12, background: '#0f5447', color: '#fff', border: '1px solid #0f5447', padding: '2px 8px', borderRadius: 6, fontWeight: 700, fontFamily: F.main }}>
                             Save {discount}%
                           </span>
                         </>
@@ -2311,8 +2534,8 @@ export default function ShopGridPage({ saleOnly = false }) {
                       style={{
                         width: '100%',
                         padding: '12px 24px',
-                        background: addedCombosFeedback[child.id] ? '#C9A84C' : '#0f5447',
-                        color: addedCombosFeedback[child.id] ? BRAND : '#fff',
+                        background: addedCombosFeedback[child.id] ? '#1b4332' : '#0f5447',
+                        color: '#fff',
                         border: 'none',
                         borderRadius: 8,
                         cursor: addedCombosFeedback[child.id] ? 'default' : 'pointer',

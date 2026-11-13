@@ -2,23 +2,35 @@ import React, { useState, useEffect, useRef } from "react";
 import { offerBannerApi, getLocalImageUrl } from "../utils/api";
 import { Link } from 'react-router-dom';
 import { OfferBannerSkeleton } from "./Skeleton";
+import defaultLogo from "../assets/img/logo2.png";
 
 function OfferCard({ offer }) {
+  const [imgBroken, setImgBroken] = useState(false);
   return (
     <Link to={offer.href} className="fa-offer-card">
       <div className="fa-offer-frame">
-        <img
-          src={offer.image}
-          alt={offer.title}
-          className="fa-offer-photo"
-          loading="lazy"
-          decoding="async"
-          onError={(e) => {
-            if (e.target.dataset.fallbackApplied) return;
-            e.target.dataset.fallbackApplied = "true";
-            e.target.src = "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?auto=format&fit=crop&w=800&q=80";
-          }}
-        />
+        {offer.image && !imgBroken ? (
+          <img
+            src={offer.image}
+            alt={offer.title}
+            className="fa-offer-photo"
+            loading="lazy"
+            decoding="async"
+            onError={() => setImgBroken(true)}
+          />
+        ) : (
+          <div
+            className="fa-offer-photo"
+            style={{
+              background: 'linear-gradient(135deg, #0f5447 0%, #15453b 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <img src={defaultLogo} alt={offer.title || 'Fashion Aura Offer'} style={{ width: '48%', height: 'auto', opacity: 0.35, objectFit: 'contain' }} />
+          </div>
+        )}
 
         {offer.numeral ? (
           <div className="fa-offer-numeral">
@@ -175,7 +187,8 @@ export default function OffersBanner() {
           background: #ffffff;
           border: 1px solid rgba(15, 84, 71, 0.3);
           border-radius: 8px !important;
-          padding: 6px 14px;
+          min-height: 36px;
+          padding: 8px 14px;
           transition: all 0.22s ease;
           cursor: pointer;
           line-height: 1;
@@ -264,14 +277,14 @@ export default function OffersBanner() {
         @media (max-width: 600px) {
           .fa-offers-header { padding: 0 16px 18px; align-items: center; }
           .fa-offers-heading { font-size: clamp(20px, 5.2vw, 24px); }
-          .fa-offers-viewall { font-size: 11px; padding: 5px 11px; gap: 4px; }
+          .fa-offers-viewall { font-size: 11px; min-height: 36px; padding: 8px 12px; gap: 4px; }
           .fa-offers-viewall svg { width: 10px; height: 10px; }
           .fa-offers-grid { grid-auto-columns: 100%; }
           .fa-offers-arrow { display: none !important; }
         }
         .fa-offer-frame {
           position: relative;
-          height: clamp(340px, 50vh, 480px);
+          height: clamp(320px, 48svh, 480px);
           border-radius: 4px;
           overflow: hidden;
           background: #123526;

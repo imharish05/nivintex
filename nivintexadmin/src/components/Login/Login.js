@@ -6,6 +6,7 @@ import img from "../../assets/logo.png";
 import Swal from 'sweetalert2';
 
 const API = process.env.REACT_APP_API_URL;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const Login = ({ onLoginSuccess }) => {
     const [email, setEmail] = useState('');
@@ -18,14 +19,26 @@ const Login = ({ onLoginSuccess }) => {
 
     const handleLogin = async (e) => {
         e.preventDefault();
-        setLoading(true);
         setError('');
+
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail || !EMAIL_REGEX.test(trimmedEmail)) {
+            setError('Please enter a valid email address.');
+            return;
+        }
+
+        if (!password || !password.trim()) {
+            setError('Password is required.');
+            return;
+        }
+
+        setLoading(true);
 
         try {
             const res = await fetch(`${API}/auth/admin/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ email: trimmedEmail, password }),
             });
 
             const data = await res.json();
@@ -72,9 +85,9 @@ const Login = ({ onLoginSuccess }) => {
                     <p className="km-sub">Admin Portal — Sign in to continue</p>
                 </div>
 
-                <form onSubmit={handleLogin} className="login-form">
+                <form onSubmit={handleLogin} className="login-form" noValidate>
                     {error && (
-                        <div className="error-alert">
+                        <div className="error-alert" role="alert">
                             <RiErrorWarningLine /> {error}
                         </div>
                     )}
@@ -85,7 +98,10 @@ const Login = ({ onLoginSuccess }) => {
                             type="email"
                             placeholder="Email Address"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            onChange={(e) => {
+                                setEmail(e.target.value);
+                                if (error) setError('');
+                            }}
                             required
                         />
                     </div>
@@ -96,7 +112,10 @@ const Login = ({ onLoginSuccess }) => {
                             type={showPassword ? 'text' : 'password'}
                             placeholder="Password"
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            onChange={(e) => {
+                                setPassword(e.target.value);
+                                if (error) setError('');
+                            }}
                             required
                             style={{ paddingRight: '48px' }}
                         />
@@ -104,6 +123,7 @@ const Login = ({ onLoginSuccess }) => {
                             type="button"
                             onClick={() => setShowPassword(p => !p)}
                             className="pw-eye-btn"
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
                         >
                             {showPassword ? <RiEyeOffLine /> : <RiEyeLine />}
                         </button>

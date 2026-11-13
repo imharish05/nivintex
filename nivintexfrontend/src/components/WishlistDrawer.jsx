@@ -91,7 +91,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
     return cartItems.some(c => normId(c.productId || c.id) === wid && normId(c.variantId) === normId(item.variantId));
   };
 
-  const fmt = (n) => '₹' + n.toLocaleString('en-IN');
+  const fmt = (n) => '₹' + Math.ceil((Number(n) || 0) - 1e-9).toLocaleString('en-IN');
 
   return (
     <>
@@ -151,11 +151,11 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
               }}>{wishlistCount}</span>
             )}
           </div>
-          <button onClick={onClose} style={{
+          <button onClick={onClose} aria-label="Close wishlist" style={{
             background: C.bg, border: `1px solid ${C.border}`,
-            width: '32px', height: '32px', cursor: 'pointer', color: C.brand,
+            width: '40px', height: '40px', cursor: 'pointer', color: C.brand,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '14px', transition: 'background 0.2s',
+            fontSize: '14px', transition: 'background 0.2s', flexShrink: 0,
           }}
             onMouseEnter={e => e.currentTarget.style.background = C.border}
             onMouseLeave={e => e.currentTarget.style.background = C.bg}
@@ -227,7 +227,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
                       color: C.brand, lineHeight: 1.4,
                       fontFamily: F.main, letterSpacing: '1px',
                     }}>{item.name}</p>
-                    <button onClick={() => removeFromWishlist(item.id)} style={{
+                    <button onClick={() => removeFromWishlist(item.id)} aria-label={`Remove ${item.name} from wishlist`} title="Remove item" style={{
                       background: 'none', border: 'none', cursor: 'pointer',
                       color: C.muted, fontSize: '13px', padding: '2px', flexShrink: 0,
                       transition: 'color 0.15s',
@@ -249,7 +249,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
                       {[item.color && `Colour: ${item.color}`, item.size && `Size: ${item.size}`, item.fabric && `Fabric: ${item.fabric}`].filter(Boolean).join(' · ')}
                     </p>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px', flexWrap: 'wrap', gap: '8px' }}>
                     <div>
                       <span style={{
                         fontWeight: 400, fontSize: '14px', color: C.brand,
@@ -315,7 +315,7 @@ const WishlistDrawer = ({ open, onClose, onOpenCart }) => {
         {/* ── Footer ── */}
         {wishlistItems.length > 0 && (
           <div style={{
-            padding: '20px 24px',
+            padding: '18px 20px max(18px, env(safe-area-inset-bottom))',
             borderTop: `1px solid ${C.border}`,
             background: C.surface,
             flexShrink: 0,

@@ -1,24 +1,41 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RiErrorWarningLine, RiEyeLine, RiEyeOffLine } from 'react-icons/ri';
 import Swal from 'sweetalert2';
 
 const API = process.env.REACT_APP_API_URL;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export default function FranchiseLogin({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError('');
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !EMAIL_REGEX.test(trimmedEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    if (!password || !password.trim()) {
+      setError('Password is required.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await fetch(`${API}/franchise/login`, {
+      const res = await fetch(`${API}/franchises/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: trimmedEmail, password })
       });
 
       const data = await res.json();
@@ -29,18 +46,22 @@ export default function FranchiseLogin({ onLoginSuccess }) {
         onLoginSuccess();
         navigate('/franchise/dashboard');
       } else {
+        const message = data.message || 'Invalid email or password';
+        setError(message);
         Swal.fire({
           icon: 'error',
           title: 'Login Failed',
-          text: data.message || 'Invalid email or password'
+          text: message
         });
       }
     } catch (err) {
       console.error(err);
+      const message = 'Something went wrong. Please try again.';
+      setError(message);
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'Something went wrong. Please try again.'
+        text: message
       });
     } finally {
       setLoading(false);
@@ -68,14 +89,37 @@ export default function FranchiseLogin({ onLoginSuccess }) {
           <p style={{ color: '#6b7280', marginTop: '8px', fontSize: '14px' }}>Sign in to manage your assigned orders</p>
         </div>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form onSubmit={handleLogin} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {error && (
+            <div
+              role="alert"
+              style={{
+                backgroundColor: '#fef2f2',
+                color: '#b91c1c',
+                border: '1px solid #fecaca',
+                borderRadius: '6px',
+                padding: '10px 12px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <RiErrorWarningLine style={{ flexShrink: 0, fontSize: '16px' }} />
+              <span>{error}</span>
+            </div>
+          )}
+
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Email Address</label>
             <input 
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError('');
+              }}
               style={{
                 width: '100%',
                 padding: '10px 12px',
@@ -89,20 +133,47 @@ export default function FranchiseLogin({ onLoginSuccess }) {
 
           <div>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>Password</label>
-            <input 
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px',
-                boxSizing: 'border-box'
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input 
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError('');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 42px 10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px',
+                  fontSize: '18px'
+                }}
+              >
+                {showPassword ? <RiEyeOffLine /> : <RiEyeLine />}
+              </button>
+            </div>
           </div>
 
           <button 

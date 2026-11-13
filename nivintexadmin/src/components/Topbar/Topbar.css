@@ -367,3 +367,34 @@
 }
 .badgeRowRed    { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .badgeRowOrange { background: #fff4ec; color: #A2C579; border: 1px solid #fed7aa; }
+.topbarMenuBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-right: 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #1e293b;
+  cursor: pointer;
+}
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0 14px;
+    height: 60px;
+  }
+  .topbarTitle {
+    font-size: 16px;
+  }
+  .topbarMenuBtn {
+    display: inline-flex;
+  }
+  .adminInfo {
+    display: none;
+  }
+  .adminProfile {
+    padding: 4px;
+  }
+}

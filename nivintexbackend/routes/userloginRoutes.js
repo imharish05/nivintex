@@ -5,19 +5,28 @@ const UserLogin = require('../models/UserLogin');
 const bcrypt    = require('bcryptjs');
 const jwt       = require('jsonwebtoken');
 const { Op }    = require('sequelize');
+const {
+  validateRegisterInput,
+  validateProfileUpdateInput,
+} = require('../controllers/userLoginController');
 
 // ─────────────────────────────────────────────
 // POST /api/user/register
 // ─────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, phone } = req.body;
+    const validation = validateRegisterInput(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const { username, email, password, phone } = validation.data;
 
     const existing = await UserLogin.findOne({ where: { email } });
     if (existing) return res.status(400).json({ error: 'Email already registered.' });
 
     const hashed = await bcrypt.hash(password, 10);
-    const user   = await UserLogin.create({ username, email, password: hashed, phone: phone || null });
+    const user   = await UserLogin.create({ username, email, password: hashed, phone });
 
     res.status(201).json({
       message: 'Registered successfully',
@@ -37,14 +46,15 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password)
+    if (typeof email !== 'string' || !email.trim() || typeof password !== 'string' || !password)
       return res.status(400).json({ message: 'Email and password are required.' });
 
-    const user = await UserLogin.findOne({ where: { email } });
-    if (!user) return res.status(404).json({ message: 'No account found with this email. Please register first.' });
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await UserLogin.findOne({ where: { email: normalizedEmail } });
+    if (!user) return res.status(401).json({ message: 'Invalid email or password.' });
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ message: 'Invalid password.' });
+    if (!match) return res.status(401).json({ message: 'Invalid email or password.' });
 
     const token = jwt.sign(
       { id: user.id, email: user.email },
@@ -68,18 +78,19 @@ router.post('/login', async (req, res) => {
 // ─────────────────────────────────────────────
 router.put('/update-profile', async (req, res) => {
   try {
-    const { id, username, email, phone } = req.body;
-    if (!id) return res.status(400).json({ error: 'User ID is required.' });
+    const validation = validateProfileUpdateInput(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
 
-    const numericId = parseInt(id, 10);
+    const { numericId, updateData } = validation;
 
     // Only email must be unique across accounts
-    if (email) {
-      const trimmedEmail = email.trim().toLowerCase();
+    if (updateData.email) {
       const conflict = await UserLogin.findOne({
         where: {
           id: { [Op.ne]: numericId },
-          email: trimmedEmail
+          email: updateData.email
         }
       });
 
@@ -87,11 +98,6 @@ router.put('/update-profile', async (req, res) => {
         return res.status(400).json({ error: 'This email is already in use by another account.' });
       }
     }
-
-    const updateData = {};
-    if (username)            updateData.username = username.trim();
-    if (email)               updateData.email    = email.trim().toLowerCase();
-    if (phone !== undefined) updateData.phone    = phone ? phone.trim() : null;
 
     await UserLogin.update(updateData, { where: { id: numericId } });
 

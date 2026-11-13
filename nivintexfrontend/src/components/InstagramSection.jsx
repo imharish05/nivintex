@@ -227,11 +227,11 @@ const styles = `
     .ig-header { margin: 0 16px 16px; }
     .ig-item { flex: 0 0 calc(100vw / 3); }
     .ig-item img, .ig-item video { height: 220px; }
-    .ig-nav-arrow-btn { width: 28px; height: 28px; }
-    .ig-nav-arrow-btn svg { width: 12px; height: 12px; }
+    .ig-nav-arrow-btn { width: 36px; height: 36px; }
+    .ig-nav-arrow-btn svg { width: 14px; height: 14px; }
     .ig-arr {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.18);
     }
     .ig-arr.prev { left: 6px; }
@@ -243,8 +243,8 @@ const styles = `
     .ig-item { flex: 0 0 calc(100vw / 2.15); }
     .ig-item img, .ig-item video { height: 190px; }
     .ig-arr {
-      width: 30px;
-      height: 30px;
+      width: 34px;
+      height: 34px;
     }
     .ig-arr.prev { left: 4px; }
     .ig-arr.next { right: 4px; }

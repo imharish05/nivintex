@@ -3,25 +3,33 @@ import React, { useState, useEffect, useRef } from 'react';
 import Footer from '../../components/Footer';
 import defaultLogo from '../../assets/img/logo2.png';
 import { useShop, calculateCartTotals } from '../../context/ShopContext';
-import { productApi, razorpayApi } from '../../utils/api';
+import { productApi, razorpayApi, couponApi } from '../../utils/api';
 import CourierSelectModal from '../../components/CourierSelectModal';
 import { API_BASE_URL } from '../../config/api';
-import { State } from 'country-state-city';
+import {
+  sanitizeIndianPhone,
+  validateEmail,
+  validateIndianPhone,
+  validateName,
+  validatePincode,
+  validatePassword,
+} from '../../utils/formValidation';
 
-const INDIAN_STATES = (() => {
-  try {
-    const states = State.getStatesOfCountry('IN');
-    if (Array.isArray(states) && states.length > 0) return states.map(s => s.name);
-  } catch (_) {}
-  return [
-    'Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar',
-    'Chandigarh', 'Chhattisgarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Goa',
-    'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand', 'Karnataka',
-    'Kerala', 'Ladakh', 'Lakshadweep', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
-    'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Puducherry', 'Punjab', 'Rajasthan',
-    'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
-  ];
-})();
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
+  'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+  'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+  'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
+  'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+];
+
+// Change these paths to match your policy pages
+const POLICY_LINKS = {
+  terms: '/terms-of-service',
+  shipping: '/shipping-policy',
+  returns: '/refund-cancellation',
+};
 
 const ORDER_SAVE_URL = `${API_BASE_URL}/orders/save`;
 const SHIPPING_QUOTE_URL = `${API_BASE_URL}/shipping/quote`;
@@ -41,10 +49,10 @@ const F = {
 const inputStyle = {
   width: '100%', padding: '11px 14px',
   border: '1px solid #EAE4D6', borderRadius: '0px',
-  fontSize: '12px', outline: 'none', marginBottom: '16px',
+  fontSize: '13px', outline: 'none', marginBottom: '16px',
   background: '#EAF0E2', fontFamily: F.sub,
-  color: BRAND, transition: 'border-color 0.25s, box-shadow 0.25s',
-  boxSizing: 'border-box', fontWeight: 300, letterSpacing: '0.5px',
+  color: '#111111', transition: 'border-color 0.25s, box-shadow 0.25s',
+  boxSizing: 'border-box', fontWeight: 500, letterSpacing: '0.3px',
 };
 const onFocus = e => { e.target.style.borderColor = '#C9933A'; e.target.style.boxShadow = `0 0 0 3px rgba(201,147,58,0.08)`; };
 const onBlur  = e => { e.target.style.borderColor = '#EAE4D6'; e.target.style.boxShadow = 'none'; };
@@ -299,6 +307,45 @@ const PaymentProcessingOverlay = () => (
   </div>
 );
 
+const normalizeAddressForCompare = (addr) => ({
+  firstName: String(addr?.firstName || addr?.name || '').trim().toLowerCase(),
+  phone: sanitizeIndianPhone(addr?.phone || ''),
+  address: String(addr?.address || '').trim().toLowerCase(),
+  address2: String(addr?.address2 || '').trim().toLowerCase(),
+  city: String(addr?.city || '').trim().toLowerCase(),
+  state: String(addr?.state || '').trim().toLowerCase(),
+  zip: String(addr?.zip || '').trim(),
+  country: String(addr?.country || 'India').trim().toLowerCase(),
+});
+
+const isSameAddress = (a, b) => {
+  if (!a || !b) return false;
+  const na = normalizeAddressForCompare(a);
+  const nb = normalizeAddressForCompare(b);
+  return Object.keys(na).every(k => na[k] === nb[k]);
+};
+
+const validateAddressFields = (addr, { requireEmail = false } = {}) => {
+  const errs = {};
+  const nameErr = validateName(addr?.firstName || addr?.name, 'Full name');
+  if (nameErr) errs.firstName = nameErr;
+  if (requireEmail) {
+    const emailErr = validateEmail(addr?.email);
+    if (emailErr) errs.email = emailErr;
+  }
+  const phoneErr = validateIndianPhone(addr?.phone);
+  if (phoneErr) errs.phone = phoneErr;
+  if (!addr?.address?.trim()) errs.address = 'Street address is required';
+  if (!addr?.city?.trim()) errs.city = 'City is required';
+  if (!addr?.state?.trim()) errs.state = 'State is required';
+  else if (!INDIAN_STATES.some(s => s.toLowerCase() === addr.state.trim().toLowerCase())) {
+    errs.state = 'Please select a valid state from the list';
+  }
+  const zipErr = validatePincode(addr?.zip);
+  if (zipErr) errs.zip = zipErr;
+  return errs;
+};
+
 const CheckoutPage = () => {
   const navigate = useNavigate();
 
@@ -311,8 +358,14 @@ const CheckoutPage = () => {
     firstName: '', email: '', phone: '', address: '', address2: '', city: '', state: '', zip: '', country: 'India', addressType: 'Home'
   });
   const [billing, setBilling]         = useState({
-    firstName: '', phone: '', address: '', address2: '', city: '', state: '', zip: '', country: 'India',
+    firstName: '', phone: '', address: '', address2: '', city: '', state: '', zip: '', country: 'India', addressType: 'Home',
   });
+  const [showBillingForm, setShowBillingForm] = useState(false);
+  const [billingForm, setBillingForm] = useState({
+    firstName: '', phone: '', address: '', address2: '', city: '', state: '', zip: '', country: 'India', addressType: 'Home',
+  });
+  const [billingFormErrors, setBillingFormErrors] = useState({});
+  const [billingEditIndex, setBillingEditIndex] = useState(null);
   const [formErrors, setFormErrors]   = useState({});
   const [placing, setPlacing]         = useState(false);
   const [placeError, setPlaceError]   = useState('');
@@ -352,9 +405,28 @@ const CheckoutPage = () => {
   const [selectedAddressIndex, setSelectedAddressIndex] = useState(0);
   const [editIndex, setEditIndex] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState('');
+  const [couponApplying, setCouponApplying] = useState(false);
+  const [policyAccepted, setPolicyAccepted] = useState(false);
 
   const errorBannerRef = useRef(null);
   const { cartItems = [], user, setCartItems, fetchOrders, getCartTotals, login, register } = useShop();
+
+  useEffect(() => {
+    if (!user) {
+      sessionStorage.setItem('redirectAfterLogin', '/checkout');
+      navigate('/login', { replace: true });
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    couponApi.getAvailable()
+      .then(data => setAvailableCoupons(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
 
   const getStorageKey = (u) => `ck_saved_addrs_${u?.email || 'guest'}`;
   const loadedKeyRef = useRef(getStorageKey(user));
@@ -374,26 +446,36 @@ const CheckoutPage = () => {
       const parsed = stored ? JSON.parse(stored) : [];
 
       if (user && parsed.length === 0) {
-        const newForm = {
-          firstName: user.name || user.username || 'User',
-          phone: user.phone || '1234567890',
+        setSavedAddresses([]);
+        setForm({
+          firstName: user.name || user.username || '',
+          phone: sanitizeIndianPhone(user.phone || ''),
           email: user.email || '',
-          address: user.address || 'Muniyappanur',
-          city: user.city || 'Vangal',
-          state: user.state || 'TAMIL NADU',
-          zip: user.zip || '639116',
+          address: '',
+          address2: '',
+          city: '',
+          state: '',
+          zip: '',
           country: 'India',
           addressType: 'Home'
-        };
-        setSavedAddresses([newForm]);
-        setForm(newForm);
-        setBilling(newForm);
-        setShowAddressForm(false);
+        });
+        setBilling({
+          firstName: user.name || user.username || '',
+          phone: sanitizeIndianPhone(user.phone || ''),
+          address: '',
+          address2: '',
+          city: '',
+          state: '',
+          zip: '',
+          country: 'India',
+        });
+        setShowAddressForm(true);
       } else {
         setSavedAddresses(parsed);
         if (parsed.length > 0) {
-          setForm(parsed[0]);
-          setBilling(parsed[0]);
+          const initialAddr = { ...parsed[0], phone: sanitizeIndianPhone(parsed[0].phone || '') };
+          setForm(initialAddr);
+          setBilling(initialAddr);
           setShowAddressForm(false);
         } else {
           setShowAddressForm(true);
@@ -432,19 +514,14 @@ const CheckoutPage = () => {
     shippingWidthCm: item.shippingWidthCm || null,
     shippingHeightCm: item.shippingHeightCm || null,
     isBuyOneGetOne: !!item.isBuyOneGetOne,
+    mrpGstType: item.mrpGstType || item.mrp_gst_type || 'With GST',
   }));
 
   const selectedBillingAddress = billingSame || !user ? form : billing;
   const billingAddressReady = Boolean(
-    (billingSame || !user || savedAddresses.includes(billing) || Boolean(billing?.address && billing?.zip))
-    && (selectedBillingAddress?.firstName?.trim() || selectedBillingAddress?.name?.trim())
-    && selectedBillingAddress?.address?.trim()
-    && selectedBillingAddress?.city?.trim()
-    && selectedBillingAddress?.state?.trim()
-    && INDIAN_STATES.some(s => s.toLowerCase() === selectedBillingAddress.state.trim().toLowerCase())
-    && /^\d{6}$/.test(String(selectedBillingAddress?.zip || '').trim())
+    (billingSame || !user || savedAddresses.some(addr => isSameAddress(billing, addr)) || Boolean(billing?.address && billing?.zip))
+    && Object.keys(validateAddressFields(selectedBillingAddress, { requireEmail: false })).length === 0
     && selectedBillingAddress?.country?.trim()
-    && String(selectedBillingAddress?.phone || '').replace(/\D/g, '').length >= 7
   );
 
   const { subtotal, savings } = buyNowItem ? calculateCartTotals([buyNowItem]) : getCartTotals();
@@ -465,13 +542,69 @@ const CheckoutPage = () => {
     : (quoteIsCurrent ? shippingQuote?.couriers?.find(courier => String(courier.courierId) === String(selectedCourierId)) : null);
 
   const shipping          = isCustomDelivery ? customDeliveryCharge : (selectedCourier ? Number(selectedCourier.rate) : 0);
-  // Billing's franchise_price_final is already the tax-inclusive storefront price.
-  const tax               = 0;
-  const total             = subtotal + shipping;
-  const formattedTax      = tax.toFixed(2);
-  const formattedSubtotal = subtotal.toFixed(2);
-  const formattedTotal    = total.toFixed(2);
-  const payDisabled = placing || orderItems.length === 0 || !quoteIsCurrent || !selectedCourier || !billingAddressReady;
+  // Product prices are GST-inclusive. Show the GST component without adding it
+  // again to the amount the customer pays.
+  const tax               = orderItems.reduce((sum, item) => {
+    if (String(item.mrpGstType).toLowerCase() === 'without gst') return sum;
+    const paidQuantity = item.isBuyOneGetOne ? Math.ceil(item.qty / 2) : item.qty;
+    return sum + (item.price * paidQuantity * 5 / 105);
+  }, 0);
+  const couponDiscount        = appliedCoupon ? Math.min(subtotal, Number(appliedCoupon.discount) || 0) : 0;
+  const flooredSubtotal       = Math.floor(Math.max(0, subtotal));
+  const flooredTax            = Math.floor(Math.max(0, tax));
+  const hasGstItems           = orderItems.some(item => String(item.mrpGstType).toLowerCase() !== 'without gst');
+  const flooredSavings        = Math.floor(Math.max(0, savings));
+  const flooredCouponDiscount = Math.floor(Math.max(0, couponDiscount));
+  const flooredShipping       = Math.floor(Math.max(0, shipping));
+  const flooredTotal          = Math.floor(Math.max(0, flooredSubtotal - flooredCouponDiscount) + flooredShipping);
+
+  const formattedSubtotal       = flooredSubtotal.toLocaleString('en-IN');
+  const formattedSavings        = flooredSavings.toLocaleString('en-IN');
+  const formattedCouponDiscount = flooredCouponDiscount.toLocaleString('en-IN');
+  const formattedShipping       = flooredShipping.toLocaleString('en-IN');
+  const formattedTotal          = flooredTotal.toLocaleString('en-IN');
+  const payDisabled = placing || orderItems.length === 0 || !quoteIsCurrent || !selectedCourier || !billingAddressReady || !policyAccepted;
+
+  const handleApplyCoupon = async (overrideCode) => {
+    const codeToUse = (overrideCode !== undefined ? overrideCode : couponInput).trim().toUpperCase();
+    if (!codeToUse) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+    setCouponApplying(true);
+    setCouponError('');
+    try {
+      const res = await couponApi.apply({
+        code: codeToUse,
+        subtotal,
+        customer_email: form.email || user?.email || '',
+        customer_phone: form.phone || user?.phone || '',
+        customer_id: user?.id || null,
+      });
+      if (!res?.success) {
+        setAppliedCoupon(null);
+        setCouponError(res?.message || 'Could not apply this coupon.');
+        return;
+      }
+      setAppliedCoupon({
+        code: res.code || codeToUse,
+        discount: Number(res.discount) || 0,
+        label: res.label || '',
+      });
+      setCouponInput(res.code || codeToUse);
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(err.message || 'Could not validate coupon.');
+    } finally {
+      setCouponApplying(false);
+    }
+  };
+
+  useEffect(() => {
+    if (appliedCoupon && subtotal <= 0) {
+      setAppliedCoupon(null);
+    }
+  }, [appliedCoupon, subtotal]);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
@@ -566,7 +699,7 @@ const CheckoutPage = () => {
       return undefined;
     }
     const pincode = form.zip.trim();
-    if (!/^\d{6}$/.test(pincode)) {
+    if (validatePincode(pincode)) {
       setShippingQuote(null);
       setSelectedCourierId('');
       setShippingQuoteError('');
@@ -608,10 +741,20 @@ const CheckoutPage = () => {
   
   const handleInlineLogin = async (e) => {
     e.preventDefault();
+    const emailErr = validateEmail(loginEmail);
+    if (emailErr) {
+      setLoginError(emailErr);
+      return;
+    }
+    const pwErr = validatePassword(loginPassword);
+    if (pwErr) {
+      setLoginError(pwErr);
+      return;
+    }
     setLoginError('');
     setIsLoggingIn(true);
     try {
-      await login(loginEmail, loginPassword);
+      await login(loginEmail.trim(), loginPassword);
       setShowInlineLogin(false);
     } catch (err) {
       setLoginError(err.message || 'Login failed');
@@ -620,27 +763,45 @@ const CheckoutPage = () => {
     }
   };
 
-  const validate = () => {
-    const errs = {};
-    if (!form.firstName?.trim()) errs.firstName = 'Full name is required';
-    if (!form.email?.trim())     errs.email     = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errs.email = 'Enter a valid email';
-    if (!form.phone?.trim())     errs.phone     = 'Mobile number is required';
-    if (!form.address?.trim())   errs.address   = 'Street address is required';
-    if (!form.city?.trim())      errs.city      = 'City is required';
-    if (!form.state?.trim())     errs.state     = 'State is required';
-    else if (!INDIAN_STATES.some(s => s.toLowerCase() === form.state.trim().toLowerCase())) errs.state = 'Please select a valid state from the list';
-    if (!form.zip?.trim())       errs.zip       = 'PIN code is required';
-    if (!billingAddressReady) errs.billingAddress = 'Select a complete billing address or choose “Billing same as shipping”.';
+  const validate = (checkBilling = true) => {
+    const errs = validateAddressFields(form, { requireEmail: true });
+    if (checkBilling && !billingAddressReady) {
+      errs.billingAddress = 'Select a complete billing address or choose “Billing same as shipping”.';
+    }
     return errs;
   };
 
   const handlePlaceOrder = async () => {
+    if (!policyAccepted) {
+      setPlaceError('Please read and accept the policies before paying.');
+      return;
+    }
+    if (showBillingForm) {
+      setPlaceError('Please save or cancel the billing address form before paying.');
+      setTimeout(() => errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+      return;
+    }
     const errs = validate();
     if (Object.keys(errs).length) {
       setFormErrors(errs);
       setPlaceError(errs.billingAddress || 'Please fill in all required fields.');
-      if (!showAddressForm) setShowAddressForm(true);
+      const hasShippingErr = Object.keys(errs).some(key => key !== 'billingAddress');
+      if (hasShippingErr && !showAddressForm) setShowAddressForm(true);
+      else if (errs.billingAddress && !billingSame && !showBillingForm) {
+        setBillingForm({
+          firstName: billing?.firstName || form.firstName || '',
+          phone: sanitizeIndianPhone(billing?.phone || form.phone || ''),
+          address: billing?.address || '',
+          address2: billing?.address2 || '',
+          city: billing?.city || '',
+          state: billing?.state || '',
+          zip: billing?.zip || '',
+          country: billing?.country || 'India',
+          addressType: billing?.addressType || 'Home',
+        });
+        setBillingEditIndex(null);
+        setShowBillingForm(true);
+      }
       setTimeout(() => errorBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
       return;
     }
@@ -736,8 +897,8 @@ const CheckoutPage = () => {
         price_type: 'Franchise',
         payment_mode: 'Online',
         has_gst: false,
-        bill_discount_amount: 0,
-        paid_amount: Number(formattedSubtotal),
+        bill_discount_amount: flooredCouponDiscount,
+        paid_amount: Math.max(0, flooredSubtotal - flooredCouponDiscount),
         items: checkoutItems.map(item => ({
           product_id: item.billingProductId,
           product_variant_id: item.billingVariantId,
@@ -746,7 +907,7 @@ const CheckoutPage = () => {
         })),
       };
       const createdPayment = await razorpayApi.createOrder({
-        amount: Number(total.toFixed(2)),
+        amount: flooredTotal,
         courierId: isCustomDelivery ? 'custom' : selectedCourier.courierId,
         billingAddress: {
           name: String(selectedBillingAddress?.firstName || selectedBillingAddress?.name || form.firstName || '').trim(),
@@ -823,18 +984,20 @@ const CheckoutPage = () => {
             customer_phone: form.phone,
             billing_address: JSON.stringify(billingAddr),
             shipping_address: JSON.stringify(shippingAddr),
-            subtotal: formattedSubtotal,
-            delivery_charge: shipping,
-            tax: formattedTax,
-            discount: savings,
-            total: formattedTotal,
+            subtotal: flooredSubtotal,
+            delivery_charge: flooredShipping,
+            tax: flooredTax,
+            discount: Math.floor(Math.max(0, flooredSavings + flooredCouponDiscount)),
+            billing_discount_amount: flooredCouponDiscount,
+            coupon_code: appliedCoupon?.code || null,
+            total: flooredTotal,
             payment_status: 'paid',
             payment_id: paymentResponse.razorpay_payment_id,
             razorpay_order_id: paymentResponse.razorpay_order_id || '',
             razorpay_signature: paymentResponse.razorpay_signature || '',
             courier_id: isCustomDelivery ? 'custom' : (selectedCourier?.courierId || selectedCourierId),
             courier_name: isCustomDelivery ? `Custom Delivery (${customDeliveryRate?.state || form.state})` : (selectedCourier?.courierName || ''),
-            courier_rate: shipping,
+            courier_rate: flooredShipping,
             courier_estimated_delivery_days: isCustomDelivery ? '3-5 Business Days' : (selectedCourier?.estimatedDeliveryDays || selectedCourier?.etd || ''),
             items: checkoutItems.map(i => ({
               product_id: i.productId, billingProductId: i.billingProductId, variantId: i.variantId, billingVariantId: i.billingVariantId, size: i.size, color: i.color, fabric: i.fabric, name: i.variant ? `${i.name} (${i.variant})` : i.name,
@@ -901,6 +1064,8 @@ const CheckoutPage = () => {
     }
   };
 
+  if (!user) return null;
+
   return (
     <>
       {toastMessage && (
@@ -951,10 +1116,262 @@ const CheckoutPage = () => {
           display: flex; justify-content: space-between;
           margin-bottom: 10px;
           font-family: ${F.sub}; font-size: 12px;
+          line-height: 1.35;
           font-weight: 300; letter-spacing: 0.5px;
         }
         .ck-summary-total     { font-family: ${F.main}; font-size: 13px; font-weight: 400; color: ${BRAND}; letter-spacing: 3px; text-transform: uppercase; }
         .ck-summary-total-val { font-family: ${F.main}; font-size: 15px; font-weight: 400; color: #C9933A; letter-spacing: 1px; }
+
+        /* ── GST tag + row ── */
+        /* ── Policy acceptance ── */
+        .ck-policy-wrap { margin-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+        .ck-policy-notice {
+          display: flex; gap: 12px; align-items: flex-start;
+          padding: 12px 14px;
+          background: #FFF8E8;
+          border: 1px solid #F0DDB0;
+          border-left: 3px solid #C9933A;
+          border-radius: 8px;
+        }
+        .ck-policy-notice > i { color: #C9933A; font-size: 15px; margin-top: 2px; flex-shrink: 0; }
+        .ck-policy-notice strong {
+          display: block;
+          font-family: ${F.main}; font-size: 11px; font-weight: 700;
+          letter-spacing: 1.4px; text-transform: uppercase; color: #8A5A00;
+          margin-bottom: 3px;
+        }
+        .ck-policy-notice span {
+          display: block;
+          font-family: ${F.sub}; font-size: 12px; line-height: 1.5; color: #6B5320;
+        }
+        .ck-policy-check {
+          display: flex; align-items: flex-start; gap: 12px;
+          padding: 12px 14px;
+          background: #fff;
+          border: 1px solid #D8E5D3;
+          border-radius: 8px;
+          cursor: pointer; user-select: none;
+          transition: border-color 0.2s, background 0.2s;
+        }
+        .ck-policy-check:hover { border-color: #C9933A; }
+        .ck-policy-check.checked { border-color: ${BRAND}; background: rgba(162,197,121,0.12); }
+        .ck-policy-check input {
+          position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0;
+        }
+        .ck-policy-box {
+          width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px;
+          display: inline-flex; align-items: center; justify-content: center;
+          border: 1.5px solid #B9CDB1; border-radius: 5px; background: #fff;
+          color: transparent; font-size: 11px;
+          transition: background 0.2s, border-color 0.2s, color 0.2s;
+        }
+        .ck-policy-check.checked .ck-policy-box { background: ${BRAND}; border-color: ${BRAND}; color: #fff; }
+        .ck-policy-check input:focus-visible + .ck-policy-box { outline: 2px solid #C9933A; outline-offset: 2px; }
+        .ck-policy-text {
+          font-family: ${F.sub}; font-size: 12.5px; line-height: 1.55; color: #3A4A42;
+        }
+        .ck-policy-text a {
+          color: ${BRAND}; font-weight: 600;
+          text-decoration: underline; text-underline-offset: 2px;
+        }
+        .ck-policy-text a:hover { color: #C9933A; }
+
+        /* ── Coupon ── */
+        .ck-coupon {
+          margin: 14px 0 20px;
+          padding: 16px;
+          background: #FAFDF9;
+          border: 1px solid #D8E5D3;
+          border-radius: 10px;
+        }
+        .ck-coupon-head {
+          display: flex; align-items: center; gap: 8px;
+          margin-bottom: 12px;
+          font-family: ${F.main};
+          font-size: 11px; font-weight: 600;
+          letter-spacing: 1.6px; text-transform: uppercase;
+          color: ${BRAND};
+        }
+        .ck-coupon-head i { font-size: 13px; color: #C9933A; }
+
+        .ck-coupon-input-group {
+          display: flex; align-items: stretch;
+          height: 46px;
+          background: #fff;
+          border: 1px solid #D8E5D3;
+          border-radius: 8px;
+          overflow: hidden;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .ck-coupon-input-group:focus-within {
+          border-color: #C9933A;
+          box-shadow: 0 0 0 3px rgba(201,147,58,0.12);
+        }
+        .ck-coupon-input-group.has-error {
+          border-color: #e74c3c;
+          box-shadow: 0 0 0 3px rgba(231,76,60,0.10);
+        }
+        .ck-coupon-input-group input {
+          flex: 1; min-width: 0;
+          border: none; outline: none; background: transparent;
+          padding: 0 14px;
+          font-family: ${F.main};
+          font-size: 13px; font-weight: 500;
+          letter-spacing: 1.5px; text-transform: uppercase;
+          color: #1A1A1A;
+        }
+        .ck-coupon-input-group input::placeholder {
+          font-weight: 400; letter-spacing: 0.5px; text-transform: none; color: #9AA8A0;
+        }
+        .ck-coupon-input-group button {
+          border: none; cursor: pointer;
+          padding: 0 22px;
+          background: ${BRAND}; color: #fff;
+          font-family: ${F.main};
+          font-size: 11px; font-weight: 600;
+          letter-spacing: 1.5px; text-transform: uppercase;
+          transition: background 0.2s;
+        }
+        .ck-coupon-input-group button:not(:disabled):hover { background: #C9933A; }
+        .ck-coupon-input-group button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .ck-coupon-error {
+          display: flex; align-items: center; gap: 6px;
+          margin: 8px 0 0;
+          font-family: ${F.sub}; font-size: 12px; color: #c0392b;
+        }
+
+        .ck-coupon-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+        .ck-coupon-list-title {
+          font-family: ${F.main};
+          font-size: 10px; font-weight: 600;
+          letter-spacing: 1.5px; text-transform: uppercase;
+          color: #8FA88A;
+        }
+        .ck-coupon-card {
+          display: flex; align-items: center; gap: 12px;
+          padding: 10px 12px;
+          background: #fff;
+          border: 1px dashed #B9CDB1;
+          border-radius: 8px;
+          transition: border-color 0.2s, background 0.2s;
+        }
+        .ck-coupon-card:hover { border-color: #C9933A; background: #FFFCF6; }
+        .ck-coupon-card-code {
+          flex-shrink: 0;
+          padding: 5px 10px;
+          background: rgba(15,84,71,0.07);
+          border-radius: 6px;
+          font-family: ${F.main};
+          font-size: 12px; font-weight: 600;
+          letter-spacing: 1.4px;
+          color: ${BRAND};
+        }
+        .ck-coupon-card-info {
+          flex: 1; min-width: 0;
+          display: flex; flex-direction: column; gap: 2px;
+        }
+        .ck-coupon-card-info strong {
+          font-family: ${F.sub}; font-size: 12.5px; font-weight: 700; color: #1A1A1A;
+        }
+        .ck-coupon-card-info span {
+          font-family: ${F.sub}; font-size: 11px; color: #6B7F73;
+        }
+        .ck-coupon-card-apply {
+          flex-shrink: 0;
+          background: transparent; border: none; cursor: pointer;
+          padding: 6px 4px;
+          font-family: ${F.main};
+          font-size: 11px; font-weight: 700;
+          letter-spacing: 1.2px; text-transform: uppercase;
+          color: #B07A22;
+        }
+        .ck-coupon-card-apply:hover:not(:disabled) { color: ${BRAND}; text-decoration: underline; text-underline-offset: 3px; }
+        .ck-coupon-card-apply:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .ck-coupon-applied {
+          display: flex; align-items: center; gap: 12px;
+          padding: 12px 14px;
+          background: rgba(162,197,121,0.16);
+          border: 1px dashed #6B9A45;
+          border-radius: 8px;
+        }
+        .ck-coupon-applied-icon {
+          width: 28px; height: 28px; flex-shrink: 0;
+          display: inline-flex; align-items: center; justify-content: center;
+          border-radius: 50%;
+          background: ${BRAND}; color: #fff; font-size: 12px;
+        }
+        .ck-coupon-applied-meta {
+          flex: 1; min-width: 0;
+          display: flex; flex-direction: column; gap: 2px;
+        }
+        .ck-coupon-applied-meta strong {
+          font-family: ${F.main}; font-size: 13px; font-weight: 600;
+          letter-spacing: 1.4px; color: ${BRAND};
+        }
+        .ck-coupon-applied-meta span {
+          font-family: ${F.sub}; font-size: 11.5px; color: #3F6B2A;
+        }
+        .ck-coupon-remove {
+          flex-shrink: 0;
+          background: transparent; border: none; cursor: pointer;
+          padding: 6px 4px;
+          font-family: ${F.main};
+          font-size: 11px; font-weight: 700;
+          letter-spacing: 1px; text-transform: uppercase;
+          color: #DC2626;
+        }
+        .ck-coupon-remove:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+        .ck-subtotal-row {
+          align-items: center;
+          margin-bottom: 14px;
+        }
+        .ck-subtotal-label {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+          white-space: nowrap;
+        }
+        .ck-subtotal-title {
+          font-family: ${F.sub};
+          font-size: 14px;
+          font-weight: 400;
+          color: #4A4A5E;
+          letter-spacing: 0.4px;
+        }
+        .ck-gst-note {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-family: ${F.sub};
+          font-size: 11.5px;
+          font-weight: 500;
+          color: #6B9A45;
+          letter-spacing: 0.4px;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+        .ck-gst-note i {
+          font-size: 9px;
+          color: ${GREEN};
+        }
+        @media (max-width: 400px) {
+          .ck-subtotal-label { gap: 6px; }
+          .ck-subtotal-title { font-size: 13px; }
+          .ck-gst-note { font-size: 10.5px; }
+        }
+        .ck-subtotal-value {
+          font-family: ${F.main};
+          font-size: 17px;
+          font-weight: 500;
+          color: ${BRAND};
+          letter-spacing: 0.8px;
+          line-height: 1.2;
+        }
 
         /* ── Courier Summary Widget ── */
         .ck-courier-box {
@@ -1088,7 +1505,12 @@ const CheckoutPage = () => {
           font-family: ${F.main};
           font-size: 9px; letter-spacing: 2.5px;
           text-transform: uppercase; color: ${BRAND};
-          font-weight: 400; display: block; margin-bottom: 6px;
+          font-weight: 600; display: block; margin-bottom: 6px;
+        }
+        .ck-card input::placeholder {
+          color: #7C8B82;
+          font-weight: 400;
+          opacity: 1;
         }
         .ck-error-msg {
           font-family: ${F.sub};
@@ -1309,7 +1731,7 @@ const CheckoutPage = () => {
         .ck-overlay-dot:nth-child(3){animation-delay:0.4s}
 
         @media(max-width:768px){
-          .ck-card { padding: 20px 16px; }
+          .ck-card { padding: 20px 16px; } .ck-section { padding: 28px 0 64px !important; }
           .ck-card-heading { font-size: 16px; letter-spacing: 2.5px; margin-bottom: 16px; }
           .ck-summary { position: static; margin-top: 24px; padding: 20px 16px; }
           .ck-root input, .ck-root select { font-size: 16px !important; }
@@ -1318,7 +1740,7 @@ const CheckoutPage = () => {
           .ck-card { padding: 16px 12px; }
           .ck-card-heading { font-size: 14px; letter-spacing: 1.5px; margin-bottom: 14px; }
           .ck-summary { padding: 16px 12px; }
-          .ck-btn-primary { font-size: 10px; letter-spacing: 2px; padding: 12px 18px; }
+          .ck-btn-primary { font-size: 10px; letter-spacing: 2px; padding: 12px 18px; min-height: 44px; } .ck-courier-active-card { flex-wrap: wrap; }
         }
       `}</style>
 
@@ -1335,7 +1757,7 @@ const CheckoutPage = () => {
           city={form.city}
         />
 
-        <section className="section-padding fix">
+        <section className="section-padding fix ck-section">
           <div className="container">
 
             {/* ── Order Confirmed ── */}
@@ -1378,19 +1800,26 @@ const CheckoutPage = () => {
                       {showInlineLogin && (
                         <div style={{ marginTop: 16, padding: '24px', border: '1px solid #EAE4D6', background: '#FDFDFD', borderRadius: 8 }}>
                           <p style={{ margin: '0 0 24px', fontSize: 13, color: '#6B6B8A', fontFamily: F.sub }}>If you have shopped with us before, please enter your login details below.</p>
-                          <form onSubmit={handleInlineLogin}>
+                          <form onSubmit={handleInlineLogin} noValidate>
                             <div className="row g-4" style={{ marginBottom: 24 }}>
                               <div className="col-md-6">
                                 <label style={{ display: 'block', fontSize: 10, color: '#8FA88A', fontFamily: F.main, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, fontWeight: 600 }}>EMAIL ADDRESS</label>
-                                <input type="email" placeholder="your@email.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required 
+                                <input type="email" placeholder="your@email.com" value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginError(''); }} required 
                                   style={{ width: '100%', padding: '14px 16px', border: '1px solid #EAE4D6', borderRadius: 8, fontSize: 14, fontFamily: F.sub, outline: 'none', color: '#1A1A1A', background: '#fff' }} />
                               </div>
                               <div className="col-md-6">
                                 <label style={{ display: 'block', fontSize: 10, color: '#8FA88A', fontFamily: F.main, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, fontWeight: 600 }}>PASSWORD</label>
                                 <div style={{ position: 'relative' }}>
-                                  <input type={showLoginPassword ? 'text' : 'password'} placeholder="Your password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required 
-                                    style={{ width: '100%', padding: '14px 16px', border: '1px solid #EAE4D6', borderRadius: 8, fontSize: 14, fontFamily: F.sub, outline: 'none', color: '#1A1A1A', background: '#fff' }} />
-                                  <i className={`fa-solid ${showLoginPassword ? 'fa-eye-slash' : 'fa-eye'}`} onClick={() => setShowLoginPassword(!showLoginPassword)} style={{ position: 'absolute', right: 16, top: 16, color: '#8FA88A', cursor: 'pointer', fontSize: 12 }}></i>
+                                  <input type={showLoginPassword ? 'text' : 'password'} placeholder="Your password" value={loginPassword} onChange={e => { setLoginPassword(e.target.value); setLoginError(''); }} required 
+                                    style={{ width: '100%', padding: '14px 44px 14px 16px', border: '1px solid #EAE4D6', borderRadius: 8, fontSize: 14, fontFamily: F.sub, outline: 'none', color: '#1A1A1A', background: '#fff' }} />
+                                  <button
+                                    type="button"
+                                    aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                                    onClick={() => setShowLoginPassword(prev => !prev)}
+                                    style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', padding: 8, cursor: 'pointer', color: '#8FA88A', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  >
+                                    <i className={`fa-solid ${showLoginPassword ? 'fa-eye-slash' : 'fa-eye'}`} aria-hidden="true" />
+                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -1408,19 +1837,21 @@ const CheckoutPage = () => {
                   )}
                 </div>
                 
-                <div className="row g-5">
+                <div className="row g-3 g-lg-5">
                 <div className="col-lg-7">
                   <div className="ck-card">
                     {!(user && showAddressForm) && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                        <h4 className="ck-card-heading" style={{ margin: 0 }}>Shipping & Billing Address</h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+                        <h4 className="ck-card-heading" style={{ margin: 0, flex: '1 1 180px' }}>Shipping & Billing Address</h4>
                         {user && !showAddressForm && (
                           <button type="button" onClick={() => {
                             setForm({ firstName: '', email: '', phone: '', address: '', address2: '', city: '', state: '', zip: '', country: 'India', addressType: 'Home' });
                             setEditIndex(null);
+                            setShowBillingForm(false);
+                            setBillingFormErrors({});
                             setShowAddressForm(true);
                           }} 
-                            style={{ color: BRAND, border: `1px solid ${BRAND}`, background: 'transparent', padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                            style={{ color: BRAND, border: `1px solid ${BRAND}`, background: 'transparent', padding: '8px 14px', minHeight: 38, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                             + Add New
                           </button>
                         )}
@@ -1460,6 +1891,7 @@ const CheckoutPage = () => {
                               onClick={() => {
                                 setForm({
                                   ...addr,
+                                  phone: sanitizeIndianPhone(addr.phone || ''),
                                   email: addr.email || user?.email || '',
                                   firstName: addr.firstName && addr.firstName !== 'User' ? addr.firstName : (user?.name || user?.username || '')
                                 });
@@ -1474,21 +1906,24 @@ const CheckoutPage = () => {
                                 gap: '8px 12px',
                                 marginBottom: 12,
                               }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: '1 1 180px', minWidth: 0 }}>
                                   <input type="radio" checked={isSelected} readOnly style={{ accentColor: BRAND, width: 16, height: 16, flexShrink: 0 }} />
                                   <span style={{ fontWeight: 600, color: '#1A1A1A', fontSize: 14 }}>{(addr.firstName && addr.firstName !== 'User') ? addr.firstName : (user?.name || user?.username || 'User')}</span>
                                   <span style={{ background: '#EAE4D6', color: '#6B6B8A', fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', flexShrink: 0 }}>{addr.addressType || 'HOME'}</span>
                                   {idx === 0 && <span style={{ background: '#FFF3CD', color: '#856404', fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, letterSpacing: 0.5, whiteSpace: 'nowrap', flexShrink: 0 }}>★ Default</span>}
                                 </div>
-                                <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexShrink: 0, marginLeft: 'auto' }}>
+                                <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexShrink: 0 }}>
                                   <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setForm({ ...addr });
+                                      setForm({ ...addr, phone: sanitizeIndianPhone(addr.phone || '') });
                                       setEditIndex(idx);
+                                      setShowBillingForm(false);
+                                      setBillingFormErrors({});
                                       setShowAddressForm(true);
                                     }}
-                                    style={{ background: 'transparent', border: 'none', color: BRAND, cursor: 'pointer', fontSize: 13, padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    style={{ background: 'transparent', border: 'none', color: BRAND, cursor: 'pointer', fontSize: 13, padding: '6px 4px', minHeight: 36, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                   >
                                     <i className="fa-regular fa-pen-to-square"></i> Edit
                                   </button>
@@ -1502,7 +1937,7 @@ const CheckoutPage = () => {
                                         return newAddrs;
                                       });
                                     }}
-                                    style={{ background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: 13, padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    style={{ background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: 13, padding: '6px 4px', minHeight: 36, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                   >
                                     <i className="fa-regular fa-trash-can"></i> Delete
                                   </button>
@@ -1522,16 +1957,49 @@ const CheckoutPage = () => {
                         })}
 
                         <div style={{ display: 'flex', justifyContent: 'center', margin: '24px 0' }}>
-                          <div onClick={() => { setBillingSame(!billingSame); setPlaceError(''); }} style={{ background: '#F9F9FB', border: '1px solid #EAE4D6', padding: '8px 16px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <div onClick={() => {
+                            const nextSame = !billingSame;
+                            setBillingSame(nextSame);
+                            if (nextSame) {
+                              setShowBillingForm(false);
+                              setBillingFormErrors({});
+                            } else if ((!billing?.address || !billing?.zip) && savedAddresses.length > 0) {
+                              const fallback = savedAddresses[selectedAddressIndex] || savedAddresses[0];
+                              setBilling({ ...fallback, phone: sanitizeIndianPhone(fallback.phone || '') });
+                            }
+                            setPlaceError('');
+                          }} style={{ background: '#F9F9FB', border: '1px solid #EAE4D6', padding: '8px 16px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                             <input type="checkbox" checked={billingSame} readOnly style={{ accentColor: BRAND, width: 14, height: 14 }} />
                             <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>Billing same as shipping</span>
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
                           <p style={{ fontSize: 11, color: '#8FA88A', fontWeight: 600, letterSpacing: 1, margin: 0 }}>BILLING ADDRESS</p>
-                          {!billingSame && (
-                            <i className="fa-solid fa-chevron-down" style={{ color: '#6B6B8A', fontSize: 12 }}></i>
+                          {!billingSame && !showBillingForm && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBillingForm({
+                                  firstName: '',
+                                  phone: '',
+                                  address: '',
+                                  address2: '',
+                                  city: '',
+                                  state: '',
+                                  zip: '',
+                                  country: 'India',
+                                  addressType: 'Work',
+                                });
+                                setBillingEditIndex(null);
+                                setBillingFormErrors({});
+                                setPlaceError('');
+                                setShowBillingForm(true);
+                              }}
+                              style={{ color: BRAND, border: `1px solid ${BRAND}`, background: 'transparent', padding: '6px 12px', minHeight: 34, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+                            >
+                              + Add New
+                            </button>
                           )}
                         </div>
 
@@ -1539,20 +2007,219 @@ const CheckoutPage = () => {
                           <div style={{ background: '#F9F9FB', border: '1px dashed #EAE4D6', borderRadius: 8, padding: 16, textAlign: 'center', color: '#8FA88A', fontSize: 13, fontStyle: 'italic' }}>
                             ✓ Same as shipping address
                           </div>
+                        ) : showBillingForm ? (
+                          <div style={{ border: '1px solid #EAE4D6', borderRadius: 8, padding: 16, background: '#FCFCF9' }}>
+                            <h5 style={{ fontWeight: 800, color: '#1A1A1A', fontSize: 14, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <i className={`fa-solid ${billingEditIndex !== null ? 'fa-pen-to-square' : 'fa-plus'}`} style={{ color: BRAND }}></i>
+                              {billingEditIndex !== null ? 'Edit Billing Address' : 'New Billing Address'}
+                            </h5>
+
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+                              {['Home', 'Work', 'Other'].map(type => (
+                                <button
+                                  key={type}
+                                  type="button"
+                                  onClick={() => setBillingForm(f => ({ ...f, addressType: type }))}
+                                  style={{
+                                    flex: 1, padding: '10px 0', border: '1px solid #EAE4D6', borderRadius: 8,
+                                    background: billingForm.addressType === type ? BRAND : '#F9F9FB',
+                                    color: billingForm.addressType === type ? '#fff' : '#6B6B8A',
+                                    fontFamily: F.main, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                                    transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                                  }}
+                                >
+                                  <i className={`fa-solid ${type === 'Home' ? 'fa-house' : type === 'Work' ? 'fa-building' : 'fa-location-dot'}`}
+                                    style={{ fontSize: 12, color: billingForm.addressType === type ? '#fff' : BRAND }}></i>
+                                  {type}
+                                </button>
+                              ))}
+                            </div>
+
+                            <div className="row g-3" style={{ marginBottom: 16 }}>
+                              <div className="col-md-6">
+                                <Field
+                                  label="FULL NAME *"
+                                  placeholder="Enter billing full name"
+                                  value={billingForm.firstName}
+                                  error={billingFormErrors.firstName}
+                                  onChange={e => { setBillingForm(f => ({ ...f, firstName: e.target.value })); setBillingFormErrors(p => ({ ...p, firstName: '' })); }}
+                                />
+                              </div>
+                              <div className="col-md-6">
+                                <Field
+                                  label="MOBILE NUMBER *"
+                                  type="tel"
+                                  inputMode="numeric"
+                                  maxLength={10}
+                                  placeholder="10-digit mobile"
+                                  value={billingForm.phone}
+                                  error={billingFormErrors.phone}
+                                  onChange={e => { setBillingForm(f => ({ ...f, phone: sanitizeIndianPhone(e.target.value) })); setBillingFormErrors(p => ({ ...p, phone: '' })); }}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={{ marginBottom: 16 }}>
+                              <Field
+                                label="STREET / HOUSE NO. *"
+                                placeholder="House / flat no., road name"
+                                value={billingForm.address}
+                                error={billingFormErrors.address}
+                                onChange={e => { setBillingForm(f => ({ ...f, address: e.target.value })); setBillingFormErrors(p => ({ ...p, address: '' })); }}
+                              />
+                            </div>
+
+                            <div style={{ marginBottom: 16 }}>
+                              <Field
+                                label="APARTMENT / LANDMARK (OPTIONAL)"
+                                placeholder="Building name, floor, landmark"
+                                value={billingForm.address2}
+                                onChange={e => setBillingForm(f => ({ ...f, address2: e.target.value }))}
+                              />
+                            </div>
+
+                            <div className="row g-3" style={{ marginBottom: 16 }}>
+                              <div className="col-md-6">
+                                <Field
+                                  label="CITY *"
+                                  placeholder="City"
+                                  value={billingForm.city}
+                                  error={billingFormErrors.city}
+                                  onChange={e => { setBillingForm(f => ({ ...f, city: e.target.value })); setBillingFormErrors(p => ({ ...p, city: '' })); }}
+                                />
+                              </div>
+                              <div className="col-md-6">
+                                <StateAutocompleteField
+                                  label="STATE *"
+                                  value={billingForm.state}
+                                  error={billingFormErrors.state}
+                                  placeholder="Select or type state"
+                                  onChange={val => {
+                                    setBillingForm(f => ({ ...f, state: val }));
+                                    setBillingFormErrors(p => ({ ...p, state: '' }));
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="row g-3" style={{ marginBottom: 16 }}>
+                              <div className="col-md-6">
+                                <Field
+                                  label="PINCODE *"
+                                  inputMode="numeric"
+                                  maxLength={6}
+                                  placeholder="6-digit pincode"
+                                  value={billingForm.zip}
+                                  error={billingFormErrors.zip}
+                                  onChange={e => { setBillingForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 6) })); setBillingFormErrors(p => ({ ...p, zip: '' })); }}
+                                />
+                              </div>
+                              <div className="col-md-6">
+                                <Field label="COUNTRY" placeholder="India" value={billingForm.country} readOnly />
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const errs = validateAddressFields(billingForm, { requireEmail: false });
+                                  if (Object.keys(errs).length) {
+                                    setBillingFormErrors(errs);
+                                    return;
+                                  }
+                                  const cleaned = {
+                                    ...billingForm,
+                                    firstName: billingForm.firstName.trim(),
+                                    phone: sanitizeIndianPhone(billingForm.phone),
+                                    address: billingForm.address.trim(),
+                                    address2: (billingForm.address2 || '').trim(),
+                                    city: billingForm.city.trim(),
+                                    state: billingForm.state.trim(),
+                                    zip: billingForm.zip.trim(),
+                                    country: billingForm.country || 'India',
+                                    addressType: billingForm.addressType || 'Home',
+                                  };
+                                  if (billingEditIndex === null) {
+                                    setSavedAddresses(prev => [...prev, cleaned]);
+                                  } else if (typeof billingEditIndex === 'number' && billingEditIndex !== selectedAddressIndex) {
+                                    setSavedAddresses(prev => {
+                                      const updated = [...prev];
+                                      updated[billingEditIndex] = { ...prev[billingEditIndex], ...cleaned };
+                                      return updated;
+                                    });
+                                  }
+                                  setBilling(cleaned);
+                                  setBillingEditIndex(null);
+                                  setBillingFormErrors({});
+                                  setShowBillingForm(false);
+                                  setPlaceError('');
+                                }}
+                                style={{ background: BRAND, color: '#fff', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                              >
+                                Save Billing Address
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBillingEditIndex(null);
+                                  setBillingFormErrors({});
+                                  setShowBillingForm(false);
+                                }}
+                                style={{ background: '#F9F9FB', color: '#1A1A1A', border: '1px solid #EAE4D6', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <>
-                            {savedAddresses.map((addr, idx) => {
-                              const isSelected = billing === addr;
-                              return (
-                                <div key={`billing-${idx}`} 
-                                  onClick={() => { setBilling(addr); setPlaceError(''); }}
-                                  style={{ border: isSelected ? `1px solid ${BRAND}` : '1px solid #EAE4D6', borderRadius: 8, padding: 16, background: isSelected ? ACCENT_SOFT : '#fff', position: 'relative', marginBottom: 12, cursor: 'pointer' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                                    <input type="radio" checked={isSelected} readOnly style={{ accentColor: BRAND, width: 16, height: 16 }} />
-                                    <span style={{ fontWeight: 600, color: '#1A1A1A', fontSize: 15 }}>{(addr.firstName && addr.firstName !== 'User') ? addr.firstName : (user?.name || user?.username || 'User')}</span>
-                                    <span style={{ background: '#EAE4D6', color: '#6B6B8A', fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>{addr.addressType || 'HOME'}</span>
+                            {(() => {
+                              const openBillingEdit = (addr, editIdx) => {
+                                setBillingForm({
+                                  firstName: (addr?.firstName && addr.firstName !== 'User') ? addr.firstName : (user?.name || user?.username || ''),
+                                  phone: sanitizeIndianPhone(addr?.phone || ''),
+                                  address: addr?.address || '',
+                                  address2: addr?.address2 || '',
+                                  city: addr?.city || '',
+                                  state: addr?.state || '',
+                                  zip: addr?.zip || '',
+                                  country: addr?.country || 'India',
+                                  addressType: addr?.addressType || 'Home',
+                                });
+                                setBillingEditIndex(editIdx);
+                                setBillingFormErrors({});
+                                setPlaceError('');
+                                setShowBillingForm(true);
+                              };
+                              const hasCustomBilling = Boolean(billing?.address && billing?.zip) && !savedAddresses.some(addr => isSameAddress(billing, addr));
+                              const renderBillingCard = (addr, { key, isSelected, editIdx, isCustom = false, onSelect }) => (
+                                <div
+                                  key={key}
+                                  onClick={onSelect}
+                                  style={{ border: isSelected ? `1px solid ${BRAND}` : '1px solid #EAE4D6', borderRadius: 8, padding: 16, background: isSelected ? ACCENT_SOFT : '#fff', position: 'relative', marginBottom: 12, cursor: 'pointer' }}
+                                >
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px 12px', marginBottom: 12 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: '1 1 180px', minWidth: 0 }}>
+                                      <input type="radio" checked={isSelected} readOnly style={{ accentColor: BRAND, width: 16, height: 16, flexShrink: 0 }} />
+                                      <span style={{ fontWeight: 600, color: '#1A1A1A', fontSize: 15 }}>{(addr.firstName && addr.firstName !== 'User') ? addr.firstName : (user?.name || user?.username || 'User')}</span>
+                                      <span style={{ background: '#EAE4D6', color: '#6B6B8A', fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', flexShrink: 0 }}>{addr.addressType || 'HOME'}</span>
+                                      {isCustom && (
+                                        <span style={{ background: '#E6F4EE', color: BRAND, fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', flexShrink: 0 }}>Billing</span>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openBillingEdit(addr, editIdx);
+                                      }}
+                                      style={{ background: 'transparent', border: 'none', color: BRAND, cursor: 'pointer', fontSize: 13, padding: '6px 4px', minHeight: 36, display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
+                                    >
+                                      <i className="fa-regular fa-pen-to-square"></i> Edit
+                                    </button>
                                   </div>
-                                  
+
                                   <div style={{ paddingLeft: 28, fontSize: 13, color: '#6B6B8A', lineHeight: 1.6 }}>
                                     <p style={{ margin: 0 }}>{addr.address} {addr.address2}</p>
                                     <p style={{ margin: 0 }}>{addr.city}, {addr.state} - {addr.zip}</p>
@@ -1563,7 +2230,28 @@ const CheckoutPage = () => {
                                   </div>
                                 </div>
                               );
-                            })}
+
+                              return (
+                                <>
+                                  {hasCustomBilling && renderBillingCard(billing, {
+                                    key: 'billing-custom',
+                                    isSelected: true,
+                                    editIdx: 'custom',
+                                    isCustom: true,
+                                    onSelect: () => setPlaceError(''),
+                                  })}
+                                  {savedAddresses.map((addr, idx) => renderBillingCard(addr, {
+                                    key: `billing-${idx}`,
+                                    isSelected: !hasCustomBilling && isSameAddress(billing, addr),
+                                    editIdx: idx,
+                                    onSelect: () => {
+                                      setBilling({ ...addr, phone: sanitizeIndianPhone(addr.phone || '') });
+                                      setPlaceError('');
+                                    },
+                                  }))}
+                                </>
+                              );
+                            })()}
                           </>
                         )}
                       </div>
@@ -1600,9 +2288,9 @@ const CheckoutPage = () => {
                           onChange={e => { setForm({ ...form, firstName: e.target.value }); setFormErrors(p => ({ ...p, firstName: '' })); }} />
                       </div>
                       <div className="col-md-6">
-                        <Field label="MOBILE NUMBER *" type="tel" placeholder="10-digit mobile"
+                        <Field label="MOBILE NUMBER *" type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit mobile"
                           value={form.phone} error={formErrors.phone}
-                          onChange={e => { setForm({ ...form, phone: e.target.value }); setFormErrors(p => ({ ...p, phone: '' })); }} />
+                          onChange={e => { setForm({ ...form, phone: sanitizeIndianPhone(e.target.value) }); setFormErrors(p => ({ ...p, phone: '' })); }} />
                       </div>
                     </div>
 
@@ -1646,9 +2334,9 @@ const CheckoutPage = () => {
 
                     <div className="row g-3" style={{ marginBottom: 16 }}>
                       <div className="col-md-6">
-                        <Field label="PINCODE *" placeholder="6-digit pincode"
+                        <Field label="PINCODE *" inputMode="numeric" maxLength={6} placeholder="6-digit pincode"
                           value={form.zip} error={formErrors.zip}
-                          onChange={e => { setForm({ ...form, zip: e.target.value }); setFormErrors(p => ({ ...p, zip: '' })); }} />
+                          onChange={e => { setForm({ ...form, zip: e.target.value.replace(/\D/g, '').slice(0, 6) }); setFormErrors(p => ({ ...p, zip: '' })); }} />
                       </div>
                       <div className="col-md-6">
                         <Field label="COUNTRY" placeholder="India"
@@ -1664,19 +2352,30 @@ const CheckoutPage = () => {
                             Set as my default address
                           </label>
                         </div>
-                        <div style={{ display: 'flex', gap: 12 }}>
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                           <button type="button" onClick={() => {
-                            const errs = validate();
+                            const errs = validate(false);
                             if (Object.keys(errs).length) { setFormErrors(errs); return; }
+                            const cleaned = {
+                              ...form,
+                              firstName: form.firstName.trim(),
+                              email: form.email.trim(),
+                              phone: sanitizeIndianPhone(form.phone),
+                              zip: form.zip.trim(),
+                            };
+                            setForm(cleaned);
+                            if (!billing?.address) {
+                              setBilling(cleaned);
+                            }
                             setSavedAddresses(prev => {
                               if (editIndex !== null) {
                                 const updated = [...prev];
-                                updated[editIndex] = form;
+                                updated[editIndex] = cleaned;
                                 setSelectedAddressIndex(editIndex);
                                 setEditIndex(null);
                                 return updated;
                               } else {
-                                const updated = [...prev, form];
+                                const updated = [...prev, cleaned];
                                 setSelectedAddressIndex(updated.length - 1);
                                 return updated;
                               }
@@ -1721,8 +2420,15 @@ const CheckoutPage = () => {
                             <div style={{ position: 'relative' }}>
                               <input type={showRegisterPassword ? 'text' : 'password'} placeholder="Create a password" value={registerPassword} 
                                 onChange={e => { setRegisterPassword(e.target.value); setFormErrors(p => ({ ...p, registerPassword: '' })); }} 
-                                style={{ width: '100%', padding: '14px 16px', border: formErrors.registerPassword ? '1px solid #e74c3c' : '1px solid #EAE4D6', borderRadius: 8, fontSize: 14, fontFamily: F.sub, outline: 'none', marginBottom: 0, color: '#1A1A1A', background: '#fff' }} />
-                              <i className={`fa-solid ${showRegisterPassword ? 'fa-eye-slash' : 'fa-eye'}`} onClick={() => setShowRegisterPassword(!showRegisterPassword)} style={{ position: 'absolute', right: 16, top: 16, color: '#8FA88A', cursor: 'pointer', fontSize: 12 }}></i>
+                                style={{ width: '100%', padding: '14px 44px 14px 16px', border: formErrors.registerPassword ? '1px solid #e74c3c' : '1px solid #EAE4D6', borderRadius: 8, fontSize: 14, fontFamily: F.sub, outline: 'none', marginBottom: 0, color: '#1A1A1A', background: '#fff' }} />
+                              <button
+                                type="button"
+                                aria-label={showRegisterPassword ? 'Hide password' : 'Show password'}
+                                onClick={() => setShowRegisterPassword(prev => !prev)}
+                                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', padding: 8, cursor: 'pointer', color: '#8FA88A', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                <i className={`fa-solid ${showRegisterPassword ? 'fa-eye-slash' : 'fa-eye'}`} aria-hidden="true" />
+                              </button>
                             </div>
                             {formErrors.registerPassword && (
                               <p style={{ margin: '4px 0 0', color: '#e74c3c', fontSize: 11, fontFamily: F.sub }}>
@@ -1734,9 +2440,10 @@ const CheckoutPage = () => {
                             </p>
                             <button type="button" 
                               onClick={async () => {
-                                const errs = validate();
-                                if (registerPassword.length < 6) {
-                                  errs.registerPassword = 'Password must be at least 6 characters.';
+                                const errs = validate(false);
+                                const pwErr = validatePassword(registerPassword, { minLength: 6 });
+                                if (pwErr) {
+                                  errs.registerPassword = pwErr;
                                 }
                                 if (Object.keys(errs).length) { 
                                   setFormErrors(errs); 
@@ -1748,7 +2455,12 @@ const CheckoutPage = () => {
                                 }
                                 setPlacing(true);
                                 try {
-                                  await register({ username: form.firstName, email: form.email, phone: form.phone, password: registerPassword });
+                                  await register({
+                                    username: form.firstName.trim(),
+                                    email: form.email.trim(),
+                                    phone: sanitizeIndianPhone(form.phone),
+                                    password: registerPassword,
+                                  });
                                   setPlaceError('');
                                 } catch(err) {
                                   if (err.message?.toLowerCase().includes('already') || err.message?.toLowerCase().includes('exist')) {
@@ -1820,31 +2532,117 @@ const CheckoutPage = () => {
                               {item.isBuyOneGetOne ? (
                                 <>
                                   <span style={{ color: '#aaa', textDecoration: 'line-through', fontSize: '11px', marginRight: '6px' }}>
-                                    ₹{(item.price * item.qty).toFixed(2)}
+                                    ₹{Math.floor(item.price * item.qty).toLocaleString('en-IN')}
                                   </span>
-                                  ₹{(item.price * Math.ceil(item.qty / 2)).toFixed(2)}
+                                  ₹{Math.floor(item.price * Math.ceil(item.qty / 2)).toLocaleString('en-IN')}
                                 </>
-                              ) : `₹${(item.price * item.qty).toFixed(2)}`}
+                              ) : `₹${Math.floor(item.price * item.qty).toLocaleString('en-IN')}`}
                             </span>
                           </div>
                         ))}
 
-                        <div className="ck-summary-row">
-                          <span style={{ color: '#6B6B8A' }}>Subtotal</span>
-                          <span style={{ color: BRAND, fontFamily: F.main, fontSize: 12, letterSpacing: 1 }}>₹{formattedSubtotal}</span>
+                        <div className="ck-coupon">
+                          <div className="ck-coupon-head">
+                            <i className="fa-solid fa-ticket" aria-hidden="true" />
+                            <span>Have a coupon code?</span>
+                          </div>
+
+                          {appliedCoupon ? (
+                            <div className="ck-coupon-applied">
+                              <span className="ck-coupon-applied-icon"><i className="fa-solid fa-check" aria-hidden="true" /></span>
+                              <div className="ck-coupon-applied-meta">
+                                <strong>{appliedCoupon.code}</strong>
+                                <span>
+                                  You saved ₹{formattedCouponDiscount}
+                                  {appliedCoupon.label ? ` · ${appliedCoupon.label}` : ''}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                className="ck-coupon-remove"
+                                onClick={() => { setAppliedCoupon(null); setCouponError(''); setCouponInput(''); }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className={`ck-coupon-input-group${couponError ? ' has-error' : ''}`}>
+                                <input
+                                  type="text"
+                                  placeholder="Enter coupon code"
+                                  value={couponInput}
+                                  autoCapitalize="characters"
+                                  onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponError(''); }}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleApplyCoupon(); } }}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={couponApplying || subtotal <= 0}
+                                  onClick={() => handleApplyCoupon()}
+                                >
+                                  {couponApplying ? 'Applying…' : 'Apply'}
+                                </button>
+                              </div>
+
+                              {couponError && (
+                                <p role="alert" className="ck-coupon-error">
+                                  <i className="fa-solid fa-circle-exclamation" aria-hidden="true" /> {couponError}
+                                </p>
+                              )}
+
+                              {availableCoupons.length > 0 && (
+                                <div className="ck-coupon-list">
+                                  <span className="ck-coupon-list-title">Available offers</span>
+                                  {availableCoupons.slice(0, 4).map(c => (
+                                    <div key={c.code} className="ck-coupon-card">
+                                      <span className="ck-coupon-card-code">{c.code}</span>
+                                      <div className="ck-coupon-card-info">
+                                        <strong>{c.type === 'percent' ? `${Number(c.value)}% OFF` : `₹${Number(c.value)} OFF`}</strong>
+                                        {Number(c.min_order) > 0 && <span>Min order ₹{Number(c.min_order).toLocaleString('en-IN')}</span>}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="ck-coupon-card-apply"
+                                        disabled={couponApplying}
+                                        onClick={() => { setCouponInput(c.code); handleApplyCoupon(c.code); }}
+                                      >
+                                        Apply
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
-                        {savings > 0 && (
+
+                        <div className="ck-summary-row ck-subtotal-row">
+                          <div className="ck-subtotal-label">
+                            <span className="ck-subtotal-title">Product subtotal</span>
+                            {hasGstItems && (
+                              <span className="ck-gst-note">
+                                <i className="fa-solid fa-check" aria-hidden="true" />
+                                Inclusive of GST
+                              </span>
+                            )}
+                          </div>
+                          <span className="ck-subtotal-value">₹{formattedSubtotal}</span>
+                        </div>
+                        {flooredSavings > 0 && (
                           <div className="ck-summary-row" style={{ color: '#E05252' }}>
                             <span style={{ fontWeight: 600 }}>Offer Discount</span>
-                            <span style={{ fontFamily: F.main, fontSize: 12, letterSpacing: 1, fontWeight: 600 }}>-₹{savings.toFixed(2)}</span>
+                            <span style={{ fontFamily: F.main, fontSize: 12, letterSpacing: 1, fontWeight: 600 }}>-₹{formattedSavings}</span>
                           </div>
                         )}
-                        <div className="ck-summary-row">
-                          <span style={{ color: '#6B6B8A' }}>GST</span>
-                          <span style={{ color: BRAND, fontFamily: F.main, fontSize: 12, letterSpacing: 1 }}>Included in product prices</span>
-                        </div>
+                        {flooredCouponDiscount > 0 && (
+                          <div className="ck-summary-row" style={{ color: '#059669' }}>
+                            <span style={{ fontWeight: 600 }}>Coupon ({appliedCoupon.code})</span>
+                            <span style={{ fontFamily: F.main, fontSize: 12, letterSpacing: 1, fontWeight: 600 }}>-₹{formattedCouponDiscount}</span>
+                          </div>
+                        )}
                         <div className="ck-summary-row" style={{ alignItems: 'center' }}>
-                          <span style={{ color: '#6B6B8A' }}>Shipping</span>
+                          <span style={{ color: '#4A4A5E', fontSize: 14, fontWeight: 400, letterSpacing: 0.4 }}>Shipping charges</span>
                           <span
                             onClick={() => {
                               if (!isCustomDelivery && quoteIsCurrent && shippingQuote?.couriers?.length > 0) {
@@ -1854,8 +2652,9 @@ const CheckoutPage = () => {
                             style={{
                               color: (isCustomDelivery ? customDeliveryRate : selectedCourier) ? BRAND : '#8FA88A',
                               fontFamily: F.main,
-                              fontSize: 12,
-                              letterSpacing: 1,
+                              fontSize: 17,
+                              fontWeight: 500,
+                              letterSpacing: 0.8,
                               cursor: !isCustomDelivery && quoteIsCurrent && shippingQuote?.couriers?.length > 0 ? 'pointer' : 'default',
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -1866,9 +2665,9 @@ const CheckoutPage = () => {
                             {isCustomDelivery ? (
                               customDeliveryLoading
                                 ? 'Calculating…'
-                                : (customDeliveryRate ? `₹${shipping.toFixed(2)}` : (customDeliveryError || (form.state ? 'Unavailable' : 'Select State')))
+                                : (customDeliveryRate ? `₹${formattedShipping}` : (customDeliveryError || (form.state ? 'Unavailable' : 'Select State')))
                             ) : (
-                              selectedCourier ? `₹${shipping.toFixed(2)}` : (shippingQuoteError || (quoteIsCurrent ? 'Choose a courier' : 'Enter PIN code for quote'))
+                              selectedCourier ? `₹${formattedShipping}` : (shippingQuoteError || (quoteIsCurrent ? 'Choose a courier' : 'Enter PIN code for quote'))
                             )}
                             {!isCustomDelivery && quoteIsCurrent && shippingQuote?.couriers?.length > 0 && (
                               <i className="fa-solid fa-pen-to-square" style={{ fontSize: 11, color: BRAND }} />
@@ -1898,7 +2697,7 @@ const CheckoutPage = () => {
                                 </div>
                                 <button
                                   type="button"
-                                  className="ck-courier-change-btn"
+                                  className="ck-courier-change-btn" style={{ minHeight: 36 }}
                                   onClick={() => setIsCourierModalOpen(true)}
                                 >
                                   Change
@@ -1923,12 +2722,10 @@ const CheckoutPage = () => {
                         )}
                         <hr style={{ borderColor: '#EAE4D6', margin: '16px 0' }} />
                         <div className="d-flex justify-content-between align-items-center">
-                          <span className="ck-summary-total">Total</span>
+                          <span className="ck-summary-total">Final total</span>
                           <span className="ck-summary-total-val">{quoteIsCurrent ? `₹${formattedTotal}` : "Pending"}</span>
                         </div>
-                        <div style={{ marginTop: 12, fontFamily: F.sub, fontSize: 10, color: '#8FA88A', textAlign: 'right', fontWeight: 200, letterSpacing: 0.5 }}>
-                          Product prices include GST. Shipping is calculated separately.
-                        </div>
+                        
                       </>
                     )}
 
@@ -1939,6 +2736,23 @@ const CheckoutPage = () => {
                           : 'Complete the shipping address before payment.'}
                       </p>
                     )}
+                    <div className="ck-policy-wrap">
+                     
+                      <label className={`ck-policy-check${policyAccepted ? ' checked' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={policyAccepted}
+                          onChange={e => { setPolicyAccepted(e.target.checked); if (e.target.checked) setPlaceError(''); }}
+                        />
+                        <span className="ck-policy-box" aria-hidden="true"><i className="fa-solid fa-check" /></span>
+                        <span className="ck-policy-text">
+                          I have read and agree to the{' '}
+                          <a href={POLICY_LINKS.terms} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>Terms</a>,{' '}
+                          <a href={POLICY_LINKS.shipping} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>Shipping Policy</a> and{' '}
+                          <a href={POLICY_LINKS.returns} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>Return &amp; Cancellation Policy</a>.
+                        </span>
+                      </label>
+                    </div>
                     <button
                       onClick={handlePlaceOrder}
                       className="ck-btn-primary"
@@ -1948,7 +2762,13 @@ const CheckoutPage = () => {
                       <span>
                         {placing
                           ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} />Opening Razorpay…</>
-                          : <>Pay {quoteIsCurrent ? `\u20B9${formattedTotal}` : "Pending"} now</>
+                          : !billingAddressReady
+                            ? 'Complete address to pay'
+                            : !quoteIsCurrent || !selectedCourier
+                              ? 'Select delivery state for shipping'
+                              : !policyAccepted
+                                ? 'Accept policies to pay'
+                                : <>Pay {'₹'}{formattedTotal} now</>
                         }
                       </span>
                     </button>

@@ -631,8 +631,8 @@ export default function Products({ showToast }) {
                   style={{ marginTop: 2 }}
                 />
                 <span>
-                  <strong style={{ display: 'block', fontSize: 12 }}>5% GST included in product price</strong>
-                  <span style={{ display: 'block', marginTop: 3, fontSize: 11, color: KM.muted }}>Checked by default. The price already includes GST; checkout will not add another 5%. Uncheck to apply no GST.</span>
+                  <strong style={{ display: 'block', fontSize: 12 }}>Add 5% GST to the product price</strong>
+                  <span style={{ display: 'block', marginTop: 3, fontSize: 11, color: KM.muted }}>When checked, the storefront price is increased by 5% and shown GST-inclusive. Checkout will not add GST again. Uncheck to show the base price without GST.</span>
                 </span>
               </label>
 

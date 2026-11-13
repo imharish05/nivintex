@@ -10,6 +10,8 @@ export default function Coupons({ showToast }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+  const todayISO = new Date().toISOString().split('T')[0];
   const [formData, setFormData] = useState({
     code: '', type: 'percent', value: '',
     min_order: '', max_discount: '', max_uses_per_user: '', expires_at: '', is_active: true
@@ -47,6 +49,7 @@ export default function Coupons({ showToast }) {
   };
 
   const resetForm = () => {
+    setFormError('');
     setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
@@ -128,6 +131,13 @@ export default function Coupons({ showToast }) {
       }
     }
 
+    if (formData.expires_at && formData.expires_at < todayISO) {
+      setFormError('Expiry date cannot be in the past');
+      return showToast('Error', 'Expiry date cannot be in the past');
+    }
+    setFormError('');
+    setIsSubmitting(true);
+
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId
       ? `${API}/coupons/admin/update/${editingId}`
@@ -152,9 +162,17 @@ export default function Coupons({ showToast }) {
         );
         resetForm();
         fetchCoupons();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        const msg = err.message || err.error || 'Could not save coupon.';
+        setFormError(msg);
+        showToast('Error', msg);
       }
     } catch {
+      setFormError('Something went wrong. Try again.');
       showToast('Server Error', 'Something went wrong. Try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -292,6 +310,7 @@ export default function Coupons({ showToast }) {
                   className="km-input"
                   name="expires_at"
                   type="date"
+                  min={todayISO}
                   value={formData.expires_at}
                   onChange={handleChange}
                 />
@@ -329,6 +348,11 @@ export default function Coupons({ showToast }) {
                 </label>
               </div>
 
+              {formError && (
+                <div role="alert" className="km-field km-field-full" style={{ padding: '10px 14px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>
+                  {formError}
+                </div>
+              )}
               <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
                 {isSubmitting && <span className="km-btn-spinner" />}
                 <span>
@@ -362,9 +386,12 @@ export default function Coupons({ showToast }) {
                 {row.expires_at ? new Date(row.expires_at).toLocaleDateString('en-IN') : 'No Expiry'}
               </td>
               <td>
-                <span className={`status-pill ${row.is_active ? 'pill-active' : 'pill-inactive'}`}>
-                  {row.is_active ? 'ACTIVE' : 'INACTIVE'}
-                </span>
+                {(() => {
+                  const isExpired = row.expires_at && new Date(row.expires_at) <= new Date();
+                  const label = isExpired ? 'EXPIRED' : (row.is_active ? 'ACTIVE' : 'INACTIVE');
+                  const pill = !isExpired && row.is_active ? 'pill-active' : 'pill-inactive';
+                  return <span className={`status-pill ${pill}`}>{label}</span>;
+                })()}
               </td>
               <td>
                 <button className="action-btn btn-edit" onClick={() => handleEditClick(row)}>Edit</button>

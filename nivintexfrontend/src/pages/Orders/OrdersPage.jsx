@@ -99,15 +99,15 @@ const OrdersPage = () => {
       <Footer />
 
       <style>{`
-        .my-orders-page { width: min(960px, calc(100% - 40px)); margin: 0 auto; padding: 42px 0 70px; }
-        .my-orders-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; padding-bottom:24px; margin-bottom:24px; border-bottom:1px solid ${BORDER}; }
+        .my-orders-page { width: min(960px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 70px; }
+        .my-orders-heading { display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; padding-bottom:24px; margin-bottom:24px; border-bottom:1px solid ${BORDER}; }
         .my-orders-eyebrow { margin:0 0 8px; color:#C9933A; font-size:10px; letter-spacing:3px; }
         .my-orders-heading h1 { margin:0; font-size:30px; font-weight:500; letter-spacing:1px; }
         .my-orders-subtitle { margin:8px 0 0; color:${MUTED}; font-size:14px; }
         .my-orders-count { color:${BRAND}; background:#fff; border:1px solid ${BORDER}; border-radius:30px; padding:9px 16px; font-size:12px; white-space:nowrap; }
         .my-orders-list { display:grid; gap:16px; }
         .my-order-card { background:#fff; border:1px solid ${BORDER}; border-radius:14px; padding:20px 22px 0; box-shadow:0 5px 18px rgba(31,92,68,.05); }
-        .my-order-topline { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:16px; border-bottom:1px solid #F0EEE8; }
+        .my-order-topline { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 12px; padding-bottom:16px; border-bottom:1px solid #F0EEE8; }
         .my-order-topline > div { display:flex; align-items:center; gap:10px; }
         .my-order-label { color:${MUTED}; font-size:10px; letter-spacing:1.5px; }
         .my-order-topline strong { font-size:14px; }
@@ -123,15 +123,15 @@ const OrdersPage = () => {
         .my-order-total span { color:${MUTED}; font-size:11px; }
         .my-order-total strong { font-size:15px; white-space:nowrap; }
         .my-order-bottom { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 0; border-top:1px solid #F0EEE8; color:${MUTED}; font-size:12px; }
-        .my-order-bottom button { display:inline-flex; align-items:center; gap:9px; border:0; background:transparent; color:${BRAND}; font:600 12px ${FONT}; cursor:pointer; padding:7px 0 7px 10px; }
+        .my-order-bottom button { display:inline-flex; align-items:center; gap:9px; border:0; background:transparent; color:${BRAND}; font:600 12px ${FONT}; cursor:pointer; padding:10px 0 10px 12px; min-height:40px; }
         .my-order-bottom button:hover { color:#C9933A; }
         .my-orders-empty { background:#fff; border:1px solid ${BORDER}; border-radius:14px; text-align:center; padding:56px 20px; }
         .my-orders-empty-icon { color:${BRAND}; font-size:34px; opacity:.7; }
         .my-orders-empty h2 { margin:16px 0 6px; font-size:19px; font-weight:500; }
         .my-orders-empty p { margin:0 0 20px; color:${MUTED}; font-size:13px; }
-        .my-orders-empty button { border:0; border-radius:6px; background:${BRAND}; color:#fff; padding:11px 20px; font:500 12px ${FONT}; cursor:pointer; }
+        .my-orders-empty button { border:0; border-radius:6px; background:${BRAND}; color:#fff; padding:12px 24px; min-height:44px; font:500 12px ${FONT}; cursor:pointer; }
         @media (max-width:600px) {
-          .my-orders-page { width:calc(100% - 28px); padding:24px 0 44px; }
+          .my-orders-page { width:calc(100% - 28px); padding:20px 0 44px; }
           .my-orders-heading { align-items:flex-start; padding-bottom:18px; margin-bottom:18px; }
           .my-orders-heading h1 { font-size:24px; }
           .my-orders-subtitle {line-height:1.5; font-size:12px; }

@@ -1,3 +1,5 @@
+const http = require('http');
+const https = require('https');
 const axios = require('axios');
 const { Op } = require('sequelize');
 const Product = require('../models/Product');
@@ -7,14 +9,19 @@ const { billingRequestManager } = require('./billingRequestManager');
 const { configuredStockLocationId, normalizeStockLocationId } = require('./billingInvoicePayload');
 const { billingApiBaseUrl } = require('../config/serviceUrls');
 
+const ipv4HttpAgent = new http.Agent({ keepAlive: true, family: 4, maxSockets: 6 });
+const ipv4HttpsAgent = new https.Agent({ keepAlive: true, family: 4, maxSockets: 6 });
+
 const getBaseUrl = billingApiBaseUrl;
 const getOptions = () => ({
   headers: {
     Accept: 'application/json',
     ...(process.env.BILLING_API_TOKEN ? { Authorization: `Bearer ${process.env.BILLING_API_TOKEN}` } : {}),
   },
-  timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 20000,
+  timeout: Number(process.env.BILLING_API_TIMEOUT_MS) || 25000,
   maxRedirects: 0,
+  httpAgent: ipv4HttpAgent,
+  httpsAgent: ipv4HttpsAgent,
 });
 
 async function billingGet(path, params = {}, options = {}) {
@@ -24,7 +31,7 @@ async function billingGet(path, params = {}, options = {}) {
   const configuredTtl = Number(process.env.BILLING_API_CATALOG_CACHE_TTL_MS);
   const cacheTtlMs = options.cache === false ? 0
     : Number.isFinite(options.cacheTtlMs) && options.cacheTtlMs >= 0 ? options.cacheTtlMs
-      : Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 10000;
+      : Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 60000;
   const response = await billingRequestManager.request({
     method: 'GET', key, label: path,
     cacheTtlMs,
@@ -42,10 +49,8 @@ async function getProducts() {
   const firstPayload = await billingGet('/products');
   const lastPage = Math.max(1, Number(firstPayload?.meta?.last_page ?? firstPayload?.data?.meta?.last_page ?? 1) || 1);
   if (lastPage <= 1) return firstPayload;
-  const pages = [];
-  for (let page = 2; page <= lastPage; page += 1) {
-    pages.push(await billingGet('/products', { page }));
-  }
+  const pageNumbers = Array.from({ length: lastPage - 1 }, (_, idx) => idx + 2);
+  const pages = await Promise.all(pageNumbers.map(page => billingGet('/products', { page })));
   return {
     ...firstPayload,
     products: [...productsFromResponse(firstPayload), ...pages.flatMap(productsFromResponse)],
@@ -69,7 +74,7 @@ async function getEndpoint(path) {
   // Keep category navigation fresh after changes in Billing while still
   // deduplicating the frequent requests from the storefront and admin.
   const configuredTtl = Number(process.env.BILLING_API_CATALOG_CACHE_TTL_MS);
-  const cacheTtlMs = Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 10000;
+  const cacheTtlMs = Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 60000;
   return billingGet(path, {}, { cacheTtlMs });
 }
 

@@ -27,6 +27,8 @@ export default function OfferBanners({ showToast }) {
   const [formData, setFormData]   = useState(EMPTY_FORM);
   const [imageFile, setImageFile] = useState(null);
   const [existingImage, setExistingImage] = useState(null);
+  const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => { fetchOfferBanners(); }, []);
 
@@ -46,6 +48,8 @@ export default function OfferBanners({ showToast }) {
   };
 
   const closeForm = () => {
+    setFormError('');
+    setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
     setFormData(EMPTY_FORM);
@@ -81,15 +85,20 @@ export default function OfferBanners({ showToast }) {
       { value: formData.btnText, fieldName: 'Button Text', required: true, maxChars: 25, maxWords: 4 },
       { value: formData.btnLink, fieldName: 'Button Link', required: true, maxChars: 255 },
     ]);
+    setFormError('');
     if (validationError) {
+      setFormError(validationError);
       showToast('Validation Error', validationError);
       return;
     }
 
     if (!imageFile && !editingId) {
-      showToast('Validation Error', 'Banner Image is required.');
+      const msg = 'Banner Image is required.';
+      setFormError(msg);
+      showToast('Validation Error', msg);
       return;
     }
+    setIsSubmitting(true);
 
     const data = new FormData();
     Object.entries(formData).forEach(([k, v]) => data.append(k, v));
@@ -110,11 +119,17 @@ export default function OfferBanners({ showToast }) {
         closeForm();
         fetchOfferBanners();
       } else {
-        const err = await res.json();
-        showToast('Failed', err.error || 'Operation could not be completed.');
+        const err = await res.json().catch(() => ({}));
+        const msg = err.error || 'Operation could not be completed.';
+        setFormError(msg);
+        showToast('Failed', msg);
       }
     } catch {
-      showToast('Server Error', 'Something went wrong. Try again.');
+      const msg = 'Something went wrong. Try again.';
+      setFormError(msg);
+      showToast('Server Error', msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -256,7 +271,12 @@ export default function OfferBanners({ showToast }) {
                 previewMaxHeight={160}
               />
 
-              <button type="submit" className="km-btn-submit">
+              {formError && (
+                <div role="alert" className="km-field km-field-full" style={{ padding: '10px 14px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>
+                  {formError}
+                </div>
+              )}
+              <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
                 {editingId ? 'Update Offer Banner' : 'Save Offer Banner'}
               </button>
             </form>

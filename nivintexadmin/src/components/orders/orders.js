@@ -53,10 +53,23 @@ const AddressBlock = ({ addr, phone, phone2, email }) => {
   );
 };
 
+const formatInr = (value) =>
+  `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetryBilling, onEditShipping, onRetryShipment }) {
   if (!order) return null;
   const billing = parseAddr(order.billing_address);
   const shipping = parseAddr(order.shipping_address) || billing;
+  const itemsSum = (order.OrderItems || []).reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
+    0
+  );
+  const rawSubtotal = Number(order.subtotal || 0);
+  const productSubtotal = rawSubtotal > 0 ? rawSubtotal : itemsSum;
+  const tax = Number(order.tax || 0);
+  const preGstPrice = Math.max(0, productSubtotal - tax);
+  const discount = Number(order.discount || 0);
+  const shippingPaid = Number(order.delivery_charge || 0);
   const total = Number(order.total || 0);
   const bookingStatus = order.shiprocket_booking_status || (order.awb_code ? 'booked' : order.payment_status === 'paid' ? 'pending' : 'not_requested');
 
@@ -76,10 +89,10 @@ function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetryBi
             <div><span>Customer</span><strong>{order.customer_name}</strong><small>{order.customer_email} · {order.customer_phone || 'No phone'}</small></div>
             <div><span>Payment status</span><strong>{labelFor(order.payment_status || 'pending')}</strong></div>
             <div><span>Payment ID</span><strong className="km-order-break">{order.payment_id || 'Not available'}</strong></div>
-            <div><span>Total paid</span><strong>₹{total.toFixed(2)}</strong></div>
+            <div><span>Total paid</span><strong>{formatInr(total)}</strong></div>
           </section>
 
-          <section className="km-order-modal-section">
+          <section className="km-order-modal-section" style={{ marginTop: 16 }}>
             <h3>Purchased items</h3>
             <div className="km-order-modal-items">
               {order.OrderItems?.map((item, index) => {
@@ -124,9 +137,56 @@ function OrderDetailsModal({ order, onClose, onPreview, onEditBilling, onRetryBi
                     {itemCode && <small style={{ display: 'block', marginTop: 4, color: '#64748b', fontSize: 11 }}>Product code: {itemCode}</small>}
                   </div>
                   <span>Qty {item.quantity}</span>
-                  <span>₹{(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}</span>
+                  <span>{formatInr(Number(item.price || 0) * Number(item.quantity || 0))}</span>
                 </div>;
               })}
+            </div>
+          </section>
+
+          <section className="km-order-modal-section" style={{ marginTop: 16 }}>
+            <h3>Payment breakdown</h3>
+            <div className="km-order-modal-lines">
+              {tax > 0 && (
+                <div>
+                  <span>Product price (before GST)</span>
+                  <strong>{formatInr(preGstPrice)}</strong>
+                </div>
+              )}
+              <div>
+                <span>GST (included)</span>
+                <strong>{tax > 0 ? formatInr(tax) : 'Not applicable'}</strong>
+              </div>
+              <div>
+                <span>Product subtotal</span>
+                <strong>{formatInr(productSubtotal)}</strong>
+              </div>
+              {discount > 0 && (
+                <div>
+                  <span>
+                    Discount{order.coupon_code ? ` (${order.coupon_code})` : ''}
+                  </span>
+                  <strong style={{ color: '#059669' }}>-{formatInr(discount)}</strong>
+                </div>
+              )}
+              <div>
+                <span>Shipping charges</span>
+                <strong>{formatInr(shippingPaid)}</strong>
+              </div>
+              <div
+                style={{
+                  borderTop: '1px solid #e2e8f0',
+                  paddingTop: 10,
+                  marginTop: 4,
+                  fontSize: 14,
+                }}
+              >
+                <span style={{ color: '#0f172a', fontWeight: 700 }}>
+                  Total paid ({labelFor(order.payment_status || 'pending')})
+                </span>
+                <strong style={{ color: '#0f5447', fontSize: 15 }}>
+                  {formatInr(total)}
+                </strong>
+              </div>
             </div>
           </section>
 
@@ -442,7 +502,6 @@ export default function Orders({ showToast, status = null }) {
             const total = Number(order.total || 0);
 
             return (
-              <>
                 <tr key={order.id}>
                   <td className="td-id">#{order.id}</td>
                   <td>
@@ -478,8 +537,6 @@ export default function Orders({ showToast, status = null }) {
                     </button>
                   </td>
                 </tr>
-
-              </>
             );
           }}
         />

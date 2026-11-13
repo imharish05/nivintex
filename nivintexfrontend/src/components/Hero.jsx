@@ -56,7 +56,7 @@ const heroStyles = `
   .nalli-hero {
     position: relative;
     width: 100%;
-    height: clamp(380px, calc(100vh - 68px - 215px), 540px);
+    height: clamp(380px, calc(100svh - 68px - 215px), 540px);
     overflow: hidden;
     background: #FAF7F2;
   }
@@ -265,24 +265,35 @@ const heroStyles = `
   /* ── Dot Navigation ── */
   .nalli-dots {
     position: absolute;
-    bottom: 12px;
+    bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 4;
     display: flex;
-    gap: 8px;
+    gap: 2px;
   }
   .nalli-dot {
-    width: 8px;
-    height: 8px;
+    position: relative;
+    width: 24px;
+    height: 24px;
     border-radius: 50% !important;
-    background: rgba(15, 78, 66, 0.3);
+    background: transparent;
     border: none;
     cursor: pointer;
-    transition: background 0.3s, transform 0.3s;
     padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .nalli-dot.active {
+  .nalli-dot::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(15, 78, 66, 0.3);
+    transition: background 0.3s, transform 0.3s;
+  }
+  .nalli-dot.active::after {
     background: #0F4E42;
     transform: scale(1.35);
   }
@@ -290,7 +301,7 @@ const heroStyles = `
   /* ── Mobile Placement & Responsive Layout ── */
   @media (max-width: 768px) {
     .nalli-hero {
-      height: clamp(420px, 62vh, 520px);
+      height: clamp(390px, 60svh, 510px);
     }
     .nalli-slide-bg {
       object-position: center top;

@@ -94,6 +94,8 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
   margin-left: var(--sidebar-width);
 }
 
@@ -851,13 +853,13 @@ body {
    RESPONSIVE
 ══════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  :root { --sidebar-width: 64px; }
-  .main { margin-left: 64px; }
+  :root { --sidebar-width: 0px; }
+  .main { margin-left: 0; width: 100%; }
   .km-form-grid { grid-template-columns: 1fr; }
   .km-field-full { grid-column: span 1; }
   .km-btn-submit,
   .km-btn-cancel { grid-column: span 1; }
-  .content { padding: 16px; }
+  .content { padding: 14px; }
 }
 
 /* ══════════════════════════════════════════════════

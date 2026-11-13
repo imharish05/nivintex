@@ -47,7 +47,7 @@ const CartDrawer = ({ open, onClose }) => {
   }, [onClose]);
 
   const { subtotal, savings } = getCartTotals(false);
-  const fmt = (n) => '₹' + n.toLocaleString('en-IN');
+  const fmt = (n) => '₹' + Math.ceil((Number(n) || 0) - 1e-9).toLocaleString('en-IN');
 
   return (
     <>
@@ -107,11 +107,11 @@ const CartDrawer = ({ open, onClose }) => {
               }}>{cartCount}</span>
             )}
           </div>
-          <button onClick={onClose} style={{
+          <button onClick={onClose} aria-label="Close cart" style={{
             background: C.bg, border: `1px solid ${C.border}`,
-            width: '32px', height: '32px', cursor: 'pointer', color: C.brand,
+            width: '40px', height: '40px', cursor: 'pointer', color: C.brand,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '14px', transition: 'background 0.2s',
+            fontSize: '14px', transition: 'background 0.2s', flexShrink: 0,
           }}
             onMouseEnter={e => e.currentTarget.style.background = C.border}
             onMouseLeave={e => e.currentTarget.style.background = C.bg}
@@ -178,7 +178,7 @@ const CartDrawer = ({ open, onClose }) => {
                       color: C.brand, lineHeight: 1.4,
                       fontFamily: F.main, letterSpacing: '1px',
                     }}>{item.name}</p>
-                    <button onClick={() => removeFromCart(item.id)} style={{
+                    <button onClick={() => removeFromCart(item.id)} aria-label={`Remove ${item.name} from cart`} title="Remove item" style={{
                       background: 'none', border: 'none', cursor: 'pointer',
                       color: C.muted, fontSize: '13px', padding: '2px', flexShrink: 0,
                       transition: 'color 0.15s',
@@ -213,14 +213,14 @@ const CartDrawer = ({ open, onClose }) => {
                     </p>
                   )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', flexWrap: 'wrap', gap: '8px' }}>
                     {/* Qty stepper */}
                     <div style={{
                       display: 'flex', alignItems: 'center',
                       overflow: 'hidden',
                     }}>
-                      <button onClick={() => updateQty(item.id, -1)} style={{
-                        width: '30px', height: '30px', border: 'none', background: C.bg,
+                      <button onClick={() => updateQty(item.id, -1)} aria-label="Decrease quantity" style={{
+                        width: '36px', height: '36px', border: 'none', background: C.bg,
                         cursor: 'pointer', fontSize: '16px', color: C.brand,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontFamily: F.main,
@@ -230,8 +230,8 @@ const CartDrawer = ({ open, onClose }) => {
                         fontWeight: 400, color: C.brand, fontFamily: F.main,
                         letterSpacing: '1px',
                       }}>{item.qty}</span>
-                      <button onClick={() => updateQty(item.id, 1)} style={{
-                        width: '30px', height: '30px', border: 'none', background: C.bg,
+                      <button onClick={() => updateQty(item.id, 1)} aria-label="Increase quantity" style={{
+                        width: '36px', height: '36px', border: 'none', background: C.bg,
                         cursor: item.billingVariantId && (item.stockSyncStatus !== 'verified' || item.qty >= item.availableStock) ? 'not-allowed' : 'pointer', fontSize: '16px', color: C.brand,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontFamily: F.main,
@@ -253,7 +253,7 @@ const CartDrawer = ({ open, onClose }) => {
         {/* ── Footer ── */}
         {cartItems.length > 0 && (
           <div style={{
-            padding: '20px 24px',
+            padding: '18px 20px max(18px, env(safe-area-inset-bottom))',
             borderTop: `1px solid ${C.border}`,
             background: C.surface,
             flexShrink: 0,
@@ -296,7 +296,7 @@ const CartDrawer = ({ open, onClose }) => {
             </div>
             {cartItems.some(item => String(item.mrpGstType || 'With GST').toLowerCase() !== 'without gst') && (
               <p style={{ margin: '-12px 0 14px', textAlign: 'right', color: C.muted, fontSize: 10, fontFamily: F.sub }}>
-                Applicable 5% GST is added at checkout.
+                5% GST is included in the product price and shown at checkout.
               </p>
             )}
 

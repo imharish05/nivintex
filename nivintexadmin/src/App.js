@@ -34,10 +34,8 @@ const PAGE_CONFIG = {
   combos:             { title: 'Combos Management' },
   categories:         { title: 'Categories' },
   subcategories:      { title: 'Sub-Categories' },
-  brands:             { title: 'Brands' },
   products:           { title: 'Products' },
   variants:           { title: 'Product Variants' },
-  stock:              { title: 'Stock Management' },
   customers:          { title: 'Customers' },
   reviews:            { title: 'Reviews' },
   coupons:            { title: 'Coupon Management' },
@@ -61,12 +59,13 @@ function AdminLayoutWrapper({ handleLogout, showToast, toast, confirmRequest, on
   const location = useLocation();
   const currentPath = location.pathname.split('/')[1] || 'dashboard';
   const cfg = PAGE_CONFIG[currentPath] || PAGE_CONFIG.dashboard;
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="layout">
-      <Sidebar activePage={currentPath} onLogout={handleLogout} />
+      <Sidebar activePage={currentPath} onLogout={handleLogout} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="main">
-        <Topbar title={cfg.title} />
+        <Topbar title={cfg.title} onMenuClick={() => setSidebarOpen(prev => !prev)} />
         <div className="content">
           <Routes>
             <Route path="/dashboard"          element={<Dashboard     showToast={showToast} />} />

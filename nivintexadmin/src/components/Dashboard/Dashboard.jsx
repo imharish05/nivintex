@@ -396,10 +396,23 @@ export default function Dashboard({ showToast }) {
     });
 
     const lowStock = [], outOfStock = [];
-    enriched.forEach(p => {
-      const entry = { productId: p.id, productName: p.name, category: p.category, stock: p.stock, salesPrice: p.price, mrp: p.mrp };
-      if (entry.stock === 0) outOfStock.push(entry);
-      else if (entry.stock <= threshold) lowStock.push(entry);
+    allProducts.forEach(p => {
+      const variants = p.Variants || p.variants || p.product_variants || [];
+      const pName = p.productName || p.name || `Product ${p.id}`;
+      if (Array.isArray(variants) && variants.length > 0) {
+        variants.forEach((v, idx) => {
+          const vStock = Number(v.stock ?? v.quantity) || 0;
+          const vLabel = [v.size, v.color, v.sku || v.variant_code].filter(Boolean).join(' · ') || `Variant #${v.id || idx + 1}`;
+          const entry = { key: `${p.id}-${v.id || idx}`, productId: p.id, productName: pName, variantLabel: vLabel, stock: vStock };
+          if (vStock === 0) outOfStock.push(entry);
+          else if (vStock <= threshold) lowStock.push(entry);
+        });
+      } else {
+        const pStock = Number(p.stock) || 0;
+        const entry = { key: `${p.id}`, productId: p.id, productName: pName, variantLabel: '', stock: pStock };
+        if (pStock === 0) outOfStock.push(entry);
+        else if (pStock <= threshold) lowStock.push(entry);
+      }
     });
     lowStock.sort((a, b) => a.stock - b.stock);
 
@@ -587,16 +600,29 @@ export default function Dashboard({ showToast }) {
               No category data
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={128}>
-              <PieChart>
-                <Pie data={products.categoryData} dataKey="revenue" nameKey="name"
-                  cx="50%" cy="50%" outerRadius={50} innerRadius={30} paddingAngle={2}
-                  labelLine={false}>
-                  {products.categoryData.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />)}
-                </Pie>
-                <Tooltip formatter={(v, _, p) => [fmtINR(v), p.payload.name]} />
-              </PieChart>
-            </ResponsiveContainer>
+            <>
+              <ResponsiveContainer width="100%" height={128}>
+                <PieChart>
+                  <Pie data={products.categoryData} dataKey="revenue" nameKey="name"
+                    cx="50%" cy="50%" outerRadius={50} innerRadius={30} paddingAngle={2}
+                    labelLine={false}>
+                    {products.categoryData.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v, _, p) => [fmtINR(v), p.payload.name]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-2 flex flex-col gap-1.5">
+                {products.categoryData.map((cat, i) => (
+                  <div key={cat.name} className="flex items-center justify-between text-xs text-slate-600">
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                      <span className="truncate">{cat.name}</span>
+                    </span>
+                    <span className="font-medium text-slate-700 ml-2 flex-shrink-0">{fmtINR(cat.revenue)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -644,9 +670,12 @@ export default function Dashboard({ showToast }) {
           ) : (
             <div className="flex flex-col gap-2">
               {[...products.outOfStock, ...products.lowStock].slice(0, 5).map(v => (
-                <div key={v.productId} className="flex justify-between items-center text-sm border-b border-slate-50 pb-2">
-                  <span className="truncate max-w-[140px] text-slate-600">{v.productName}</span>
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${v.stock === 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                <div key={v.key} className="flex justify-between items-center text-sm border-b border-slate-50 pb-2 gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate max-w-[170px] text-slate-700">{v.productName}</div>
+                    {v.variantLabel && <div className="truncate max-w-[170px] text-[11px] text-slate-400">{v.variantLabel}</div>}
+                  </div>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${v.stock === 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
                     {v.stock === 0 ? 'Out' : `${v.stock} left`}
                   </span>
                 </div>

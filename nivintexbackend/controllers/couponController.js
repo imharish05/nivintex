@@ -2,10 +2,36 @@
 const Order = require('../models/Order');
 const { Op } = require('sequelize');
 
+function parseAndValidateExpiry(rawExpiry) {
+    if (rawExpiry === undefined || rawExpiry === null || String(rawExpiry).trim() === '') {
+        return { value: null, error: null };
+    }
+    const trimmed = String(rawExpiry).trim();
+    const parsed = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+        ? new Date(`${trimmed}T23:59:59.999`)
+        : new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) {
+        return { value: null, error: 'Invalid expiry date.' };
+    }
+    if (parsed <= new Date()) {
+        return { value: null, error: 'Expiry date cannot be in the past.' };
+    }
+    return { value: parsed, error: null };
+}
+
 // Create coupon
 exports.createCoupon = async (req, res) => {
     try {
-        const coupon = await Coupon.create(req.body);
+        const { value: parsedExpiry, error: expiryError } = parseAndValidateExpiry(req.body.expires_at);
+        if (expiryError) {
+            return res.status(400).json({ success: false, message: expiryError });
+        }
+        const payload = {
+            ...req.body,
+            code: String(req.body.code || '').trim().toUpperCase(),
+            expires_at: parsedExpiry,
+        };
+        const coupon = await Coupon.create(payload);
         res.status(201).json({ success: true, data: coupon });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
@@ -15,10 +41,21 @@ exports.createCoupon = async (req, res) => {
 // Update coupon (needed by admin UI)
 exports.updateCoupon = async (req, res) => {
     try {
-        await Coupon.update(req.body, { where: { id: req.params.id } });
+        const payload = { ...req.body };
+        if (Object.prototype.hasOwnProperty.call(req.body, 'expires_at')) {
+            const { value: parsedExpiry, error: expiryError } = parseAndValidateExpiry(req.body.expires_at);
+            if (expiryError) {
+                return res.status(400).json({ success: false, message: expiryError });
+            }
+            payload.expires_at = parsedExpiry;
+        }
+        if (payload.code !== undefined) {
+            payload.code = String(payload.code).trim().toUpperCase();
+        }
+        await Coupon.update(payload, { where: { id: req.params.id } });
         res.json({ success: true, message: 'Coupon updated' });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(400).json({ success: false, message: error.message });
     }
 };
 

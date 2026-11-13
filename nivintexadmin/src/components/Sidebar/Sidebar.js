@@ -100,6 +100,14 @@ const NAV_ITEMS = [
           <line x1="12" y1="5" x2="12" y2="19" strokeDasharray="3 3" />
         </svg>
       )},
+      /* Promo Bar is temporarily hidden; keep the navigation definition for re-enabling later.
+      { id: 'promo-bar', label: 'Promo Bar', icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="2" y="7" width="20" height="10" rx="2" />
+          <line x1="6" y1="12" x2="18" y2="12" />
+        </svg>
+      )},
+      */
     ],
   },
   {
@@ -186,7 +194,7 @@ const NAV_ITEMS = [
 ];
 
 
-export default function Sidebar({ onLogout }) {
+export default function Sidebar({ onLogout, isOpen = false, onClose }) {
   const location = useLocation();
   const activePage = location.pathname.split('/')[1] || 'dashboard';
 
@@ -220,7 +228,9 @@ export default function Sidebar({ onLogout }) {
   };
 
   return (
-    <aside className={styles.sidebar}>
+    <>
+      {isOpen && <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />}
+      <aside className={`${styles.sidebar} ${isOpen ? styles.sidebarOpen : ''}`}>
       <div className={styles.logoArea} style={{ padding: '24px 20px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
           <img src={logo} alt="Fashion Aura" style={{ height: '32px', width: 'auto', display: 'block' }} />
@@ -256,6 +266,7 @@ export default function Sidebar({ onLogout }) {
                         <Link
                           key={sub.id}
                           to={`/${sub.id}`}
+                          onClick={() => onClose?.()}
                           className={`${styles.subItem} ${activePage === sub.id ? styles.subActive : ''}`}
                           style={{ textDecoration: 'none' }}
                         >
@@ -270,6 +281,7 @@ export default function Sidebar({ onLogout }) {
                 <Link
                   key={item.id}
                   to={`/${item.id}`}
+                  onClick={() => onClose?.()}
                   className={`${styles.navItem} ${activePage === item.id ? styles.active : ''}`}
                   style={{ textDecoration: 'none' }}
                 >
@@ -291,5 +303,6 @@ export default function Sidebar({ onLogout }) {
         </button>
       </div>
     </aside>
+    </>
   );
 }

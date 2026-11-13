@@ -122,10 +122,10 @@ const OrderDetailsPage = () => {
       </main>
       <Footer />
       <style>{`
-        .order-detail-page { width:min(960px,calc(100% - 40px)); margin:0 auto; padding:18px 0 42px; }
-        .order-detail-back { display:inline-flex; align-items:center; gap:8px; padding:6px 0; margin-bottom:10px; border:0; background:transparent; color:${BRAND}; font:500 12px ${FONT}; cursor:pointer; }
+        .order-detail-page { width:min(960px,calc(100% - 40px)); margin:0 auto; padding:20px 0 42px; }
+        .order-detail-back { display:inline-flex; align-items:center; gap:8px; padding:8px 0; min-height:40px; margin-bottom:10px; border:0; background:transparent; color:${BRAND}; font:500 12px ${FONT}; cursor:pointer; }
         .order-detail-back:hover { color:#C9933A; }
-        .order-detail-heading { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:12px 18px; background:#fff; border:1px solid ${BORDER}; border-radius:14px; }
+        .order-detail-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px 18px; padding:12px 18px; background:#fff; border:1px solid ${BORDER}; border-radius:14px; }
         .order-detail-heading-copy { display:grid; justify-items:start; gap:4px; }
         .order-detail-heading-copy > p, .order-detail-heading-copy > h1 { margin:0 !important; line-height:1.2 !important; }
         .order-detail-eyebrow { color:#C9933A; font-size:10px; letter-spacing:2px; }
@@ -161,7 +161,7 @@ const OrderDetailsPage = () => {
         .order-detail-state p { font-size:13px; }
         .order-detail-state button { margin-top:10px; padding:10px 16px; border:0; border-radius:6px; color:#fff; background:${BRAND}; font:500 12px ${FONT}; cursor:pointer; }
         @media(max-width:600px) {
-          .order-detail-page { width:calc(100% - 28px); padding:14px 0 34px; }
+          .order-detail-page { width:calc(100% - 28px); padding:16px 0 34px; }
           .order-detail-heading { padding:10px 12px; align-items:center; }
           .order-detail-heading-copy { gap:3px; }
           .order-detail-heading h1 { font-size:19px; }
@@ -170,8 +170,9 @@ const OrderDetailsPage = () => {
           .order-progress-card, .order-detail-card { margin-top:8px; padding:13px 12px; }
           .order-progress { margin:14px 0 0; }
           .order-progress-line { left:9%; right:9%; }
-          .order-progress-step { font-size:9px; }
+          .order-progress-step { font-size:9px; line-height:1.25; padding:0 2px; }
           .order-progress-dot { width:23px; height:23px; }
+          .order-detail-state button { min-height:44px; padding:12px 20px; }
           .order-detail-item { gap:9px; padding:8px 0; }
           .order-detail-item img { width:44px; height:54px; }
           .order-detail-item-info strong { font-size:11px; }

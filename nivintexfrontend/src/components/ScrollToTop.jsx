@@ -85,10 +85,10 @@ export default function ScrollToTop() {
 
         @media (max-width: 768px) {
           .fa-scroll-top-btn {
-            bottom: 82px;
-            right: 26px;
-            width: 42px;
-            height: 42px;
+            bottom: calc(max(14px, env(safe-area-inset-bottom)) + 54px);
+            right: 14px;
+            width: 44px;
+            height: 44px;
             border-radius: 50% !important;
           }
           .fa-scroll-top-btn i {

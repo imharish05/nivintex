@@ -71,7 +71,8 @@ const styles = `
     background: #ffffff;
     border: 1px solid rgba(15, 84, 71, 0.3);
     border-radius: 8px !important;
-    padding: 6px 14px;
+    min-height: 36px;
+    padding: 8px 14px;
     transition: all 0.22s ease;
     cursor: pointer;
     line-height: 1;
@@ -323,7 +324,7 @@ const styles = `
   @media (max-width: 640px) {
     .na-header { margin-bottom: 16px; }
     .na-heading { font-size: clamp(20px, 5.2vw, 24px); }
-    .na-viewall { font-size: 11px; padding: 5px 11px; gap: 4px; }
+    .na-viewall { font-size: 11px; min-height: 36px; padding: 8px 12px; gap: 4px; }
     .na-viewall svg { width: 10px; height: 10px; }
     .na-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .na-right { min-height: 260px; aspect-ratio: 4/3; max-height: 360px; padding: 12px; }
@@ -484,8 +485,7 @@ export default function NewArrivalsSection() {
                       />
                     ) : (
                       <div className="na-placeholder" style={{ background: '#126354', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', overflow: 'hidden' }}>
-                        <img src={logo} alt="Fashion Aura" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
-                        <img src={logo} alt="Default Logo" style={{ width: '75%', height: 'auto', objectFit: 'contain' }} />
+                        <img src={logo} alt="Fashion Aura" style={{ width: '75%', height: 'auto', objectFit: 'contain' }} />
                       </div>
                     )}
 

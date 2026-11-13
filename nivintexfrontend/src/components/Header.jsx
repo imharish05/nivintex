@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useShop } from '../context/ShopContext';
-import CartDrawer from './CartDrawer';
-import WishlistDrawer from './WishlistDrawer';
 import { categoryApi, subCategoryApi, productApi, getImageUrl, slugifyProductName } from '../utils/api';
 import logo from '../assets/img/logo2.png';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -70,7 +68,7 @@ const styles = {
     boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
     position: 'fixed',
     top: 0, left: 0, right: 0,
-    zIndex: 999,
+    zIndex: 1100,
     transition: 'background 0.35s ease, box-shadow 0.35s ease',
     fontFamily: F.main,
   }),
@@ -251,7 +249,7 @@ const styles = {
     border: '1px solid rgba(15,84,71,0.10)',
     boxShadow: '0 18px 48px -8px rgba(15,84,71,0.22), 0 6px 18px rgba(20,35,28,0.08)',
     padding: '0',
-    zIndex: 1100,
+    zIndex: 1200,
     opacity: visible ? 1 : 0,
     transform: visible ? 'translateY(0) scale(1)' : 'translateY(-8px) scale(0.97)',
     pointerEvents: visible ? 'all' : 'none',
@@ -537,13 +535,24 @@ const IconBtn = ({ active, title, onClick, children, hoverColor, textColor }) =>
 };
 
 // ── Main Header ───────────────────────────────────────────────────────────────
-const Header = () => {
+const Header = ({ onOpenCart, onOpenWishlist }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [hasSaleProducts, setHasSaleProducts] = useState(false);
-  const [cartOpen, setCartOpen]       = useState(false);
-  const [wishOpen, setWishOpen]       = useState(false);
+  /* Promo banner temporarily hidden from header; uncomment to re-enable.
+  const [promoBars, setPromoBars]     = useState([]);
+  const [promoIdx, setPromoIdx]       = useState(0);
+  */
+  const openCartDrawer = () => (onOpenCart ? onOpenCart() : window.dispatchEvent(new CustomEvent('openCartDrawer')));
+  const openWishDrawer = () => (onOpenWishlist ? onOpenWishlist() : window.dispatchEvent(new CustomEvent('openWishlistDrawer')));
   const [accountOpen, setAccountOpen] = useState(false);
+  const [pinnedOpen, setPinnedOpen]   = useState(false);
+  const isAccountMenuOpen = accountOpen || pinnedOpen;
+
+  const closeAccountMenu = () => {
+    setAccountOpen(false);
+    setPinnedOpen(false);
+  };
   const [collOpen, setCollOpen]       = useState(false);
   const [collHovered, setCollHovered] = useState(false);
   const [categories, setCategories]   = useState([]);
@@ -563,7 +572,7 @@ const Header = () => {
 
   useEffect(() => {
     setMobileNavOpen(false);
-    setAccountOpen(false);
+    closeAccountMenu();
     setCollOpen(false);
   }, [location.pathname]);
 
@@ -604,10 +613,28 @@ const Header = () => {
       .catch((err) => console.error('[Header] check sale products:', err));
   }, []);
 
+  /* Promo banner temporarily hidden from header; uncomment to re-enable.
+  useEffect(() => {
+    fetch(`${BASE_API}/promo-bar/active`)
+      .then(r => (r.ok ? r.json() : []))
+      .then(data => { if (Array.isArray(data)) setPromoBars(data); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (promoBars.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setPromoIdx(i => (i + 1) % promoBars.length);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [promoBars.length]);
+  */
+
   const accountRef = useRef(null);
   const collRef    = useRef(null);
   const collListRef = useRef(null);
   const accTimer   = useRef(null);
+  const lastAccEnterRef = useRef(0);
   const collTimer  = useRef(null);
   const searchRef  = useRef(null);
   const searchModalRef = useRef(null);
@@ -618,7 +645,7 @@ const Header = () => {
 
   useEffect(() => {
     const handleClick = (e) => {
-      if (accountRef.current && !accountRef.current.contains(e.target)) setAccountOpen(false);
+      if (accountRef.current && !accountRef.current.contains(e.target)) closeAccountMenu();
       if (collRef.current    && !collRef.current.contains(e.target))    { setCollOpen(false); setCollHovered(false); }
     };
     document.addEventListener('mousedown', handleClick);
@@ -731,7 +758,10 @@ const Header = () => {
     setCollHovered(true);
   };
   const handleCollLeave = () => { collTimer.current = setTimeout(() => { setCollOpen(false); setCollHovered(false); }, 160); };
-  const handleAccEnter  = () => { clearTimeout(accTimer.current); setAccountOpen(true); };
+  const handleAccEnter  = () => {
+    clearTimeout(accTimer.current);
+    setAccountOpen(true);
+  };
   const handleAccLeave  = () => { accTimer.current = setTimeout(() => setAccountOpen(false), 250); };
 
   // ── Navigate to Shop page pre-filtered by the chosen category ──
@@ -772,6 +802,50 @@ const Header = () => {
       <div style={{ height: '68px' }} />
 
       <header style={{ ...styles.headerWrap(), background: C.brand }} id="header-sticky">
+        {/* Promo banner temporarily hidden from header; uncomment to re-enable.
+        {activePromo && (
+          <div
+            role="region"
+            aria-label="Promotional announcement"
+            style={{
+              background: activePromo.bgGradient || '#126354',
+              color: activePromo.textColor || '#ffffff',
+              minHeight: '32px',
+              padding: '5px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              flexWrap: 'wrap',
+              fontSize: '11px',
+              fontFamily: F.main,
+              letterSpacing: '1.2px',
+              textAlign: 'center',
+              borderBottom: '1px solid rgba(255,255,255,0.14)',
+            }}
+          >
+            {activePromo.linkUrl ? (
+              <Link to={activePromo.linkUrl} style={{ color: 'inherit', textDecoration: 'none', fontWeight: 500 }}>
+                {activePromo.message}
+              </Link>
+            ) : (
+              <span style={{ fontWeight: 500 }}>{activePromo.message}</span>
+            )}
+            {activePromo.code && (
+              <span style={{
+                padding: '2px 8px',
+                borderRadius: '4px',
+                border: '1px dashed currentColor',
+                fontSize: '10px',
+                fontWeight: 700,
+                letterSpacing: '1.5px',
+              }}>
+                {activePromo.codeLabel ? `${activePromo.codeLabel}: ` : ''}{activePromo.code}
+              </span>
+            )}
+          </div>
+        )}
+        */}
         <div style={styles.headerInner} className="header-inner-row">
 
           {/* Logo */}
@@ -862,13 +936,13 @@ const Header = () => {
             </div>
 
             {/* Wishlist */}
-            <IconBtn active={wishOpen} title="Wishlist" hoverColor={C.navHover} textColor={C.text} onClick={() => { setWishOpen(true); setCartOpen(false); }}>
+            <IconBtn active={false} title="Wishlist" hoverColor={C.navHover} textColor={C.text} onClick={openWishDrawer}>
               <i className="fa-regular fa-heart" />
               {wishlistCount > 0 && <span style={styles.badge()}>{wishlistCount}</span>}
             </IconBtn>
 
             {/* Cart */}
-            <IconBtn active={cartOpen} title="Cart" hoverColor={C.navHover} textColor={C.text} onClick={() => { setCartOpen(true); setWishOpen(false); }}>
+            <IconBtn active={false} title="Cart" hoverColor={C.navHover} textColor={C.text} onClick={openCartDrawer}>
               <i className="fa-solid fa-bag-shopping" />
               {cartCount > 0 && <span style={styles.badge()}>{cartCount}</span>}
             </IconBtn>
@@ -878,15 +952,18 @@ const Header = () => {
               onMouseEnter={handleAccEnter} onMouseLeave={handleAccLeave}>
               <button
                 style={{
-                  ...styles.accountBtn(accountOpen),
+                  ...styles.accountBtn(isAccountMenuOpen),
                   outline: 'none',
                 }}
-                onClick={() => setAccountOpen(o => !o)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinnedOpen(p => !p);
+                }}
                 onMouseEnter={() => setAccHovered(true)}
                 onMouseLeave={() => setAccHovered(false)}
                 title={user ? `${user.name} - Account` : 'Sign in'}
                 aria-label="Account options"
-                aria-expanded={accountOpen}
+                aria-expanded={isAccountMenuOpen}
               >
                 {user ? (
                   <div
@@ -896,7 +973,7 @@ const Header = () => {
                       gap: '5px',
                       padding: '3px 6px 3px 3px',
                       borderRadius: '24px',
-                      background: (accountOpen || accHovered) ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                      background: (isAccountMenuOpen || accHovered) ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
                       transition: 'all 0.2s ease',
                     }}
                   >
@@ -914,7 +991,7 @@ const Header = () => {
                         fontWeight: 700,
                         fontFamily: F.main,
                         letterSpacing: '0.5px',
-                        boxShadow: (accountOpen || accHovered)
+                        boxShadow: (isAccountMenuOpen || accHovered)
                           ? '0 0 0 2px #FFFFFF, 0 3px 8px rgba(0,0,0,0.25)'
                           : '0 0 0 1.5px rgba(255,255,255,0.4)',
                         transition: 'all 0.2s ease',
@@ -926,9 +1003,9 @@ const Header = () => {
                       className="fa-solid fa-chevron-down"
                       style={{
                         fontSize: '9px',
-                        color: (accountOpen || accHovered) ? '#C9933A' : 'rgba(255,255,255,0.7)',
+                        color: (isAccountMenuOpen || accHovered) ? '#C9933A' : 'rgba(255,255,255,0.7)',
                         transition: 'transform 0.25s ease, color 0.2s',
-                        transform: accountOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: isAccountMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                       }}
                     />
                   </div>
@@ -941,8 +1018,8 @@ const Header = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: (accountOpen || accHovered) ? C.navHover : C.text,
-                      background: (accountOpen || accHovered) ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                      color: (isAccountMenuOpen || accHovered) ? C.navHover : C.text,
+                      background: (isAccountMenuOpen || accHovered) ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
                       fontSize: '15px',
                       transition: 'all 0.2s ease',
                     }}
@@ -952,7 +1029,7 @@ const Header = () => {
                 )}
               </button>
 
-              <div style={styles.dropdown(accountOpen)}>
+              <div style={styles.dropdown(isAccountMenuOpen)}>
                 {/* Invisible hover bridge to prevent cursor gap drop */}
                 <div
                   style={{
@@ -991,10 +1068,10 @@ const Header = () => {
                       </div>
                     </div>
                     <div style={styles.menuList}>
-                      <DropItem icon="fa-solid fa-user"               label="My Profile" onClick={() => { navigate('/profile'); setAccountOpen(false); }} />
-                      <DropItem icon="fa-solid fa-truck"              label="My Orders"  onClick={() => { navigate('/orders');  setAccountOpen(false); }} />
+                      <DropItem icon="fa-solid fa-user"               label="My Profile" onClick={() => { navigate('/profile'); closeAccountMenu(); }} />
+                      <DropItem icon="fa-solid fa-truck"              label="My Orders"  onClick={() => { navigate('/orders');  closeAccountMenu(); }} />
                       <div style={styles.dropDivider} />
-                      <DropItem icon="fa-solid fa-right-from-bracket" label="Logout"     onClick={() => { setAccountOpen(false); logout(); }} danger />
+                      <DropItem icon="fa-solid fa-right-from-bracket" label="Logout"     onClick={() => { closeAccountMenu(); logout(); }} danger />
                     </div>
                   </>
                 ) : (
@@ -1003,11 +1080,11 @@ const Header = () => {
                     <p style={styles.guestTitle}>Welcome</p>
                     <p style={styles.guestSub}>Sign in for orders, wishlist & more</p>
                     <Link to="/login" style={styles.signInBtn}
-                      onClick={() => setAccountOpen(false)}>
+                      onClick={() => { sessionStorage.removeItem('redirectAfterLogin'); closeAccountMenu(); }}>
                       Sign In
                     </Link>
                     <Link to="/register" style={styles.registerLink}
-                      onClick={() => setAccountOpen(false)}>
+                      onClick={() => { sessionStorage.removeItem('redirectAfterLogin'); closeAccountMenu(); }}>
                       New customer? Create account
                     </Link>
                   </div>
@@ -1057,7 +1134,7 @@ const Header = () => {
             aria-label="Close Navigation Menu"
             style={{
               background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff',
-              width: '32px', height: '32px', borderRadius: '50%',
+              width: '40px', height: '40px', borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer'
             }}
@@ -1271,14 +1348,14 @@ const Header = () => {
               <>
                 <Link
                   to="/login"
-                  onClick={() => setMobileNavOpen(false)}
+                  onClick={() => { sessionStorage.removeItem('redirectAfterLogin'); setMobileNavOpen(false); }}
                   style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', color: '#2C2F33', textDecoration: 'none', fontSize: '12px', letterSpacing: '1px' }}
                 >
                   <i className="fa-regular fa-user" style={{ width: '16px', color: C.brand }} /> Sign In
                 </Link>
                 <Link
                   to="/register"
-                  onClick={() => setMobileNavOpen(false)}
+                  onClick={() => { sessionStorage.removeItem('redirectAfterLogin'); setMobileNavOpen(false); }}
                   style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', color: '#2C2F33', textDecoration: 'none', fontSize: '12px', letterSpacing: '1px' }}
                 >
                   <i className="fa-solid fa-user-plus" style={{ width: '16px', color: C.brand }} /> Create Account
@@ -1289,11 +1366,11 @@ const Header = () => {
         </div>
 
         {/* Bottom quick actions */}
-        <div style={{ padding: '14px 20px', background: '#F4F0E8', borderTop: '1px solid #EAE4D6', display: 'flex', gap: '10px' }}>
+        <div style={{ padding: '14px 16px max(14px, env(safe-area-inset-bottom))', background: '#F4F0E8', borderTop: '1px solid #EAE4D6', display: 'flex', gap: '10px' }}>
           <button
-            onClick={() => { setMobileNavOpen(false); setWishOpen(true); }}
+            onClick={() => { setMobileNavOpen(false); openWishDrawer(); }}
             style={{
-              flex: 1, padding: '10px 12px', background: '#fff', border: '1px solid #EAE4D6',
+              flex: 1, minHeight: '44px', padding: '10px 12px', background: '#fff', border: '1px solid #EAE4D6',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
               color: C.brand, fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', fontFamily: F.main,
             }}
@@ -1301,9 +1378,9 @@ const Header = () => {
             <i className="fa-regular fa-heart" /> Wishlist ({wishlistCount})
           </button>
           <button
-            onClick={() => { setMobileNavOpen(false); setCartOpen(true); }}
+            onClick={() => { setMobileNavOpen(false); openCartDrawer(); }}
             style={{
-              flex: 1, padding: '10px 12px', background: C.brand, border: 'none',
+              flex: 1, minHeight: '44px', padding: '10px 12px', background: C.brand, border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
               color: '#fff', fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', cursor: 'pointer', fontFamily: F.main,
             }}
@@ -1400,8 +1477,8 @@ const Header = () => {
                   background: '#F4F0E8',
                   color: C.brand,
                   cursor: 'pointer',
-                  width: '36px',
-                  height: '36px',
+                  width: '40px',
+                  height: '40px',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
@@ -1715,12 +1792,14 @@ const Header = () => {
             {/* Modal Footer */}
             {searchResults.length > 0 && (
               <div style={{
-                padding: '12px 20px',
+                padding: '12px 16px',
                 background: '#FAF8F5',
                 borderTop: '1px solid #EAE4D6',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                gap: '10px',
+                flexWrap: 'wrap',
               }}>
                 <button
                   type="button"
@@ -1729,10 +1808,12 @@ const Header = () => {
                     background: C.brand,
                     color: '#ffffff',
                     border: 'none',
-                    padding: '9px 18px',
+                    padding: '10px 16px',
+                    minHeight: '40px',
+                    maxWidth: '100%',
                     borderRadius: '8px',
                     fontSize: '11px',
-                    letterSpacing: '1.5px',
+                    letterSpacing: '1.2px',
                     textTransform: 'uppercase',
                     cursor: 'pointer',
                     display: 'flex',
@@ -1740,10 +1821,11 @@ const Header = () => {
                     gap: '6px',
                     fontFamily: F.main,
                     fontWeight: 500,
+                    minWidth: 0,
                   }}
                 >
-                  <span>View All Results for "{searchQuery}"</span>
-                  <i className="fa-solid fa-arrow-right" style={{ fontSize: '10px' }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>View All Results for "{searchQuery}"</span>
+                  <i className="fa-solid fa-arrow-right" style={{ fontSize: '10px', flexShrink: 0 }} />
                 </button>
                 <span className="d-none d-md-inline" style={{ fontSize: '11px', color: '#8A998A' }}>
                   Press <kbd style={{ padding: '2px 5px', background: '#fff', border: '1px solid #ccc', borderRadius: '3px', fontSize: '10px' }}>ESC</kbd> to exit
@@ -1753,10 +1835,6 @@ const Header = () => {
           </div>
         </div>
       )}
-
-      {/* Drawers */}
-      <CartDrawer     open={cartOpen} onClose={() => setCartOpen(false)} />
-      <WishlistDrawer open={wishOpen} onClose={() => setWishOpen(false)} onOpenCart={() => { setCartOpen(true); setWishOpen(false); }} />
     </>
   );
 };

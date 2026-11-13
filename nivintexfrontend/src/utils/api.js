@@ -7,50 +7,70 @@ import { API_BASE_URL, BILLING_API_BASE_URL, BILLING_ASSET_BASE_URL } from '../c
 
 const BASE = API_BASE_URL;
 const LOCAL = API_BASE_URL;
+const inFlightGetRequests = new Map();
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 async function request(method, path, body, useLocal = false) {
   const baseUrl = useLocal ? LOCAL : BASE;
   const url = `${baseUrl}${path}`;
-  const isFormData = body instanceof FormData;
 
-  const headers = {};
-  if (!isFormData) headers['Content-Type'] = 'application/json';
-
-  const token = localStorage.getItem('adminToken') || localStorage.getItem('userToken');
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  let res;
-  try {
-    res = await fetch(url, {
-      method,
-      headers,
-      body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
-    });
-  } catch (networkErr) {
-    throw new Error(
-      `Cannot connect to server at ${baseUrl}. Is the backend running?\n(${networkErr.message})`
-    );
+  if (method === 'GET' && !body && inFlightGetRequests.has(url)) {
+    return inFlightGetRequests.get(url);
   }
 
-  // Parse response
-  const contentType = res.headers.get('content-type') || '';
-  const isJson = contentType.includes('application/json');
+  const executeRequest = async () => {
+    const isFormData = body instanceof FormData;
 
-  if (!res.ok) {
-    const errData = isJson ? await res.json() : { message: res.statusText };
-    if (res.status === 401 && localStorage.getItem('adminToken')) {
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminUser');
-      window.dispatchEvent(new Event('admin-auth-expired'));
+    const headers = {};
+    if (!isFormData) headers['Content-Type'] = 'application/json';
+
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('userToken');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
+      });
+    } catch (networkErr) {
+      throw new Error(
+        `Cannot connect to server at ${baseUrl}. Is the backend running?\n(${networkErr.message})`
+      );
     }
-    const err = new Error(errData.message || errData.error || `${method} ${path} failed (${res.status})`);
-    err.status = res.status;
-    throw err;
+
+    // Parse response
+    const contentType = res.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+
+    if (!res.ok) {
+      const errData = isJson ? await res.json() : { message: res.statusText };
+      if (res.status === 401 && localStorage.getItem('adminToken')) {
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminUser');
+        window.dispatchEvent(new Event('admin-auth-expired'));
+      }
+      const err = new Error(errData.message || errData.error || `${method} ${path} failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+
+    if (res.status === 204) return null;
+    return isJson ? res.json() : res.text();
+  };
+
+  if (method !== 'GET' || body) {
+    return executeRequest();
   }
 
-  if (res.status === 204) return null;
-  return isJson ? res.json() : res.text();
+  const promise = executeRequest().finally(() => {
+    if (inFlightGetRequests.get(url) === promise) {
+      inFlightGetRequests.delete(url);
+    }
+  });
+  inFlightGetRequests.set(url, promise);
+  return promise;
 }
 
 const get  = (path)        => request('GET',    path);
@@ -151,28 +171,41 @@ export const categoryApi = {
     const baseUrl = (BASE || '').replace(/\/+$/, '');
     if (!baseUrl) throw new Error('REACT_APP_API_URL is not configured.');
 
-    const token = localStorage.getItem('adminToken') || localStorage.getItem('userToken');
-    const headers = { Accept: 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
+    const cacheKey = `${baseUrl}/billing/category`;
+    if (inFlightGetRequests.has(cacheKey)) {
+      return inFlightGetRequests.get(cacheKey);
+    }
 
-    const response = await fetch(`${baseUrl}/billing/category`, {
-      headers,
-    });
-    if (!response.ok) throw new Error(`GET ${baseUrl}/billing/category failed (${response.status})`);
+    const promise = (async () => {
+      const token = localStorage.getItem('adminToken') || localStorage.getItem('userToken');
+      const headers = { Accept: 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
-    const data = await response.json();
-    const candidates = [data?.category, data?.data?.category, data?.categories, data?.data?.data?.category, data?.data, data];
-    const rows = candidates.find(Array.isArray) || candidates.find(value => value && typeof value === 'object' && (value.id != null || value.category_id != null));
-    return (Array.isArray(rows) ? rows : rows ? [rows] : []).map(category => {
-      const rawImage = category.image || category.image_url || category.imageUrl || category.category_image || category.categoryImage || category.photo || null;
-      return {
-        ...category,
-        id: category.id ?? category.category_id ?? category.categoryId,
-        name: category.name || category.category_name || category.categoryName || '',
-        status: ['inactive', 'disabled', '0', 'false', 'no'].includes(String(category.status ?? category.is_active ?? category.isActive ?? category.active ?? '').trim().toLowerCase()) ? 'Inactive' : 'Active',
-        image: billingImageUrl(rawImage),
-      };
+      const response = await fetch(cacheKey, {
+        headers,
+      });
+      if (!response.ok) throw new Error(`GET ${baseUrl}/billing/category failed (${response.status})`);
+
+      const data = await response.json();
+      const candidates = [data?.category, data?.data?.category, data?.categories, data?.data?.data?.category, data?.data, data];
+      const rows = candidates.find(Array.isArray) || candidates.find(value => value && typeof value === 'object' && (value.id != null || value.category_id != null));
+      return (Array.isArray(rows) ? rows : rows ? [rows] : []).map(category => {
+        const rawImage = category.image || category.image_url || category.imageUrl || category.category_image || category.categoryImage || category.photo || null;
+        return {
+          ...category,
+          id: category.id ?? category.category_id ?? category.categoryId,
+          name: category.name || category.category_name || category.categoryName || '',
+          status: ['inactive', 'disabled', '0', 'false', 'no'].includes(String(category.status ?? category.is_active ?? category.isActive ?? category.active ?? '').trim().toLowerCase()) ? 'Inactive' : 'Active',
+          image: billingImageUrl(rawImage),
+        };
+      });
+    })().finally(() => {
+      if (inFlightGetRequests.get(cacheKey) === promise) {
+        inFlightGetRequests.delete(cacheKey);
+      }
     });
+    inFlightGetRequests.set(cacheKey, promise);
+    return promise;
   },
   getById: async (id) => {
     const categories = await categoryApi.getAll();
@@ -207,14 +240,22 @@ export const subCategoryApi = {
 
 const mapProduct = (p) => {
   if (!p) return p;
+  const gstType = p.mrpGstType || p.mrp_gst_type || 'With GST';
+  const shouldAddGst = String(gstType).toLowerCase() !== 'without gst';
+  const priceWithGst = value => {
+    const amount = Number(value) || 0;
+    if (p.storefrontGstInclusive === true) return Math.ceil(amount - 1e-9);
+    return Math.ceil((shouldAddGst ? amount * 1.05 : amount) - 1e-9);
+  };
   const sourceVariants = p.variants || p.Variants || p.product_varients || p.product_variants || [];
   const variants = sourceVariants.map(variant => {
     const rawFinal = variant.franchise_price_final ?? variant.prices?.franchise;
-    const finalPrice = Number(rawFinal) || 0;
-    return { ...variant, franchise_price_final: rawFinal ?? null, salesPrice: finalPrice, mrp: finalPrice };
+    const finalPrice = priceWithGst(rawFinal);
+    return { ...variant, storefrontGstInclusive: true, franchise_price_final: rawFinal == null ? null : finalPrice, salesPrice: finalPrice, mrp: finalPrice };
   });
-  const rawProductFinal = p.franchise_price_final ?? p.prices?.franchise ?? variants.find(variant => variant.franchise_price_final != null)?.franchise_price_final;
-  const finalPrice = Number(rawProductFinal) || 0;
+  const rawVariantFinal = sourceVariants.find(variant => variant.franchise_price_final != null || variant.prices?.franchise != null);
+  const rawProductFinal = p.franchise_price_final ?? p.prices?.franchise ?? rawVariantFinal?.franchise_price_final ?? rawVariantFinal?.prices?.franchise;
+  const finalPrice = priceWithGst(rawProductFinal);
   let sizes = p.sizes || [];
   let colors = p.colors || [];
   let totalStock = p.stock || 0;
@@ -236,6 +277,7 @@ const mapProduct = (p) => {
 
   return {
     ...p,
+    storefrontGstInclusive: true,
     slug: p.slug || p.product_slug || slugifyProductName(p.productName || p.name, p.id),
     productName: p.name || p.productName,
     categoryId: p.billingCategoryId || p.Category?.billingCategoryId || p.category_id || p.categoryId,
@@ -258,7 +300,7 @@ const mapProduct = (p) => {
     sizes: sizes,
     colors: colors,
     stock: totalStock,
-    franchise_price_final: rawProductFinal ?? null,
+    franchise_price_final: rawProductFinal == null ? null : finalPrice,
     salesPrice: finalPrice,
     mrp: finalPrice,
     image: p.main_image || p.image
@@ -294,6 +336,11 @@ const enrichProductsWithBillingPrices = async products => {
     const billing = billingById.get(String(billingId));
     if (!billing) return row;
     const franchisePrice = billing.prices?.franchise ?? billing.franchise_price_final;
+    const shouldAddGst = String(row.mrpGstType || row.mrp_gst_type || 'With GST').toLowerCase() !== 'without gst';
+    const priceWithGst = value => {
+      const amount = Number(value) || 0;
+      return Math.ceil((shouldAddGst ? amount * 1.05 : amount) - 1e-9);
+    };
     const existingVariants = row.Variants || row.variants || [];
     const billingVariants = billing.variants || billing.product_variants || billing.product_varients || [];
     const billingVariantByCode = new Map(billingVariants.flatMap(variant =>
@@ -301,15 +348,22 @@ const enrichProductsWithBillingPrices = async products => {
     ));
     const Variants = existingVariants.map(variant => {
       const matched = billingVariantByCode.get(String(variant.variant_code || variant.sku || variant.barcode || '').toLowerCase());
-      const variantPrice = matched?.prices?.franchise ?? matched?.franchise_price_final ?? variant.franchise_price_final ?? franchisePrice;
-      return { ...variant, franchise_price_final: variantPrice ?? null, salesPrice: Number(variantPrice) || 0, mrp: Number(variantPrice) || 0 };
+      const billingVariantPrice = matched?.prices?.franchise ?? matched?.franchise_price_final;
+      const variantPrice = billingVariantPrice ?? variant.franchise_price_final ?? franchisePrice;
+      const displayPrice = billingVariantPrice != null
+        ? priceWithGst(billingVariantPrice)
+        : variant.storefrontGstInclusive === true && variant.franchise_price_final != null
+          ? Math.ceil((Number(variantPrice) || 0) - 1e-9)
+          : priceWithGst(variantPrice);
+      return { ...variant, storefrontGstInclusive: true, franchise_price_final: variantPrice == null ? null : displayPrice, salesPrice: displayPrice, mrp: displayPrice };
     });
     return {
       ...row,
+      storefrontGstInclusive: true,
       prices: billing.prices || row.prices,
-      franchise_price_final: franchisePrice ?? row.franchise_price_final ?? null,
-      salesPrice: Number(franchisePrice ?? row.salesPrice) || 0,
-      mrp: Number(franchisePrice ?? row.mrp) || 0,
+      franchise_price_final: franchisePrice == null ? row.franchise_price_final ?? null : priceWithGst(franchisePrice),
+      salesPrice: franchisePrice == null ? Number(row.salesPrice) || 0 : priceWithGst(franchisePrice),
+      mrp: franchisePrice == null ? Number(row.mrp) || 0 : priceWithGst(franchisePrice),
       Variants,
     };
   });

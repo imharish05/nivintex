@@ -26,6 +26,7 @@ export default function Banners({ showToast }) {
   const [imageFile, setImageFile] = useState(null);
   const [existingImage, setExistingImage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => { fetchBanners(); }, []);
 
@@ -40,6 +41,7 @@ export default function Banners({ showToast }) {
   };
 
   const closeForm = () => {
+    setFormError('');
     setIsSubmitting(false);
     setShowForm(false);
     setEditingId(null);
@@ -79,7 +81,7 @@ export default function Banners({ showToast }) {
 
     // Character and word limit validations
     const fieldsToValidate = [
-      { value: formData.title, fieldName: 'Title', required: isRequired, maxChars: 40, maxWords: 6 },
+      { value: formData.title, fieldName: 'Title', required: true, maxChars: 40, maxWords: 6 },
       { value: formData.subtitle, fieldName: 'Subtitle', required: isRequired, maxChars: 50, maxWords: 8 },
       { value: formData.link, fieldName: 'Link/URL', required: isRequired, maxChars: 255 },
     ];
@@ -93,8 +95,10 @@ export default function Banners({ showToast }) {
       });
     }
 
+    setFormError('');
     const validationError = validateFields(fieldsToValidate);
     if (validationError) {
+      setFormError(validationError);
       showToast('Validation Error', validationError);
       return;
     }
@@ -107,7 +111,9 @@ export default function Banners({ showToast }) {
       return;
     }
     if (!editingId && !imageFile) {
-      showToast('Validation Error', 'Please select a banner image to upload.');
+      const msg = 'Please select a banner image to upload.';
+      setFormError(msg);
+      showToast('Validation Error', msg);
       return;
     }
     const data = new FormData();
@@ -132,11 +138,17 @@ export default function Banners({ showToast }) {
         closeForm();
         fetchBanners();
       } else {
-        const err = await res.json();
-        showToast('Failed', err.error || 'Operation could not be completed.');
+        const err = await res.json().catch(() => ({}));
+        const msg = err.error || 'Operation could not be completed.';
+        setFormError(msg);
+        showToast('Failed', msg);
       }
     } catch {
-      showToast('Server Error', 'Something went wrong. Try again.');
+      const msg = 'Something went wrong. Try again.';
+      setFormError(msg);
+      showToast('Server Error', msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -231,14 +243,13 @@ export default function Banners({ showToast }) {
 
               <div className="km-field">
                 <label className="km-label">
-                  Title {isReq && <span style={{ color: 'red' }}>*</span>}
+                  Title <span style={{ color: 'red' }}>*</span>
                 </label>
                 <input
                   className={`km-input ${isOverLimit(formData.title, { maxChars: 40, maxWords: 6 }) ? 'km-input-error' : ''}`}
                   type="text"
                   placeholder="e.g. New Arrivals"
-                  required={isReq}
-                  value={formData.title}
+                  required value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
                 />
                 <CharWordCounter
@@ -329,6 +340,11 @@ export default function Banners({ showToast }) {
                 </select>
               </div>
 
+              {formError && (
+                <div role="alert" className="km-field km-field-full" style={{ padding: '10px 14px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', fontSize: 13, fontWeight: 500 }}>
+                  {formError}
+                </div>
+              )}
               <button type="submit" className="km-btn-submit" disabled={isSubmitting}>
                 {isSubmitting && <span className="km-btn-spinner" />}
                 <span>

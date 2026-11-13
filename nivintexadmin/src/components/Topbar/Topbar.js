@@ -5,7 +5,7 @@ import logo from '../../assets/logo.png';
 const API = process.env.REACT_APP_API_URL;
 const STORAGE_KEY = 'kalpana_low_stock_threshold';
 
-export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick }) {
+export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick, onMenuClick }) {
   const savedThreshold = parseInt(localStorage.getItem(STORAGE_KEY)) || 10;
 
   const [alerts, setAlerts]       = useState({ lowStock: [], outOfStock: [], summary: { lowStockCount: 0, outOfStockCount: 0, totalAlerts: 0 } });
@@ -62,6 +62,15 @@ export default function Topbar({ title, addBtn, addLabel, onAdd, onNotifClick })
   return (
     <div className="topbar">
       <div className="topbarLeft">
+        {onMenuClick && (
+          <button type="button" className="topbarMenuBtn" onClick={onMenuClick} aria-label="Toggle navigation menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        )}
         <div className="topbarTitle">{title}</div>
       </div>
 

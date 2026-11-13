@@ -9,8 +9,32 @@ const ShopContext = createContext();
 export const useShop = () => useContext(ShopContext);
 
 /* ── Session helpers ─────────────────────────────────────────────────── */
+const SESSION_COOKIE_NAME = 'nv_ephemeral_auth';
+const hasEphemeralCookie = () =>
+  typeof document !== 'undefined' &&
+  document.cookie.split(';').some((part) => part.trim().startsWith(`${SESSION_COOKIE_NAME}=`));
+
+const setEphemeralCookie = (enabled) => {
+  if (typeof document === 'undefined') return;
+  if (enabled) {
+    document.cookie = `${SESSION_COOKIE_NAME}=1; path=/; SameSite=Lax`;
+  } else {
+    document.cookie = `${SESSION_COOKIE_NAME}=; path=/; Max-Age=0; SameSite=Lax`;
+  }
+};
+
 const loadSession = () => {
   try {
+    // If the user signed in with "Remember me" off, expire the session once
+    // the browser has been closed (the session cookie is cleared on close).
+    if (localStorage.getItem('nv_session_only') === '1' && !hasEphemeralCookie()) {
+      localStorage.removeItem('nv_user');
+      localStorage.removeItem('userToken');
+      localStorage.removeItem('nv_session_only');
+      sessionStorage.removeItem('nv_user');
+      return null;
+    }
+
     // User identity must be shared across tabs. Migrate the old tab-scoped
     // value once so users already logged in before this change stay signed in.
     const shared = localStorage.getItem('nv_user');
@@ -26,9 +50,21 @@ const loadSession = () => {
   }
   catch { return null; }
 };
-const saveSession = (u) => {
-  if (u) localStorage.setItem('nv_user', JSON.stringify(u));
-  else   localStorage.removeItem('nv_user');
+const saveSession = (u, remember) => {
+  if (u) {
+    localStorage.setItem('nv_user', JSON.stringify(u));
+    if (remember === false) {
+      localStorage.setItem('nv_session_only', '1');
+      setEphemeralCookie(true);
+    } else if (remember === true) {
+      localStorage.removeItem('nv_session_only');
+      setEphemeralCookie(false);
+    }
+  } else {
+    localStorage.removeItem('nv_user');
+    localStorage.removeItem('nv_session_only');
+    setEphemeralCookie(false);
+  }
   // Do not leave stale tab-scoped identities behind after migrating.
   sessionStorage.removeItem('nv_user');
 };
@@ -46,6 +82,11 @@ const resolveImg = (img) => {
   return getImageUrl(img) || '';
 };
 const normId = (val) => (val === undefined || val === null) ? '' : String(val);
+const storefrontPriceWithGst = (value, gstType) => {
+  const price = Number(value) || 0;
+  const inclusivePrice = String(gstType || 'With GST').toLowerCase() === 'without gst' ? price : price * 1.05;
+  return Math.ceil(inclusivePrice - 1e-9);
+};
 
 const billingStock = (variant) => {
   if (variant?.in_stock === false || variant?.in_stock === 0 || ['false', '0', 'no', 'out of stock'].includes(String(variant?.in_stock ?? '').trim().toLowerCase())) return 0;
@@ -223,9 +264,14 @@ export const ShopProvider = ({ children }) => {
         if (!product) return item;
         const variant = (product.Variants || []).find(row => normId(row.id) === normId(item.variantId));
         const finalPrice = variant?.franchise_price_final ?? product.franchise_price_final;
+        const resolvedGstPrice = finalPrice == null
+          ? undefined
+          : (product.storefrontGstInclusive === true
+            ? Math.ceil((Number(finalPrice) || 0) - 1e-9)
+            : storefrontPriceWithGst(finalPrice, product.mrpGstType || product.mrp_gst_type));
         return {
           ...item,
-          ...(finalPrice == null ? {} : { price: Number(finalPrice) || 0 }),
+          ...(resolvedGstPrice === undefined ? {} : { price: resolvedGstPrice }),
           mrpGstType: product.mrpGstType || product.mrp_gst_type || 'With GST',
         };
       }));
@@ -233,7 +279,7 @@ export const ShopProvider = ({ children }) => {
     return () => { active = false; };
   }, [user?.id]);
 
-  const persistUser   = (u)      => { setUser(u); saveSession(u); };
+  const persistUser   = (u, remember) => { setUser(u); saveSession(u, remember); };
   const persistOrders = (orders) => { setMyOrders(orders); sessionStorage.setItem('nv_orders', JSON.stringify(orders)); };
 
   const normaliseCartRow = (row) => ({
@@ -253,7 +299,7 @@ export const ShopProvider = ({ children }) => {
     shippingLengthCm: row.shipping_length_cm ?? row.shippingLengthCm ?? row.Product?.shipping_length_cm ?? row.Product?.shippingLengthCm ?? null,
     shippingWidthCm: row.shipping_width_cm ?? row.shippingWidthCm ?? row.Product?.shipping_width_cm ?? row.Product?.shippingWidthCm ?? null,
     shippingHeightCm: row.shipping_height_cm ?? row.shippingHeightCm ?? row.Product?.shipping_height_cm ?? row.Product?.shippingHeightCm ?? null,
-    price:     Number(row.Variant?.franchise_price_final ?? row.Product?.franchise_price_final) || 0,
+    price:     storefrontPriceWithGst(row.Variant?.franchise_price_final ?? row.Product?.franchise_price_final, row.Product?.mrpGstType || row.Product?.mrp_gst_type),
     qty:       parseInt(row.quantity   || 1, 10),
     isBuyOneGetOne: row.Product ? !!row.Product.isBuyOneGetOne : !!row.isBuyOneGetOne,
   });
@@ -364,7 +410,7 @@ export const ShopProvider = ({ children }) => {
   }, [user?.id]);
 
   /* ── Shared post-auth handler ─────────────────────────────────────── */
-  const _onAuthSuccess = async (userData, token) => {
+  const _onAuthSuccess = async (userData, token, { remember = true } = {}) => {
     if (token) localStorage.setItem('userToken', token);
 
     const u = {
@@ -373,7 +419,7 @@ export const ShopProvider = ({ children }) => {
       email: userData.email || '',
       phone: userData.phone || '',
     };
-    persistUser(u);
+    persistUser(u, remember);
     persistOrders([]);
 
     const guestCart     = loadGuestCart();
@@ -416,20 +462,14 @@ export const ShopProvider = ({ children }) => {
       await fetchWishlist(u.id);
     }
 
-    const redirect = sessionStorage.getItem('redirectAfterLogin');
-    if (redirect) {
-      sessionStorage.removeItem('redirectAfterLogin');
-      navigate(redirect.replace(/^#/, "/"));
-    }
-
     return u;
   };
 
   /* ── Auth ─────────────────────────────────────────────────────────── */
-  const login = async (email, password) => {
+  const login = async (email, password, remember = true) => {
     const res      = await authApi.userLogin(email, password);
     const userData = res.user || res.customer || res;
-    return _onAuthSuccess(userData, res.token);
+    return _onAuthSuccess(userData, res.token, { remember });
   };
 
   const register = async ({ username, email, phone = '', password }) => {
@@ -515,7 +555,7 @@ export const ShopProvider = ({ children }) => {
   const addToCart = async (product) => {
     const productId = normId(product.productId || product.id);
     const name      = product.name      || product.productName || 'Product';
-    const price     = parseFloat(product.price || 0);
+    const price     = Math.ceil((parseFloat(product.price || 0)) - 1e-9);
     const img       = product.img || product.image || '';
     const weight    = product.subtitle || product.weight || '';
     const shippingWeightKg = Number(product.shippingWeightKg || product.weightKg || 0) || null;

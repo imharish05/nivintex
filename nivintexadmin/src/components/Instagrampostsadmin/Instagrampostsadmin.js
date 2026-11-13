@@ -292,7 +292,7 @@ export default function InstagramPosts({ showToast }) {
                     ) : (
                       <img
                         src={`${API}/${row.image}`}
-                        alt={row.label}
+                        alt={row.label || `Instagram post ${row.id}`}
                         width="48"
                         height="48"
                         style={{ objectFit: 'cover', borderRadius: 4 }}

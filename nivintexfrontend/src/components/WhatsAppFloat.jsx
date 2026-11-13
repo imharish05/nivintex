@@ -24,7 +24,7 @@ const WhatsAppFloat = () => {
           align-items: center;
           justify-content: center;
           box-shadow: 0 4px 16px rgba(37, 211, 102, 0.35);
-          z-index: 9999;
+          z-index: 1100;
           text-decoration: none !important;
           cursor: pointer;
           transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
@@ -93,8 +93,8 @@ const WhatsAppFloat = () => {
         /* Adjust back-to-top button so it stacks neatly above WhatsApp */
         .back-to-top,
         .fa-scroll-top-btn {
-          bottom: 96px !important;
-          right: 32px !important;
+          bottom: 92px !important;
+          right: 28px !important;
           width: 48px !important;
           height: 48px !important;
           border-radius: 50% !important;
@@ -102,10 +102,10 @@ const WhatsAppFloat = () => {
 
         @media (max-width: 768px) {
           .wa-float-btn {
-            bottom: 26px;
-            right: 26px;
-            width: 42px;
-            height: 42px;
+            bottom: max(14px, env(safe-area-inset-bottom));
+            right: 14px;
+            width: 44px;
+            height: 44px;
             border-radius: 50% !important;
           }
           .wa-float-btn svg {
@@ -113,16 +113,14 @@ const WhatsAppFloat = () => {
             height: 22px;
           }
           .wa-tooltip {
-            right: 52px;
-            font-size: 11px;
-            padding: 5px 10px;
+            display: none !important;
           }
           .back-to-top,
           .fa-scroll-top-btn {
-            bottom: 82px !important;
-            right: 26px !important;
-            width: 42px !important;
-            height: 42px !important;
+            bottom: calc(max(14px, env(safe-area-inset-bottom)) + 54px) !important;
+            right: 14px !important;
+            width: 44px !important;
+            height: 44px !important;
             border-radius: 50% !important;
           }
         }

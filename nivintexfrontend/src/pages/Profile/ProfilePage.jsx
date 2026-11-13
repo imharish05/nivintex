@@ -4,32 +4,42 @@ import { useShop } from '../../context/ShopContext';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import defaultLogo from '../../assets/img/logo2.png';
+import {
+  sanitizeIndianPhone,
+  validateEmail,
+  validateIndianPhone,
+  validateName,
+  validatePassword,
+} from '../../utils/formValidation';
 
 const F = {
-  main:    "'Josefin Sans', 'Raleway', 'Century Gothic', sans-serif",
-  sub:     "'Raleway', 'Josefin Sans', sans-serif",
+  serif: "'Cormorant Garamond', 'Playfair Display', Georgia, serif",
+  main:  "'Josefin Sans', 'Montserrat', 'Century Gothic', sans-serif",
+  sub:   "'Raleway', 'Josefin Sans', sans-serif",
 };
 
 const C = {
-  brand:     '#0f5447',
-  accent:    '#0f5447',
-  accentHov: '#0b3a31',
-  border:    '#EAE4D6',
-  surface:   '#FFFFFF',
-  muted:     '#6B6B8A',
-  bg:        '#EAF0E2',
-  success:   '#2E9E6B',
-  danger:    '#E05252',
-  gold:      '#C9933A',
+  brand:       '#0F4E42',
+  brandDark:   '#0A332B',
+  accent:      '#0F4E42',
+  accentHov:   '#0B3A31',
+  border:      '#E2E8F0',
+  borderLight: 'rgba(15, 78, 66, 0.08)',
+  surface:     '#FFFFFF',
+  muted:       '#64748B',
+  text:        '#1E293B',
+  bg:          '#FAF7F2',
+  success:     '#2E9E6B',
+  danger:      '#E05252',
 };
 
 const STATUS_COLORS = {
-  Pending:          { bg: '#FFFBEB', color: '#B45309', border: '#FDE68A' },
-  pending:          { bg: '#FFFBEB', color: '#B45309', border: '#FDE68A' },
+  Pending:          { bg: '#F8FAFC', color: '#475569', border: '#CBD5E1' },
+  pending:          { bg: '#F8FAFC', color: '#475569', border: '#CBD5E1' },
   Confirmed:        { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
   confirmed:        { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' },
-  Processing:       { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
-  processing:       { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
+  Processing:       { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
+  processing:       { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
   Shipped:          { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   shipped:          { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
   out_for_delivery: { bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
@@ -44,250 +54,71 @@ const statusStyle = status => {
   if (value.includes('cancel')) return { color: '#B91C1C', bg: '#FEF2F2' };
   if (value.includes('deliver')) return { color: '#15803D', bg: '#F0FDF4' };
   if (value.includes('ship')) return { color: '#1D4ED8', bg: '#EFF6FF' };
-  if (value.includes('pending')) return { color: '#B45309', bg: '#FFFBEB' };
+  if (value.includes('pending')) return { color: '#475569', bg: '#F8FAFC' };
   return { color: C.brand, bg: '#EAF5F0' };
 };
 
 const labelFor = (s = '') => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-const styles = {
-  page:  { background: C.bg, minHeight: '100vh', fontFamily: F.main },
-  inner: { maxWidth: '1100px', margin: '0 auto', padding: '48px 24px 80px' },
-
-  topRow: {
-    marginBottom: '40px',
-    borderBottom: `1px solid ${C.border}`,
-    paddingBottom: '24px',
-  },
-  headingWrap: { display: 'flex', alignItems: 'center', gap: '16px' },
-  headingLine: {
-    width: '36px', height: '1px',
-    background: C.gold, display: 'inline-block',
-  },
-  heading: {
-    margin: 0, fontSize: '28px', fontWeight: 300,
-    color: C.brand, letterSpacing: '6px',
-    fontFamily: F.main, textTransform: 'uppercase',
-  },
-  subHead: {
-    margin: '6px 0 0', fontSize: '13px', color: C.muted,
-    letterSpacing: '2px', fontFamily: F.sub, fontWeight: 300,
-  },
-
-  layout: { display: 'flex', gap: '28px', alignItems: 'flex-start', flexWrap: 'wrap' },
-
-  sidebar: {
-    width: '230px', flexShrink: 0,
-    display: 'flex', flexDirection: 'column', gap: '16px',
-  },
-
-  avatarCard: {
-    background: C.surface,
-    border: `1px solid ${C.border}`,
-    borderTop: `3px solid ${C.brand}`,
-    padding: '32px 16px 28px',
-    textAlign: 'center',
-    boxShadow: '0 4px 20px rgba(31,92,68,0.07)',
-  },
-  avatarRing: {
-    width: '80px', height: '80px', borderRadius: '50%',
-    border: `1px solid ${C.border}`,
-    padding: '3px',
-    margin: '0 auto 16px',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  },
-  avatar: {
-    width: '100%', height: '100%', borderRadius: '50%',
-    background: `linear-gradient(135deg, ${C.brand} 0%, #0b3a31 100%)`,
-    color: '#fff',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '22px', fontWeight: 300,
-    fontFamily: F.main, letterSpacing: '2px',
-  },
-  avatarName: {
-    margin: '0 0 4px', fontSize: '16px', fontWeight: 300,
-    color: C.brand, letterSpacing: '3px',
-    fontFamily: F.main, textTransform: 'uppercase',
-  },
-  avatarDivider: {
-    width: '28px', height: '1px', background: C.gold,
-    margin: '10px auto', opacity: 0.8,
-  },
-  avatarEmail: {
-    margin: 0, fontSize: '12px', color: C.muted,
-    letterSpacing: '0.5px', fontFamily: F.sub, fontWeight: 300,
-    wordBreak: 'break-all',
-  },
-
-  navCard: {
-    background: C.surface,
-    border: `1px solid ${C.border}`,
-    overflow: 'hidden',
-    boxShadow: '0 4px 20px rgba(31,92,68,0.07)',
-  },
-  navLabel: {
-    padding: '12px 16px 10px',
-    fontSize: '10px', fontWeight: 400, letterSpacing: '3px',
-    textTransform: 'uppercase', color: C.gold,
-    fontFamily: F.main, borderBottom: `1px solid ${C.border}`,
-  },
-  navItem: (active) => ({
-    display: 'flex', alignItems: 'center', gap: '12px',
-    padding: '13px 16px',
-    fontSize: '12px', fontWeight: active ? 400 : 300,
-    letterSpacing: '2px', textTransform: 'uppercase',
-    fontFamily: F.main,
-    color: active ? C.brand : C.muted,
-    background: active ? 'rgba(31,92,68,0.08)' : 'transparent',
-    borderLeft: `3px solid ${active ? C.brand : 'transparent'}`,
-    cursor: 'pointer', transition: 'all 0.2s',
-  }),
-  navIcon: (active) => ({
-    fontSize: '13px', color: active ? C.gold : C.muted,
-    width: '16px', textAlign: 'center',
-  }),
-  navBadge: {
-    marginLeft: 'auto',
-    background: C.gold, color: '#fff',
-    borderRadius: '2px', fontSize: '9px', fontWeight: 400,
-    padding: '2px 7px', letterSpacing: '0.5px',
-    fontFamily: F.main,
-  },
-
-  main: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '20px' },
-
-  card: {
-    background: C.surface,
-    border: `1px solid ${C.border}`,
-    padding: '32px 28px',
-    boxShadow: '0 4px 20px rgba(31,92,68,0.07)',
-  },
-  cardTitleWrap: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: '28px', paddingBottom: '16px',
-    borderBottom: `1px solid ${C.border}`,
-  },
-  cardTitleLeft: {
-    display: 'flex', alignItems: 'center', gap: '12px',
-  },
-  cardTitleBar: { width: '3px', height: '20px', background: C.gold, flexShrink: 0 },
-  cardTitle: {
-    fontSize: '12px', fontWeight: 400, color: C.brand,
-    letterSpacing: '4px', textTransform: 'uppercase',
-    fontFamily: F.main, margin: 0,
-  },
-
-  formRow: { display: 'flex', gap: '20px', flexWrap: 'wrap' },
-  fieldWrap: { flex: '1 1 180px', marginBottom: '16px' },
-  fieldWrapFull: { flex: '1 1 100%', marginBottom: '16px' },
-
-  label: {
-    display: 'block', fontSize: '10px', fontWeight: 400,
-    color: C.gold, letterSpacing: '2.5px',
-    textTransform: 'uppercase', marginBottom: '8px',
-    fontFamily: F.main,
-  },
-  input: (focused, readOnly = false) => ({
-    width: '100%', padding: '11px 2px', fontSize: '14px',
-    color: readOnly ? '#888' : C.brand,
-    background: 'transparent',
-    border: 'none',
-    borderBottom: `1px solid ${readOnly ? C.border : focused ? C.brand : C.border}`,
-    borderRadius: 0, outline: 'none',
-    boxSizing: 'border-box', transition: 'border-color 0.25s',
-    fontFamily: F.sub, fontWeight: 300, letterSpacing: '1px',
-    cursor: readOnly ? 'not-allowed' : 'text',
-  }),
-
-  actionRow: {
-    display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center',
-    marginTop: '8px', paddingTop: '20px',
-    borderTop: `1px solid ${C.border}`,
-  },
-  saveBtn: {
-    minHeight: '42px', height: '42px',
-    padding: '0 26px',
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    background: C.brand, color: '#fff',
-    border: 'none', borderRadius: 6,
-    fontSize: '11px', fontWeight: 500,
-    lineHeight: 1,
-    letterSpacing: '2px', textTransform: 'uppercase',
-    cursor: 'pointer', fontFamily: F.main,
-    whiteSpace: 'nowrap',
-    boxSizing: 'border-box',
-    transition: 'opacity 0.2s',
-  },
-  saveBtnDisabled: {
-    minHeight: '42px', height: '42px',
-    padding: '0 26px',
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    background: '#aaa', color: '#fff',
-    border: 'none', borderRadius: 6,
-    fontSize: '11px', fontWeight: 500,
-    lineHeight: 1,
-    letterSpacing: '2px', textTransform: 'uppercase',
-    cursor: 'not-allowed', fontFamily: F.main,
-    whiteSpace: 'nowrap',
-    boxSizing: 'border-box',
-  },
-  discardBtn: {
-    minHeight: '42px', height: '42px',
-    padding: '0 22px',
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    background: 'transparent', color: C.muted,
-    border: `1px solid ${C.border}`, borderRadius: 6,
-    fontSize: '11px', fontWeight: 500,
-    lineHeight: 1,
-    letterSpacing: '2px', textTransform: 'uppercase',
-    cursor: 'pointer', fontFamily: F.main,
-    whiteSpace: 'nowrap',
-    boxSizing: 'border-box',
-    transition: 'all 0.2s ease',
-  },
-
-  emptyState: {
-    textAlign: 'center', padding: '50px 20px',
-  },
-  emptyIcon: {
-    fontSize: '40px', marginBottom: '16px', opacity: 0.6,
-  },
-  emptyTitle: {
-    fontSize: '16px', color: C.brand, letterSpacing: '2px', textTransform: 'uppercase',
-    margin: '0 0 8px', fontFamily: F.main, fontWeight: 400,
-  },
-  emptyText: {
-    fontSize: '13px', color: C.muted, margin: '0 0 24px', fontFamily: F.sub,
-  },
-  primaryBtn: {
-    display: 'inline-block',
-    padding: '12px 28px',
-    background: C.brand, color: '#fff',
-    border: 'none', borderRadius: 8,
-    fontSize: '11px', fontWeight: 400,
-    letterSpacing: '2px', textTransform: 'uppercase',
-    cursor: 'pointer', fontFamily: F.main,
-    textDecoration: 'none',
-  },
-
-};
-
-const Field = ({ label, value, onChange, type = 'text', placeholder = '', full = false, readOnly = false }) => {
+const Field = ({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  placeholder = '',
+  full = false,
+  readOnly = false,
+  error = '',
+  inputMode,
+  maxLength,
+  icon,
+}) => {
   const [focused, setFocused] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const isPassword = type === 'password';
 
   return (
-    <div style={full ? styles.fieldWrapFull : styles.fieldWrap}>
-      <label style={{ ...styles.label, display: 'flex', alignItems: 'center', gap: '6px' }}>
-        {label}
-        {readOnly && (
-          <span style={{ fontSize: '9px', textTransform: 'none', letterSpacing: '0.5px', color: '#999', fontWeight: 300 }}>
-            (Cannot be changed)
-          </span>
-        )}
+    <div style={{ flex: full ? '1 1 100%' : '1 1 240px', marginBottom: '18px' }}>
+      <label style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontSize: '11px',
+        fontWeight: 600,
+        letterSpacing: '1.2px',
+        textTransform: 'uppercase',
+        color: error ? C.danger : '#334155',
+        marginBottom: '8px',
+        fontFamily: F.main,
+      }}>
+        <span>{label}</span>
       </label>
-      <div style={{ position: 'relative', width: '100%' }}>
+
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        background: readOnly ? '#F8FAFC' : (focused ? '#FFFFFF' : '#F8FAFC'),
+        border: `1.5px solid ${error ? C.danger : (focused ? C.brand : '#CBD5E1')}`,
+        borderRadius: '12px',
+        boxShadow: focused ? '0 0 0 4px rgba(15, 78, 66, 0.08)' : 'none',
+        transition: 'all 0.2s ease',
+        height: '48px',
+        padding: '0 14px',
+        boxSizing: 'border-box',
+      }}>
+        {icon && (
+          <i className={icon} style={{
+            color: focused ? C.brand : (readOnly ? '#94A3B8' : '#64748B'),
+            fontSize: '14px',
+            width: '20px',
+            textAlign: 'center',
+            marginRight: '10px',
+            flexShrink: 0,
+            transition: 'color 0.2s',
+          }} />
+        )}
         <input
           type={isPassword ? (showPw ? 'text' : 'password') : type}
           value={value}
@@ -295,9 +126,22 @@ const Field = ({ label, value, onChange, type = 'text', placeholder = '', full =
           placeholder={placeholder}
           readOnly={readOnly}
           tabIndex={readOnly ? -1 : 0}
+          inputMode={inputMode}
+          maxLength={maxLength}
+          aria-invalid={error ? 'true' : 'false'}
           style={{
-            ...styles.input(focused && !readOnly, readOnly),
-            paddingRight: isPassword ? '32px' : '2px',
+            flex: 1,
+            minWidth: 0,
+            height: '100%',
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontSize: '14px',
+            color: readOnly ? '#64748B' : C.text,
+            fontFamily: F.sub,
+            fontWeight: 400,
+            letterSpacing: '0.3px',
+            cursor: readOnly ? 'not-allowed' : 'text',
           }}
           onFocus={() => !readOnly && setFocused(true)}
           onBlur={() => setFocused(false)}
@@ -309,16 +153,13 @@ const Field = ({ label, value, onChange, type = 'text', placeholder = '', full =
             onClick={() => setShowPw(prev => !prev)}
             aria-label={showPw ? `Hide ${label}` : `Show ${label}`}
             style={{
-              position: 'absolute',
-              right: '2px',
-              top: '50%',
-              transform: 'translateY(-50%)',
               background: 'transparent',
               border: 'none',
-              padding: '6px 4px',
               cursor: 'pointer',
-              color: showPw ? C.brand : C.muted,
+              color: showPw ? C.brand : '#94A3B8',
               fontSize: '14px',
+              padding: '6px',
+              marginLeft: '6px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -330,6 +171,21 @@ const Field = ({ label, value, onChange, type = 'text', placeholder = '', full =
           </button>
         )}
       </div>
+
+      {error && (
+        <span role="alert" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+          marginTop: '6px',
+          fontSize: '11px',
+          color: C.danger,
+          fontFamily: F.sub,
+          fontWeight: 500,
+        }}>
+          <i className="fa-solid fa-circle-exclamation" style={{ fontSize: '11px' }} /> {error}
+        </span>
+      )}
     </div>
   );
 };
@@ -339,13 +195,12 @@ const ProfilePage = () => {
   const location = useLocation();
 
   const {
-    user, updateUser, changePassword,
+    user, updateUser, changePassword, logout,
     cartItems, addToCart, removeFromCart, updateQty, cartCount, getCartTotals,
     wishlistItems, removeFromWishlist, wishlistCount,
     myOrders, showToast: showCommonToast
   } = useShop();
 
-  // Tab State syncing with hash (#profile, #orders, #wishlist, #cart)
   const getTab = () => {
     const h = (location.hash || window.location.hash || '').replace('#', '').toLowerCase();
     if (['orders', 'wishlist', 'cart'].includes(h)) return h;
@@ -361,39 +216,46 @@ const ProfilePage = () => {
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
     navigate(`/profile#${tabId}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const [profile, setProfile] = useState({
     name:  user?.name || user?.username || '',
-    phone: user?.phone || '',
+    phone: sanitizeIndianPhone(user?.phone || ''),
     email: user?.email || '',
   });
-  const setP = (key) => (val) => setProfile(p => ({ ...p, [key]: val }));
+  const [profileErrors, setProfileErrors] = useState({});
+  const setP = (key) => (val) => {
+    const nextVal = key === 'phone' ? sanitizeIndianPhone(val) : val;
+    setProfile(p => ({ ...p, [key]: nextVal }));
+    setProfileErrors(errs => (errs[key] ? { ...errs, [key]: '' } : errs));
+  };
 
   const [pw, setPw] = useState({ current: '', newPw: '', confirm: '' });
+  const [pwErrors, setPwErrors] = useState({});
   const [pwLoading, setPwLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
-  const setPwF = (key) => (val) => setPw(p => ({ ...p, [key]: val }));
+  const setPwF = (key) => (val) => {
+    setPw(p => ({ ...p, [key]: val }));
+    setPwErrors(errs => (errs[key] ? { ...errs, [key]: '' } : errs));
+  };
 
-  // Keep the profile form in sync once authenticated user is available
   useEffect(() => {
     if (user) {
       setProfile({
         name:  user.name || user.username || '',
-        phone: user.phone || '',
+        phone: sanitizeIndianPhone(user.phone || ''),
         email: user.email || '',
       });
+      setProfileErrors({});
     }
   }, [user?.id]);
 
-  // Redirect unauthenticated visitors to login
   useEffect(() => {
     if (!user) navigate('/login', { replace: true });
   }, [user, navigate]);
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const initials = user.name
     ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -402,11 +264,28 @@ const ProfilePage = () => {
   const showToast = (msg, isError = false) => showCommonToast(msg, isError ? 'error' : 'success');
 
   const handleSaveProfile = async () => {
-    if (!profile.name.trim())  { showToast('Name is required', true);  return; }
-    if (!profile.email.trim()) { showToast('Email is required', true); return; }
+    const errs = {};
+    const nameErr = validateName(profile.name, 'Full name');
+    if (nameErr) errs.name = nameErr;
+    const phoneErr = validateIndianPhone(profile.phone);
+    if (phoneErr) errs.phone = phoneErr;
+    const emailErr = validateEmail(profile.email);
+    if (emailErr) errs.email = emailErr;
+
+    if (Object.keys(errs).length > 0) {
+      setProfileErrors(errs);
+      showToast(Object.values(errs)[0], true);
+      return;
+    }
+
+    setProfileErrors({});
     setProfileLoading(true);
     try {
-      await updateUser({ name: profile.name, phone: profile.phone, email: profile.email });
+      await updateUser({
+        name: profile.name.trim(),
+        phone: sanitizeIndianPhone(profile.phone),
+        email: profile.email.trim(),
+      });
       showToast('Profile updated successfully');
     } catch (err) {
       showToast(err.message || 'Failed to update profile', true);
@@ -414,13 +293,32 @@ const ProfilePage = () => {
   };
 
   const handleDiscard = () => {
-    setProfile({ name: user.name || user.username || '', phone: user.phone || '', email: user.email || '' });
+    setProfile({
+      name: user.name || user.username || '',
+      phone: sanitizeIndianPhone(user.phone || ''),
+      email: user.email || '',
+    });
+    setProfileErrors({});
   };
 
   const handleSavePassword = async () => {
-    if (!pw.current)             { showToast('Enter your current password', true); return; }
-    if (pw.newPw.length < 6)     { showToast('Password must be at least 6 characters', true); return; }
-    if (pw.newPw !== pw.confirm) { showToast('Passwords do not match', true); return; }
+    const errs = {};
+    if (!pw.current) errs.current = 'Please enter your current password.';
+    const newPwErr = validatePassword(pw.newPw, { minLength: 6 });
+    if (newPwErr) errs.newPw = newPwErr;
+    if (!pw.confirm) {
+      errs.confirm = 'Please confirm your new password.';
+    } else if (pw.newPw !== pw.confirm) {
+      errs.confirm = 'Passwords do not match.';
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setPwErrors(errs);
+      showToast(Object.values(errs)[0], true);
+      return;
+    }
+
+    setPwErrors({});
     setPwLoading(true);
     try {
       await changePassword({ currentPassword: pw.current, newPassword: pw.newPw });
@@ -432,267 +330,892 @@ const ProfilePage = () => {
   };
 
   const navLinks = [
-    { id: 'profile',  icon: 'fa-regular fa-user',        label: 'My Profile', badge: null },
-    { id: 'orders',   icon: 'fa-solid fa-truck',         label: 'My Orders',  badge: myOrders?.length || 0 },
-    { id: 'wishlist', icon: 'fa-regular fa-heart',       label: 'Wishlist',   badge: wishlistCount || 0 },
-    { id: 'cart',     icon: 'fa-solid fa-cart-shopping', label: 'Cart',       badge: cartCount || 0 },
+    { id: 'profile',  icon: 'fa-regular fa-user',        label: 'Personal Info',  badge: null },
+    { id: 'orders',   icon: 'fa-solid fa-truck',         label: 'My Orders',      badge: myOrders?.length || 0 },
+    { id: 'wishlist', icon: 'fa-regular fa-heart',       label: 'My Wishlist',    badge: wishlistCount || 0 },
+    { id: 'cart',     icon: 'fa-solid fa-cart-shopping', label: 'Shopping Bag',   badge: cartCount || 0 },
   ];
 
   const pageHeaders = {
-    profile:  { title: 'My Profile', sub: 'Manage your personal information' },
-    orders:   { title: 'My Orders',  sub: 'Track and manage your purchases' },
-    wishlist: { title: 'Wishlist',   sub: 'Saved items you love' },
-    cart:     { title: 'My Cart',    sub: 'Review and manage items in your bag' },
+    profile:  { title: 'Personal Information', sub: 'Manage your personal details and account security' },
+    orders:   { title: 'My Orders',            sub: 'Track shipments and view past purchases' },
+    wishlist: { title: 'My Wishlist',          sub: 'Saved items you love and cherish' },
+    cart:     { title: 'Shopping Bag',         sub: 'Review selected items before proceeding to checkout' },
   };
 
   const currentHeader = pageHeaders[activeTab] || pageHeaders.profile;
   const { subtotal } = getCartTotals ? getCartTotals(false) : { subtotal: 0 };
 
   return (
-    <div style={styles.page}>
+    <div style={{ background: C.bg, minHeight: '100vh', fontFamily: F.main, color: C.text }}>
+      <Header />
+
       <style>{`
-        @media (max-width: 768px) {
-          .profile-sidebar { width: 100% !important; }
-          .profile-inner { padding: 24px 16px 60px !important; }
-          .profile-card { padding: 20px 16px !important; }
-          .profile-layout { flex-direction: column !important; }
-          .profile-inner input { font-size: 16px !important; }
+        .profile-container {
+          max-width: 1240px;
+          margin: 0 auto;
+          padding: 24px 24px 80px;
         }
-        .profile-pw-toggle:hover {
-          color: ${C.brand} !important;
+
+        .profile-breadcrumb {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-family: ${F.sub};
+          color: ${C.muted};
+          margin-bottom: 20px;
         }
-        .item-action-btn:hover {
-          background-color: ${C.brand} !important;
-          color: #fff !important;
+        .profile-breadcrumb a, .profile-breadcrumb span.link {
+          color: ${C.brand};
+          text-decoration: none;
+          font-weight: 600;
+          cursor: pointer;
+          transition: color 0.2s;
         }
-        .profile-action-row {
+        .profile-breadcrumb a:hover, .profile-breadcrumb span.link:hover {
+          color: ${C.accentHov};
+        }
+        .profile-breadcrumb .sep {
+          color: #94A3B8;
+          font-size: 11px;
+        }
+        .profile-breadcrumb .current {
+          color: #1E293B;
+          font-weight: 600;
+        }
+
+        .profile-hero-card {
+          background: #FFFFFF;
+          border: 1px solid ${C.border};
+          border-top: 3px solid ${C.brand};
+          border-radius: 18px;
+          padding: 26px 32px;
+          box-shadow: 0 10px 30px -6px rgba(15, 78, 66, 0.05), 0 2px 8px rgba(0, 0, 0, 0.02);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 24px;
+          margin-bottom: 28px;
+        }
+        .profile-hero-left {
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          min-width: 0;
+        }
+        .profile-hero-avatar-ring {
+          width: 72px;
+          height: 72px;
+          border-radius: 50%;
+          background: ${C.brand};
+          padding: 3px;
+          box-shadow: 0 0 0 4px #EAF5F0;
+          flex-shrink: 0;
+        }
+        .profile-hero-avatar {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          background: ${C.brand};
+          color: #FFFFFF;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+          font-weight: 700;
+          font-family: ${F.serif};
+          letter-spacing: 0.5px;
+        }
+        .profile-hero-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: #EAF5F0;
+          color: ${C.brand};
+          border: 1px solid rgba(15, 78, 66, 0.18);
+          padding: 3px 12px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.8px;
+          text-transform: uppercase;
+        }
+        .profile-hero-name {
+          font-family: ${F.serif};
+          font-size: clamp(24px, 2.8vw, 32px);
+          font-weight: 600;
+          color: ${C.brandDark};
+          margin: 4px 0 6px;
+          line-height: 1.2;
+        }
+        .profile-hero-meta {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 16px;
+          font-size: 13px;
+          color: ${C.muted};
+          font-family: ${F.sub};
+        }
+        .profile-hero-meta span {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .profile-hero-stats {
+          display: flex;
+          align-items: center;
+          gap: 0;
+        }
+        .profile-stat-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 4px 22px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          text-decoration: none;
+          outline: none;
+        }
+        .profile-stat-item:hover .profile-stat-number {
+          color: ${C.accentHov};
+          transform: translateY(-1px);
+        }
+        .profile-stat-item:hover .profile-stat-label {
+          color: ${C.brand};
+        }
+        .profile-stat-divider {
+          width: 1px;
+          height: 28px;
+          background: #E2E8F0;
+          flex-shrink: 0;
+        }
+        .profile-stat-number {
+          font-size: 26px;
+          font-weight: 700;
+          color: ${C.brand};
+          font-family: ${F.serif};
+          line-height: 1;
+          transition: all 0.2s ease;
+        }
+        .profile-stat-label {
+          font-size: 11px;
+          color: ${C.muted};
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          font-weight: 600;
+          margin-top: 5px;
+          font-family: ${F.main};
+          transition: color 0.2s ease;
+        }
+
+        .profile-grid-layout {
+          display: flex;
+          align-items: flex-start;
+          gap: 28px;
+        }
+
+        .profile-sidebar-wrap {
+          width: 270px;
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        .profile-nav-box {
+          background: #FFFFFF;
+          border: 1px solid ${C.border};
+          border-radius: 16px;
+          box-shadow: 0 8px 24px -4px rgba(15, 78, 66, 0.04);
+          padding: 16px 12px;
+        }
+        .profile-nav-eyebrow {
+          display: block;
+          padding: 8px 14px 12px;
+          font-size: 10px;
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+          color: ${C.brand};
+          font-weight: 700;
+        }
+        .profile-nav-item {
           display: flex;
           align-items: center;
           gap: 12px;
-          justify-content: flex-end;
+          padding: 12px 14px;
+          border-radius: 12px;
+          font-size: 13px;
+          font-weight: 500;
+          color: #334155;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          margin-bottom: 4px;
+          font-family: ${F.main};
+          border: 1px solid transparent;
+        }
+        .profile-nav-item:hover {
+          background: #F8FAFC;
+          color: ${C.brand};
+        }
+        .profile-nav-item.is-active {
+          background: linear-gradient(135deg, #0F4E42 0%, #166455 100%);
+          color: #FFFFFF;
+          box-shadow: 0 4px 14px rgba(15, 78, 66, 0.22);
+          transform: translateY(-1px);
+        }
+        .profile-nav-item-icon {
+          width: 20px;
+          text-align: center;
+          font-size: 14px;
+          color: ${C.brand};
+        }
+        .profile-nav-item.is-active .profile-nav-item-icon {
+          color: #FFFFFF;
+        }
+        .profile-nav-badge {
+          margin-left: auto;
+          background: #EAF5F0;
+          color: ${C.brand};
+          border: 1px solid rgba(15, 78, 66, 0.2);
+          border-radius: 20px;
+          padding: 2px 8px;
+          font-size: 10px;
+          font-weight: 700;
+        }
+        .profile-nav-item.is-active .profile-nav-badge {
+          background: rgba(255, 255, 255, 0.25);
+          color: #FFFFFF;
+          border: none;
+        }
+
+        .profile-support-card {
+          background: #F8FAFC;
+          border: 1px solid ${C.border};
+          border-radius: 14px;
+          padding: 16px;
+          text-align: center;
+        }
+        .profile-support-header {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          font-weight: 600;
+          font-size: 12px;
+          letter-spacing: 0.8px;
+          text-transform: uppercase;
+          color: ${C.brand};
+          margin-bottom: 6px;
+        }
+        .profile-support-desc {
+          font-size: 12px;
+          color: ${C.muted};
+          font-family: ${F.sub};
+          line-height: 1.4;
+          margin-bottom: 12px;
+        }
+        .profile-support-link {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          width: 100%;
+          padding: 9px 12px;
+          border-radius: 8px;
+          background: #25D366;
+          color: #FFFFFF;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.8px;
+          text-transform: uppercase;
+          text-decoration: none;
+          box-shadow: 0 4px 12px rgba(37, 211, 102, 0.25);
+          transition: all 0.2s;
+        }
+        .profile-support-link:hover {
+          background: #1EBE5D;
+          color: #FFFFFF;
+          transform: translateY(-1px);
+        }
+
+        .profile-nav-logout-btn {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 12px;
+          font-size: 13px;
+          font-weight: 500;
+          color: ${C.danger};
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: 1px solid rgba(224, 82, 82, 0.15);
+          background: #FFF5F5;
+          font-family: ${F.main};
           margin-top: 8px;
+        }
+        .profile-nav-logout-btn:hover {
+          background: #FEE2E2;
+          border-color: ${C.danger};
+        }
+
+        .profile-main-wrap {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+        .profile-content-card {
+          background: #FFFFFF;
+          border: 1px solid ${C.border};
+          border-radius: 18px;
+          box-shadow: 0 8px 24px -4px rgba(15, 78, 66, 0.04), 0 2px 8px rgba(0, 0, 0, 0.02);
+          padding: 30px 32px;
+        }
+        .profile-card-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding-bottom: 20px;
+          border-bottom: 1px solid ${C.border};
+          margin-bottom: 24px;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .profile-card-header-left {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+        .profile-card-icon-pill {
+          width: 42px;
+          height: 42px;
+          border-radius: 12px;
+          background: #EAF5F0;
+          border: 1px solid rgba(15, 78, 66, 0.15);
+          color: ${C.brand};
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          flex-shrink: 0;
+        }
+        .profile-card-title {
+          font-family: ${F.serif};
+          font-size: 24px;
+          font-weight: 600;
+          color: ${C.brandDark};
+          margin: 0;
+          line-height: 1.2;
+        }
+        .profile-card-subtitle {
+          font-size: 13px;
+          color: ${C.muted};
+          font-family: ${F.sub};
+          margin: 4px 0 0;
+        }
+
+        .profile-action-bar {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 12px;
           padding-top: 20px;
           border-top: 1px solid ${C.border};
+          margin-top: 8px;
+          flex-wrap: wrap;
         }
-        .profile-btn-save, .profile-btn-discard {
-          min-height: 42px !important;
-          height: 42px !important;
-          line-height: 1 !important;
-          white-space: nowrap !important;
-          box-sizing: border-box !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          font-family: ${F.main} !important;
-          font-size: 11px !important;
-          font-weight: 500 !important;
-          letter-spacing: 2px !important;
-          text-transform: uppercase !important;
-          border-radius: 6px !important;
-          transition: all 0.2s ease !important;
-        }
-        .profile-btn-save {
-          padding: 0 28px !important;
-          background: ${C.brand} !important;
-          color: #fff !important;
-          border: none !important;
+        .profile-btn-ghost {
+          min-height: 44px;
+          padding: 0 24px;
+          border-radius: 10px;
+          background: #FFFFFF;
+          border: 1.5px solid ${C.border};
+          color: ${C.muted};
+          font-family: ${F.main};
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
           cursor: pointer;
+          transition: all 0.2s;
         }
-        .profile-btn-save:hover:not(:disabled) {
-          opacity: 0.92;
+        .profile-btn-ghost:hover {
+          border-color: ${C.brand};
+          color: ${C.brand};
+          background: #F8FAFC;
         }
-        .profile-btn-save:disabled {
-          background: #aaa !important;
+        .profile-btn-primary {
+          min-height: 44px;
+          padding: 0 32px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #0F4E42 0%, #166455 100%);
+          border: none;
+          color: #FFFFFF;
+          font-family: ${F.main};
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
+          cursor: pointer;
+          box-shadow: 0 4px 14px rgba(15, 78, 66, 0.22);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .profile-btn-primary:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(15, 78, 66, 0.3);
+        }
+        .profile-btn-primary:disabled {
+          background: #CBD5E0;
           cursor: not-allowed;
+          box-shadow: none;
         }
-        .profile-btn-discard {
-          padding: 0 22px !important;
-          background: transparent !important;
-          color: ${C.muted} !important;
-          border: 1px solid ${C.border} !important;
+
+        .profile-order-card {
+          background: #FFFFFF;
+          border: 1px solid ${C.border};
+          border-radius: 14px;
+          padding: 20px 22px 0;
+          box-shadow: 0 4px 16px rgba(15, 78, 66, 0.04);
+          margin-bottom: 16px;
+        }
+        .profile-order-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid #F1F5F9;
+        }
+        .profile-order-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border-radius: 20px;
+          padding: 6px 12px;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: capitalize;
+        }
+        .profile-order-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: currentColor;
+        }
+        .profile-order-body {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 16px 0;
+        }
+        .profile-order-thumb {
+          width: 64px;
+          height: 74px;
+          border-radius: 8px;
+          object-fit: cover;
+          object-position: top;
+          background: #F8FAFC;
+          border: 1px solid ${C.border};
+          flex-shrink: 0;
+        }
+        .profile-order-bottom {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 0;
+          border-top: 1px solid #F1F5F9;
+          color: ${C.muted};
+          font-size: 12px;
+        }
+        .profile-track-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border: none;
+          background: transparent;
+          color: ${C.brand};
+          font-family: ${F.main};
+          font-size: 12px;
+          font-weight: 600;
           cursor: pointer;
+          transition: color 0.2s;
         }
-        .profile-btn-discard:hover {
-          color: ${C.brand} !important;
-          border-color: ${C.brand} !important;
+        .profile-track-btn:hover {
+          color: ${C.accentHov};
         }
-        @media (max-width: 600px) {
-          .profile-action-row {
-            gap: 10px !important;
+
+        .profile-empty-state {
+          text-align: center;
+          padding: 48px 20px;
+        }
+        .profile-empty-icon {
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          background: #F4F8F2;
+          color: ${C.brand};
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 26px;
+          margin-bottom: 16px;
+        }
+        .profile-empty-title {
+          font-family: ${F.serif};
+          font-size: 22px;
+          font-weight: 600;
+          color: ${C.brandDark};
+          margin: 0 0 8px;
+        }
+        .profile-empty-text {
+          font-size: 14px;
+          color: ${C.muted};
+          font-family: ${F.sub};
+          max-width: 380px;
+          margin: 0 auto 20px;
+        }
+
+        @media (max-width: 992px) {
+          .profile-grid-layout {
+            flex-direction: column;
+            gap: 20px;
           }
-          .profile-action-row .profile-btn-discard,
-          .profile-action-row .profile-btn-save {
-            flex: 1 1 0 !important;
-            padding: 0 10px !important;
-            font-size: 11px !important;
-            letter-spacing: 1px !important;
-            min-height: 42px !important;
-            height: 42px !important;
+          .profile-sidebar-wrap {
+            width: 100%;
+          }
+          .profile-nav-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+          }
+          .profile-nav-item {
+            margin-bottom: 0;
+          }
+          .profile-hero-stats {
+            width: 100%;
+            justify-content: space-around;
+            padding-top: 14px;
+            border-top: 1px solid #F1F5F9;
+          }
+          .profile-stat-item {
+            flex: 1;
+            padding: 6px 12px;
           }
         }
-        .my-orders-list { display: grid; gap: 16px; }
-        .my-order-card { background: #fff; border: 1px solid ${C.border}; border-radius: 14px; padding: 20px 22px 0; box-shadow: 0 5px 18px rgba(31,92,68,.05); }
-        .my-order-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid #F0EEE8; }
-        .my-order-topline > div { display: flex; align-items: center; gap: 10px; }
-        .my-order-label { color: ${C.muted}; font-size: 10px; letter-spacing: 1.5px; }
-        .my-order-topline strong { font-size: 14px; }
-        .my-order-status { display: inline-flex; align-items: center; gap: 7px; border-radius: 20px; padding: 7px 11px; font-size: 11px; font-weight: 600; text-transform: capitalize; }
-        .my-order-status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-        .my-order-summary { display: flex; align-items: center; gap: 16px; padding: 18px 0; }
-        .my-order-image, .my-order-image-placeholder { width: 64px; height: 74px; border-radius: 8px; object-fit: cover; object-position: top; background: ${C.bg}; flex-shrink: 0; }
-        .my-order-image-placeholder { display: grid; place-items: center; color: ${C.brand}; font-size: 20px; }
-        .my-order-info { display: grid; gap: 5px; min-width: 0; flex: 1; }
-        .my-order-date, .my-order-more { color: ${C.muted}; font-size: 12px; }
-        .my-order-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
-        .my-order-total { display: grid; justify-items: end; gap: 5px; padding-left: 14px; }
-        .my-order-total span { color: ${C.muted}; font-size: 11px; }
-        .my-order-total strong { font-size: 15px; white-space: nowrap; }
-        .my-order-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 0; border-top: 1px solid #F0EEE8; color: ${C.muted}; font-size: 12px; }
-        .my-order-bottom button { display: inline-flex; align-items: center; gap: 9px; border: 0; background: transparent; color: ${C.brand}; font: 600 12px ${F.main}; cursor: pointer; padding: 7px 0 7px 10px; transition: color 0.2s ease; }
-        .my-order-bottom button:hover { color: ${C.gold}; }
+
         @media (max-width: 600px) {
-          .my-order-card { padding: 15px 14px 0; }
-          .my-order-summary { gap: 11px; padding: 14px 0; }
-          .my-order-image, .my-order-image-placeholder { width: 54px; height: 64px; }
-          .my-order-info strong { font-size: 12px; }
-          .my-order-date, .my-order-more { font-size: 10px; }
-          .my-order-total { padding-left: 4px; }
-          .my-order-total strong { font-size: 12px; }
-          .my-order-total span, .my-order-bottom { font-size: 10px; }
-          .my-order-bottom button { font-size: 10px; }
+          .profile-container {
+            padding: 16px 14px 60px;
+          }
+          .profile-hero-card {
+            padding: 20px 18px;
+            gap: 16px;
+          }
+          .profile-hero-avatar-ring {
+            width: 58px;
+            height: 58px;
+          }
+          .profile-hero-avatar {
+            font-size: 20px;
+          }
+          .profile-hero-stats {
+            display: flex !important;
+            width: 100% !important;
+            justify-content: space-around !important;
+            padding-top: 12px !important;
+            border-top: 1px solid #F1F5F9 !important;
+          }
+          .profile-stat-item {
+            flex: 1 !important;
+            padding: 4px 6px !important;
+          }
+          .profile-stat-number {
+            font-size: 20px !important;
+          }
+          .profile-stat-label {
+            font-size: 10px !important;
+            letter-spacing: 0.6px !important;
+          }
+          .profile-nav-list {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+          .profile-content-card {
+            padding: 20px 16px;
+          }
+          .profile-action-bar button {
+            flex: 1 1 100%;
+          }
         }
       `}</style>
-      <Header />
-      <div className="profile-inner" style={styles.inner}>
 
-        {/* ── Page Heading ── */}
-        <div style={styles.topRow}>
-          <div style={styles.headingWrap}>
-            <span style={styles.headingLine} />
-            <div>
-              <h1 style={styles.heading}>{currentHeader.title}</h1>
-              <p style={styles.subHead}>{currentHeader.sub}</p>
+      <div className="profile-container">
+
+        <nav className="profile-breadcrumb" aria-label="Breadcrumb">
+          <span className="link" onClick={() => navigate('/home')}>Home</span>
+          <span className="sep">/</span>
+          <span className="link" onClick={() => handleTabChange('profile')}>My Account</span>
+          {activeTab !== 'profile' && (
+            <>
+              <span className="sep">/</span>
+              <span className="current">{currentHeader.title}</span>
+            </>
+          )}
+        </nav>
+
+        <section className="profile-hero-card">
+          <div className="profile-hero-left">
+            <div className="profile-hero-avatar-ring">
+              <div className="profile-hero-avatar">{initials}</div>
             </div>
-          </div>
-        </div>
-
-        <div className="profile-layout" style={styles.layout}>
-
-          {/* ── Sidebar ── */}
-          <div className="profile-sidebar" style={styles.sidebar}>
-            <div style={styles.avatarCard}>
-              <div style={styles.avatarRing}>
-                <div style={styles.avatar}>{initials}</div>
+            <div className="profile-hero-info">
+              
+              <h1 className="profile-hero-name">Hello, {profile.name || 'Valued Customer'}</h1>
+              <div className="profile-hero-meta">
+                <span><i className="fa-regular fa-envelope" /> {profile.email}</span>
+                {profile.phone && <span><i className="fa-solid fa-phone" /> +91 {profile.phone}</span>}
               </div>
-              <p style={styles.avatarName}>{profile.name || 'Your Name'}</p>
-              <div style={styles.avatarDivider} />
-              <p style={styles.avatarEmail}>{profile.email}</p>
-            </div>
-
-            <div style={styles.navCard}>
-              <div style={styles.navLabel}>Account</div>
-              {navLinks.map(({ id, icon, label, badge }, i) => {
-                const active = activeTab === id;
-                const isLast = i === navLinks.length - 1;
-                return (
-                  <div
-                    key={id}
-                    style={{
-                      ...styles.navItem(active),
-                      borderBottom: isLast ? 'none' : `1px solid ${C.border}`,
-                    }}
-                    onClick={() => handleTabChange(id)}
-                  >
-                    <i className={icon} style={styles.navIcon(active)} />
-                    {label}
-                    {badge > 0 && <span style={styles.navBadge}>{badge}</span>}
-                  </div>
-                );
-              })}
             </div>
           </div>
 
-          {/* ── Main Content Tabs ── */}
-          <div style={styles.main}>
+          <div className="profile-hero-stats">
+            <button
+              type="button"
+              className="profile-stat-item"
+              onClick={() => handleTabChange('orders')}
+              title="View your orders"
+              aria-label={`${myOrders?.length || 0} Orders`}
+            >
+              <span className="profile-stat-number">{myOrders?.length || 0}</span>
+              <span className="profile-stat-label">Orders</span>
+            </button>
 
-            {/* ══════════════════════════════════════════════════
-               TAB 1: PROFILE
-            ══════════════════════════════════════════════════ */}
+            <span className="profile-stat-divider" aria-hidden="true" />
+
+            <button
+              type="button"
+              className="profile-stat-item"
+              onClick={() => handleTabChange('wishlist')}
+              title="View your wishlist"
+              aria-label={`${wishlistCount || 0} Wishlist items`}
+            >
+              <span className="profile-stat-number">{wishlistCount || 0}</span>
+              <span className="profile-stat-label">Wishlist</span>
+            </button>
+
+            <span className="profile-stat-divider" aria-hidden="true" />
+
+            <button
+              type="button"
+              className="profile-stat-item"
+              onClick={() => handleTabChange('cart')}
+              title="View shopping bag"
+              aria-label={`${cartCount || 0} Items in Bag`}
+            >
+              <span className="profile-stat-number">{cartCount || 0}</span>
+              <span className="profile-stat-label">In Bag</span>
+            </button>
+          </div>
+        </section>
+
+        <div className="profile-grid-layout">
+
+          <aside className="profile-sidebar-wrap">
+            <div className="profile-nav-box">
+              <span className="profile-nav-eyebrow">Account Dashboard</span>
+              <div className="profile-nav-list">
+                {navLinks.map(({ id, icon, label, badge }) => {
+                  const active = activeTab === id;
+                  return (
+                    <div
+                      key={id}
+                      role="button"
+                      tabIndex={0}
+                      className={`profile-nav-item ${active ? 'is-active' : ''}`}
+                      onClick={() => handleTabChange(id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTabChange(id); } }}
+                    >
+                      <i className={`profile-nav-item-icon ${icon}`} />
+                      <span>{label}</span>
+                      {badge > 0 && <span className="profile-nav-badge">{badge}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div
+                role="button"
+                tabIndex={0}
+                className="profile-nav-logout-btn"
+                onClick={() => { logout(); navigate('/home'); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); logout(); navigate('/home'); } }}
+              >
+                <i className="fa-solid fa-arrow-right-from-bracket" />
+                <span>Sign Out</span>
+              </div>
+            </div>
+          </aside>
+
+          <main className="profile-main-wrap">
+
             {activeTab === 'profile' && (
               <>
-                {/* Edit Profile */}
-                <div className="profile-card" style={styles.card}>
-                  <div style={styles.cardTitleWrap}>
-                    <div style={styles.cardTitleLeft}>
-                      <div style={styles.cardTitleBar} />
-                      <p style={styles.cardTitle}>Edit Profile</p>
+                <section className="profile-content-card">
+                  <div className="profile-card-header">
+                    <div className="profile-card-header-left">
+                      <span className="profile-card-icon-pill"><i className="fa-regular fa-user" /></span>
+                      <div>
+                        <h2 className="profile-card-title">Personal Information</h2>
+                        <p className="profile-card-subtitle">Manage your personal identification and contact details</p>
+                      </div>
                     </div>
                   </div>
-                  <div style={styles.formRow}>
-                    <Field label="Full Name"    value={profile.name}  onChange={setP('name')}  placeholder="Your full name" />
-                    <Field label="Phone Number" value={profile.phone} onChange={setP('phone')} placeholder="+91 00000 00000" type="tel" />
+
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                    <Field
+                      label="Full Name"
+                      value={profile.name}
+                      onChange={setP('name')}
+                      placeholder="Your full name"
+                      error={profileErrors.name}
+                      icon="fa-regular fa-user"
+                    />
+                    <Field
+                      label="Phone Number"
+                      value={profile.phone}
+                      onChange={setP('phone')}
+                      placeholder="10-digit mobile number"
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      error={profileErrors.phone}
+                      icon="fa-solid fa-phone"
+                    />
+                    <Field
+                      label="Email Address"
+                      value={profile.email}
+                      placeholder="you@example.com"
+                      type="email"
+                      full
+                      readOnly
+                      error={profileErrors.email}
+                      icon="fa-regular fa-envelope"
+                    />
                   </div>
-                  <div style={styles.formRow}>
-                    <Field label="Email Address" value={profile.email} placeholder="you@example.com" type="email" full readOnly />
-                  </div>
-                  <div className="profile-action-row" style={styles.actionRow}>
-                    <button className="profile-btn-discard" style={styles.discardBtn} onClick={handleDiscard}>Discard</button>
+
+                  <div className="profile-action-bar">
+                    <button type="button" className="profile-btn-ghost" onClick={handleDiscard}>
+                      Discard
+                    </button>
                     <button
-                      className="profile-btn-save"
-                      style={profileLoading ? styles.saveBtnDisabled : styles.saveBtn}
+                      type="button"
+                      className="profile-btn-primary"
                       onClick={handleSaveProfile}
                       disabled={profileLoading}
                     >
-                      {profileLoading ? 'Saving...' : 'Save Changes'}
+                      {profileLoading ? (
+                        <>
+                          <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} /> Saving...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fa-regular fa-floppy-disk" style={{ marginRight: 8 }} /> Save Changes
+                        </>
+                      )}
                     </button>
                   </div>
-                </div>
+                </section>
 
-                {/* Change Password */}
-                <div className="profile-card" style={styles.card}>
-                  <div style={styles.cardTitleWrap}>
-                    <div style={styles.cardTitleLeft}>
-                      <div style={styles.cardTitleBar} />
-                      <p style={styles.cardTitle}>Change Password</p>
+                <section className="profile-content-card">
+                  <div className="profile-card-header">
+                    <div className="profile-card-header-left">
+                      <span className="profile-card-icon-pill"><i className="fa-solid fa-shield-halved" /></span>
+                      <div>
+                        <h2 className="profile-card-title">Security & Password</h2>
+                        <p className="profile-card-subtitle">Update your password to keep your shopping account secure</p>
+                      </div>
                     </div>
                   </div>
-                  <div style={styles.formRow}>
-                    <Field label="Current Password" value={pw.current} onChange={setPwF('current')} type="password" placeholder="Enter current password" full />
+
+                  <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                    <Field
+                      label="Current Password"
+                      value={pw.current}
+                      onChange={setPwF('current')}
+                      type="password"
+                      placeholder="Enter your current password"
+                      full
+                      error={pwErrors.current}
+                      icon="fa-solid fa-key"
+                    />
+                    <Field
+                      label="New Password"
+                      value={pw.newPw}
+                      onChange={setPwF('newPw')}
+                      type="password"
+                      placeholder="Min. 6 characters"
+                      error={pwErrors.newPw}
+                      icon="fa-solid fa-lock"
+                    />
+                    <Field
+                      label="Confirm New Password"
+                      value={pw.confirm}
+                      onChange={setPwF('confirm')}
+                      type="password"
+                      placeholder="Re-enter new password"
+                      error={pwErrors.confirm}
+                      icon="fa-solid fa-circle-check"
+                    />
                   </div>
-                  <div style={styles.formRow}>
-                    <Field label="New Password"     value={pw.newPw}   onChange={setPwF('newPw')}   type="password" placeholder="Min. 6 characters" />
-                    <Field label="Confirm Password" value={pw.confirm} onChange={setPwF('confirm')} type="password" placeholder="Re-enter new password" />
-                  </div>
-                  <div className="profile-action-row" style={styles.actionRow}>
+
+                  <div className="profile-action-bar">
                     <button
-                      className="profile-btn-save"
-                      style={pwLoading ? styles.saveBtnDisabled : styles.saveBtn}
+                      type="button"
+                      className="profile-btn-primary"
                       onClick={handleSavePassword}
                       disabled={pwLoading}
                     >
-                      {pwLoading ? 'Updating...' : 'Update Password'}
+                      {pwLoading ? (
+                        <>
+                          <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} /> Updating...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fa-solid fa-shield-halved" style={{ marginRight: 8 }} /> Update Password
+                        </>
+                      )}
                     </button>
                   </div>
-                </div>
+                </section>
               </>
             )}
 
-            {/* ══════════════════════════════════════════════════
-               TAB 2: ORDERS
-            ══════════════════════════════════════════════════ */}
             {activeTab === 'orders' && (
-              <div className="profile-card" style={styles.card}>
-                <div style={styles.cardTitleWrap}>
-                  <div style={styles.cardTitleLeft}>
-                    <div style={styles.cardTitleBar} />
-                    <p style={styles.cardTitle}>Order History ({myOrders?.length || 0})</p>
+              <section className="profile-content-card">
+                <div className="profile-card-header">
+                  <div className="profile-card-header-left">
+                    <span className="profile-card-icon-pill"><i className="fa-solid fa-truck" /></span>
+                    <div>
+                      <h2 className="profile-card-title">Order History ({myOrders?.length || 0})</h2>
+                      <p className="profile-card-subtitle">Track deliveries and view itemized invoices</p>
+                    </div>
                   </div>
                   <button
                     style={{
                       background: 'none', border: 'none', color: C.brand,
                       fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase',
-                      cursor: 'pointer', fontFamily: F.main, fontWeight: 500,
-                      display: 'flex', alignItems: 'center', gap: '6px'
+                      cursor: 'pointer', fontFamily: F.main, fontWeight: 600,
+                      display: 'flex', alignItems: 'center', gap: '6px',
                     }}
                     onClick={() => navigate('/orders')}
                   >
@@ -702,38 +1225,38 @@ const ProfilePage = () => {
                 </div>
 
                 {!myOrders || myOrders.length === 0 ? (
-                  <div style={styles.emptyState}>
-                    <div style={styles.emptyIcon}>🛍️</div>
-                    <p style={styles.emptyTitle}>No Orders Yet</p>
-                    <p style={styles.emptyText}>When you place your first order, it will appear here.</p>
-                    <button style={styles.primaryBtn} onClick={() => navigate('/shop')}>
-                      Explore Sarees
+                  <div className="profile-empty-state">
+                    <div className="profile-empty-icon"><i className="fa-solid fa-box-open" /></div>
+                    <h3 className="profile-empty-title">No Orders Yet</h3>
+                    <p className="profile-empty-text">When you place your first order with Fashion Aura, your tracking timeline and receipt will appear here.</p>
+                    <button className="profile-btn-primary" onClick={() => navigate('/shop')}>
+                      Explore Collection
                     </button>
                   </div>
                 ) : (
-                  <div className="my-orders-list">
+                  <div>
                     {myOrders.map((order) => {
                       const badge = statusStyle(order.status);
                       const itemCount = (order.items || []).reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
                       const firstItem = order.items?.[0];
                       return (
-                        <article className="my-order-card" key={order.id}>
-                          <div className="my-order-topline">
-                            <div>
-                              <span className="my-order-label">ORDER</span>
-                              <strong>#{order.id}</strong>
+                        <article className="profile-order-card" key={order.id}>
+                          <div className="profile-order-top">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ color: C.muted, fontSize: '11px', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>Order</span>
+                              <strong style={{ fontSize: '14px', color: C.brandDark }}>#{order.id}</strong>
                             </div>
-                            <span className="my-order-status" style={{ color: badge.color, background: badge.bg }}>
-                              <span className="my-order-status-dot" />{labelFor(order.status || 'Processing')}
+                            <span className="profile-order-badge" style={{ color: badge.color, background: badge.bg }}>
+                              <span className="profile-order-dot" />{labelFor(order.status || 'Processing')}
                             </span>
                           </div>
 
-                          <div className="my-order-summary">
+                          <div className="profile-order-body">
                             {firstItem?.image ? (
                               <img
                                 src={firstItem.image}
                                 alt={firstItem?.name || ''}
-                                className="my-order-image"
+                                className="profile-order-thumb"
                                 onError={(e) => {
                                   e.target.src = defaultLogo;
                                   e.target.style.objectFit = 'contain';
@@ -742,27 +1265,36 @@ const ProfilePage = () => {
                                 }}
                               />
                             ) : (
-                              <div className="my-order-image-placeholder"><i className="fa-solid fa-bag-shopping" /></div>
+                              <div className="profile-order-thumb" style={{ display: 'grid', placeItems: 'center', color: C.brand, fontSize: '20px' }}>
+                                <i className="fa-solid fa-bag-shopping" />
+                              </div>
                             )}
-                            <div className="my-order-info">
-                              <span className="my-order-date">Placed {order.date || 'Date unavailable'}</span>
-                              <strong>{firstItem?.name || 'Order items'}</strong>
+
+                            <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: '4px' }}>
+                              <span style={{ color: C.muted, fontSize: '12px', fontFamily: F.sub }}>Placed on {order.date || 'Recent'}</span>
+                              <strong style={{ fontSize: '14px', color: C.brandDark, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {firstItem?.name || 'Order Items'}
+                              </strong>
                               {order.items?.length > 1 && (
-                                <span className="my-order-more">
-                                  and {order.items.length - 1} more product{order.items.length > 2 ? 's' : ''}
+                                <span style={{ color: C.brand, fontSize: '11px', fontWeight: 600 }}>
+                                  + {order.items.length - 1} more item{order.items.length > 2 ? 's' : ''}
                                 </span>
                               )}
                             </div>
-                            <div className="my-order-total">
-                              <span>Total</span>
-                              <strong>₹{Number(order.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ display: 'block', color: C.muted, fontSize: '11px' }}>Total Amount</span>
+                              <strong style={{ fontSize: '16px', color: C.brand, fontFamily: F.serif }}>
+                                ₹{Number(order.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </strong>
                             </div>
                           </div>
 
-                          <div className="my-order-bottom">
-                            <span>{itemCount} {itemCount === 1 ? 'item' : 'items'}</span>
+                          <div className="profile-order-bottom">
+                            <span>{itemCount} {itemCount === 1 ? 'item' : 'items'} in parcel</span>
                             <button
                               type="button"
+                              className="profile-track-btn"
                               onClick={() => navigate(`/orders/${encodeURIComponent(order.id)}`)}
                             >
                               Track Order <i className="fa-solid fa-arrow-right" />
@@ -773,28 +1305,28 @@ const ProfilePage = () => {
                     })}
                   </div>
                 )}
-              </div>
+              </section>
             )}
 
-            {/* ══════════════════════════════════════════════════
-               TAB 3: WISHLIST
-            ══════════════════════════════════════════════════ */}
             {activeTab === 'wishlist' && (
-              <div className="profile-card" style={styles.card}>
-                <div style={styles.cardTitleWrap}>
-                  <div style={styles.cardTitleLeft}>
-                    <div style={styles.cardTitleBar} />
-                    <p style={styles.cardTitle}>My Wishlist ({wishlistCount || 0})</p>
+              <section className="profile-content-card">
+                <div className="profile-card-header">
+                  <div className="profile-card-header-left">
+                    <span className="profile-card-icon-pill"><i className="fa-regular fa-heart" /></span>
+                    <div>
+                      <h2 className="profile-card-title">My Wishlist ({wishlistCount || 0})</h2>
+                      <p className="profile-card-subtitle">Your curated selection of favorites</p>
+                    </div>
                   </div>
                 </div>
 
                 {!wishlistItems || wishlistItems.length === 0 ? (
-                  <div style={styles.emptyState}>
-                    <div style={styles.emptyIcon}>🤍</div>
-                    <p style={styles.emptyTitle}>Your Wishlist is Empty</p>
-                    <p style={styles.emptyText}>Explore our collections and save your favorite sarees here.</p>
-                    <button style={styles.primaryBtn} onClick={() => navigate('/shop')}>
-                      Browse Collections
+                  <div className="profile-empty-state">
+                    <div className="profile-empty-icon"><i className="fa-regular fa-heart" /></div>
+                    <h3 className="profile-empty-title">Your Wishlist is Empty</h3>
+                    <p className="profile-empty-text">Explore our ethnic designs, kurtis, and maxi collections, then tap the heart icon to save what you love.</p>
+                    <button className="profile-btn-primary" onClick={() => navigate('/shop')}>
+                      Discover Collections
                     </button>
                   </div>
                 ) : (
@@ -808,8 +1340,8 @@ const ProfilePage = () => {
                           gap: '16px',
                           padding: '16px',
                           border: `1px solid ${C.border}`,
-                          borderRadius: '8px',
-                          background: '#fff',
+                          borderRadius: '12px',
+                          background: '#FFFFFF',
                           flexWrap: 'wrap',
                         }}
                       >
@@ -820,8 +1352,8 @@ const ProfilePage = () => {
                             width: '64px',
                             height: '74px',
                             objectFit: 'cover',
+                            borderRadius: '8px',
                             border: `1px solid ${C.border}`,
-                            borderRadius: '4px',
                             background: C.bg,
                             flexShrink: 0,
                           }}
@@ -833,39 +1365,25 @@ const ProfilePage = () => {
                           }}
                         />
 
-                        <div style={{ flex: 1, minWidth: '180px' }}>
-                          <h4 style={{ margin: '0 0 4px', fontSize: '14px', color: C.brand, fontFamily: F.main, fontWeight: 500 }}>
+                        <div style={{ flex: 1, minWidth: '160px' }}>
+                          <h4 style={{ margin: '0 0 4px', fontSize: '14px', color: C.brandDark, fontWeight: 600 }}>
                             {item.name}
                           </h4>
                           {item.subtitle && (
-                            <p style={{ margin: '0 0 6px', fontSize: '12px', color: C.muted, fontFamily: F.sub }}>
+                            <p style={{ margin: '0 0 4px', fontSize: '12px', color: C.muted, fontFamily: F.sub }}>
                               {item.subtitle}
                             </p>
                           )}
-                          <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: C.brand }}>
+                          <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: C.brand, fontFamily: F.serif }}>
                             ₹{(Number(item.price) || 0).toLocaleString('en-IN')}
                           </p>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: 'auto' }}>
                           <button
-                            className="item-action-btn"
-                            style={{
-                              padding: '8px 18px',
-                              background: C.brand,
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '6px',
-                              fontSize: '11px',
-                              letterSpacing: '1.5px',
-                              textTransform: 'uppercase',
-                              cursor: 'pointer',
-                              fontFamily: F.main,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              transition: 'all 0.2s',
-                            }}
+                            type="button"
+                            className="profile-btn-primary"
+                            style={{ minHeight: '40px', padding: '0 18px', fontSize: '10px' }}
                             onClick={() => {
                               addToCart({
                                 productId: item.productId || item.id,
@@ -877,26 +1395,32 @@ const ProfilePage = () => {
                                 subtitle:  item.subtitle,
                               });
                               removeFromWishlist(item.id);
-                              showToast(`${item.name} moved to cart!`);
+                              showToast(`${item.name} moved to bag!`);
                             }}
                           >
-                            <i className="fa-solid fa-bag-shopping" style={{ fontSize: '11px' }} />
-                            <span>Move to Cart</span>
+                            <i className="fa-solid fa-bag-shopping" style={{ marginRight: 6 }} /> Move to Bag
                           </button>
 
                           <button
+                            type="button"
+                            aria-label={`Remove ${item.name} from wishlist`}
+                            title="Remove from Wishlist"
                             style={{
-                              padding: '8px 12px',
-                              background: 'transparent',
+                              width: '40px',
+                              height: '40px',
                               border: `1px solid ${C.border}`,
-                              borderRadius: '6px',
+                              borderRadius: '10px',
+                              background: '#F8FAFC',
                               color: C.muted,
                               cursor: 'pointer',
-                              fontSize: '12px',
-                              transition: 'color 0.2s',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s',
                             }}
-                            title="Remove from Wishlist"
                             onClick={() => removeFromWishlist(item.id)}
+                            onMouseEnter={e => { e.currentTarget.style.color = C.danger; e.currentTarget.style.borderColor = C.danger; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border; }}
                           >
                             <i className="fa-regular fa-trash-can" />
                           </button>
@@ -905,27 +1429,27 @@ const ProfilePage = () => {
                     ))}
                   </div>
                 )}
-              </div>
+              </section>
             )}
 
-            {/* ══════════════════════════════════════════════════
-               TAB 4: CART
-            ══════════════════════════════════════════════════ */}
             {activeTab === 'cart' && (
-              <div className="profile-card" style={styles.card}>
-                <div style={styles.cardTitleWrap}>
-                  <div style={styles.cardTitleLeft}>
-                    <div style={styles.cardTitleBar} />
-                    <p style={styles.cardTitle}>Shopping Cart ({cartCount || 0})</p>
+              <section className="profile-content-card">
+                <div className="profile-card-header">
+                  <div className="profile-card-header-left">
+                    <span className="profile-card-icon-pill"><i className="fa-solid fa-bag-shopping" /></span>
+                    <div>
+                      <h2 className="profile-card-title">Shopping Bag ({cartCount || 0})</h2>
+                      <p className="profile-card-subtitle">Review and manage items before checkout</p>
+                    </div>
                   </div>
                 </div>
 
                 {!cartItems || cartItems.length === 0 ? (
-                  <div style={styles.emptyState}>
-                    <div style={styles.emptyIcon}>🛒</div>
-                    <p style={styles.emptyTitle}>Your Cart is Empty</p>
-                    <p style={styles.emptyText}>Add some beautiful sarees to your cart and they will show up here.</p>
-                    <button style={styles.primaryBtn} onClick={() => navigate('/shop')}>
+                  <div className="profile-empty-state">
+                    <div className="profile-empty-icon"><i className="fa-solid fa-bag-shopping" /></div>
+                    <h3 className="profile-empty-title">Your Bag is Empty</h3>
+                    <p className="profile-empty-text">Add your desired outfits and dresses to your shopping bag to continue.</p>
+                    <button className="profile-btn-primary" onClick={() => navigate('/shop')}>
                       Start Shopping
                     </button>
                   </div>
@@ -941,8 +1465,8 @@ const ProfilePage = () => {
                             gap: '16px',
                             padding: '16px',
                             border: `1px solid ${C.border}`,
-                            borderRadius: '8px',
-                            background: '#fff',
+                            borderRadius: '12px',
+                            background: '#FFFFFF',
                             flexWrap: 'wrap',
                           }}
                         >
@@ -953,8 +1477,8 @@ const ProfilePage = () => {
                               width: '64px',
                               height: '74px',
                               objectFit: 'cover',
+                              borderRadius: '8px',
                               border: `1px solid ${C.border}`,
-                              borderRadius: '4px',
                               background: C.bg,
                               flexShrink: 0,
                             }}
@@ -966,144 +1490,114 @@ const ProfilePage = () => {
                             }}
                           />
 
-                          <div style={{ flex: 1, minWidth: '160px' }}>
-                            <h4 style={{ margin: '0 0 4px', fontSize: '14px', color: C.brand, fontFamily: F.main, fontWeight: 500 }}>
+                          <div style={{ flex: 1, minWidth: '150px' }}>
+                            <h4 style={{ margin: '0 0 4px', fontSize: '14px', color: C.brandDark, fontWeight: 600 }}>
                               {item.name}
                             </h4>
                             {item.subtitle && (
-                              <p style={{ margin: '0 0 6px', fontSize: '12px', color: C.muted, fontFamily: F.sub }}>
+                              <p style={{ margin: '0 0 4px', fontSize: '12px', color: C.muted, fontFamily: F.sub }}>
                                 {item.subtitle}
                               </p>
                             )}
                             <p style={{ margin: 0, fontSize: '13px', color: C.muted }}>
-                              Unit Price: ₹{(Number(item.price) || 0).toLocaleString('en-IN')}
+                              Unit Price: <span style={{ color: C.brand, fontWeight: 600 }}>₹{(Number(item.price) || 0).toLocaleString('en-IN')}</span>
                             </p>
                           </div>
 
-                          {/* Quantity Selector */}
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              border: `1px solid ${C.border}`,
-                              borderRadius: '4px',
-                              overflow: 'hidden',
-                            }}
-                          >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginLeft: 'auto' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden' }}>
+                              <button
+                                type="button"
+                                aria-label={`Decrease quantity for ${item.name}`}
+                                style={{
+                                  width: '32px', height: '32px', border: 'none', background: '#F1F5F9',
+                                  color: C.brand, cursor: 'pointer', fontSize: '14px',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}
+                                onClick={() => updateQty(item.id, -1)}
+                              >
+                                −
+                              </button>
+                              <span style={{ minWidth: '32px', textAlign: 'center', fontSize: '13px', fontWeight: 600, color: C.brandDark }}>
+                                {item.qty}
+                              </span>
+                              <button
+                                type="button"
+                                aria-label={`Increase quantity for ${item.name}`}
+                                style={{
+                                  width: '32px', height: '32px', border: 'none', background: '#F1F5F9',
+                                  color: C.brand, cursor: 'pointer', fontSize: '14px',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}
+                                onClick={() => updateQty(item.id, 1)}
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            <div style={{ minWidth: '80px', textAlign: 'right', fontWeight: 700, color: C.brand, fontFamily: F.serif, fontSize: '16px' }}>
+                              ₹{((Number(item.price) || 0) * (Number(item.qty) || 1)).toLocaleString('en-IN')}
+                            </div>
+
                             <button
+                              type="button"
+                              aria-label={`Remove ${item.name} from cart`}
+                              title="Remove Item"
                               style={{
-                                width: '28px', height: '28px', border: 'none', background: '#F8F6F1',
-                                color: C.brand, cursor: 'pointer', fontSize: '14px',
+                                width: '36px', height: '36px', border: `1px solid ${C.border}`, borderRadius: '8px',
+                                background: '#F8FAFC', color: C.muted, cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all 0.2s',
                               }}
-                              onClick={() => updateQty(item.id, -1)}
+                              onClick={() => removeFromCart(item.id)}
+                              onMouseEnter={e => { e.currentTarget.style.color = C.danger; e.currentTarget.style.borderColor = C.danger; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border; }}
                             >
-                              -
-                            </button>
-                            <span style={{ width: '32px', textAlign: 'center', fontSize: '13px', fontWeight: 500, color: C.brand }}>
-                              {item.qty}
-                            </span>
-                            <button
-                              style={{
-                                width: '28px', height: '28px', border: 'none', background: '#F8F6F1',
-                                color: C.brand, cursor: 'pointer', fontSize: '14px',
-                              }}
-                              onClick={() => updateQty(item.id, 1)}
-                            >
-                              +
+                              <i className="fa-regular fa-trash-can" />
                             </button>
                           </div>
-
-                          <div style={{ minWidth: '80px', textAlign: 'right', fontWeight: 600, color: C.brand, fontSize: '14px' }}>
-                            ₹{((Number(item.price) || 0) * (Number(item.qty) || 1)).toLocaleString('en-IN')}
-                          </div>
-
-                          <button
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: C.muted,
-                              cursor: 'pointer',
-                              padding: '6px',
-                              fontSize: '14px',
-                            }}
-                            title="Remove Item"
-                            onClick={() => removeFromCart(item.id)}
-                          >
-                            <i className="fa-regular fa-trash-can" />
-                          </button>
                         </div>
                       ))}
                     </div>
 
-                    {/* Cart Total & Checkout Bar */}
-                    <div
-                      style={{
-                        padding: '20px',
-                        background: '#FAF9F6',
-                        border: `1px solid ${C.border}`,
-                        borderRadius: '8px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: '16px',
-                      }}
-                    >
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '20px 24px', background: '#F8FAFC', borderRadius: '14px',
+                      border: `1px solid ${C.border}`, flexWrap: 'wrap', gap: '16px'
+                    }}>
                       <div>
-                        <span style={{ fontSize: '11px', color: C.muted, letterSpacing: '1.5px', textTransform: 'uppercase', display: 'block' }}>
-                          Subtotal ({cartCount} item{cartCount > 1 ? 's' : ''})
-                        </span>
-                        <strong style={{ fontSize: '20px', color: C.brand, fontFamily: F.main }}>
-                          ₹{(Number(subtotal) || 0).toLocaleString('en-IN')}
+                        <span style={{ fontSize: '12px', color: C.muted, textTransform: 'uppercase', letterSpacing: '1px', display: 'block' }}>Estimated Bag Subtotal</span>
+                        <strong style={{ fontSize: '24px', color: C.brandDark, fontFamily: F.serif }}>
+                          ₹{Number(subtotal || 0).toLocaleString('en-IN')}
                         </strong>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '12px' }}>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                         <button
-                          style={{
-                            padding: '12px 24px',
-                            background: 'transparent',
-                            color: C.brand,
-                            border: `1px solid ${C.brand}`,
-                            borderRadius: '8px',
-                            fontSize: '11px',
-                            letterSpacing: '2px',
-                            textTransform: 'uppercase',
-                            cursor: 'pointer',
-                            fontFamily: F.main,
-                          }}
+                          type="button"
+                          className="profile-btn-ghost"
                           onClick={() => navigate('/shop')}
                         >
                           Continue Shopping
                         </button>
                         <button
-                          style={{
-                            padding: '12px 28px',
-                            background: C.brand,
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontSize: '11px',
-                            letterSpacing: '2px',
-                            textTransform: 'uppercase',
-                            cursor: 'pointer',
-                            fontFamily: F.main,
-                            fontWeight: 400,
-                          }}
+                          type="button"
+                          className="profile-btn-primary"
                           onClick={() => navigate('/checkout')}
                         >
-                          Proceed to Checkout
+                          Proceed to Checkout <i className="fa-solid fa-arrow-right" style={{ marginLeft: 8 }} />
                         </button>
                       </div>
                     </div>
                   </div>
                 )}
-              </div>
+              </section>
             )}
 
-          </div>
+          </main>
         </div>
       </div>
+
       <Footer />
     </div>
   );

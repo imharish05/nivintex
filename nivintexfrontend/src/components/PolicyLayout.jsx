@@ -207,7 +207,8 @@ const PolicyLayout = ({ title, subtitle, badge, lastUpdated, children }) => {
           align-items: center;
           justify-content: center;
           gap: 7px;
-          padding: 8px 14px;
+          min-height: 44px;
+          padding: 10px 16px;
           border-radius: 3px;
           font-size: 11.5px;
           font-family: 'Josefin Sans', sans-serif;
@@ -269,8 +270,11 @@ const PolicyLayout = ({ title, subtitle, badge, lastUpdated, children }) => {
         }
 
         @media (max-width: 768px) {
-          .plc-minimal-root { padding: 35px 0 50px; }
+          .plc-minimal-root { padding: 28px 0 60px; }
+          .plc-minimal-wrap { padding: 0 16px; }
           .plc-min-support { flex-direction: column; align-items: flex-start; }
+          .plc-min-support-links { width: 100%; }
+          .plc-min-btn { flex: 1 1 130px; }
         }
       `}</style>
 

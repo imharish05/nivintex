@@ -159,20 +159,31 @@ export function ComboCardSkeleton() {
 // ── Product Details Skeleton (Used on /product-details) ──
 export function ProductDetailsSkeleton() {
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '36px 20px', minHeight: '80vh' }}>
-      <style>{skeletonStyles}</style>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 16px', minHeight: '80vh' }}>
+      <style>{`
+        ${skeletonStyles}
+        .pdp-skel-gallery { display: flex; gap: 16px; }
+        .pdp-skel-thumbs { display: flex; flex-direction: column; gap: 10px; width: 70px; flex-shrink: 0; }
+        .pdp-skel-main { flex: 1; min-height: 480px; height: 70vh; max-height: 650px; border-radius: 10px; }
+        @media (max-width: 767.98px) {
+          .pdp-skel-gallery { flex-direction: column-reverse; gap: 10px; }
+          .pdp-skel-thumbs { flex-direction: row; width: 100%; overflow: hidden; }
+          .pdp-skel-thumbs > div { width: 58px !important; height: 74px !important; flex-shrink: 0; }
+          .pdp-skel-main { min-height: 320px; height: 52svh; max-height: 440px; }
+        }
+      `}</style>
       <div className="row g-4 g-lg-5">
         {/* Left Gallery */}
         <div className="col-lg-6 col-12">
-          <div style={{ display: 'flex', gap: 16 }}>
+          <div className="pdp-skel-gallery">
             {/* Thumbnails strip */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 70, flexShrink: 0 }}>
+            <div className="pdp-skel-thumbs">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="fa-skeleton" style={{ width: 66, height: 88, borderRadius: 6 }} />
               ))}
             </div>
             {/* Main Image */}
-            <div className="fa-skeleton" style={{ flex: 1, minHeight: 480, height: '70vh', maxHeight: 650, borderRadius: 10 }} />
+            <div className="fa-skeleton pdp-skel-main" />
           </div>
         </div>
 
@@ -329,8 +340,10 @@ export function OfferBannerSkeleton() {
           grid-auto-flow: column;
           grid-auto-columns: calc(50% - 14px);
           gap: clamp(14px, 2.5vw, 28px);
-          overflow: hidden;
+          overflow-x: auto;
+          scrollbar-width: none;
         }
+        .offer-skel-grid::-webkit-scrollbar { display: none; }
         @media (max-width: 820px) {
           .offer-skel-grid {
             grid-auto-columns: 100%;

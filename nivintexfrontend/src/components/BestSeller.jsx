@@ -75,7 +75,8 @@ const styles = `
     background: #ffffff;
     border: 1px solid rgba(15, 84, 71, 0.3);
     border-radius: 8px !important;
-    padding: 6px 14px;
+    min-height: 36px;
+    padding: 8px 14px;
     transition: all 0.22s ease;
     cursor: pointer;
     line-height: 1;
@@ -517,17 +518,17 @@ const styles = `
   @media (max-width: 600px) {
     :root { --card-width: 155px; --hero-width: 220px; --card-gap: 12px; }
     .bs-hero { height: 350px; }
-    .bs-hero-label { font-size: 38px; }
-    .bs-header { padding: 0 16px 18px; align-items: center; }
+    .bs-hero-label { font-size: clamp(24px, 6.5vw, 32px); }
+    .bs-header { padding: 0 16px 18px; align-items: center; flex-wrap: wrap; }
     .bs-title { font-size: clamp(20px, 5.2vw, 24px); }
-    .bs-viewall { font-size: 11px; padding: 5px 11px; gap: 4px; }
+    .bs-viewall { font-size: 11px; min-height: 36px; padding: 8px 12px; gap: 4px; }
     .bs-viewall svg { width: 10px; height: 10px; }
-    .bs-nav-arrow-btn { width: 28px; height: 28px; }
-    .bs-nav-arrow-btn svg { width: 12px; height: 12px; }
+    .bs-nav-arrow-btn { width: 36px; height: 36px; }
+    .bs-nav-arrow-btn svg { width: 14px; height: 14px; }
     .bs-carousel-outer { padding: 0 16px; }
     .bs-arrow {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       top: 35%;
       box-shadow: 0 2px 8px rgba(0,0,0,0.18);
     }
@@ -792,8 +793,7 @@ export default function BestSellersSection() {
                         />
                       ) : (
                         <div className="bs-placeholder" style={{ background: '#126354', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', overflow: 'hidden' }}>
-                        <img src={logo} alt="Fashion Aura" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
-                          <img src={logo} alt="Default Logo" style={{ width: '75%', height: 'auto', objectFit: 'contain' }} />
+                          <img src={logo} alt="Fashion Aura" style={{ width: '75%', height: 'auto', objectFit: 'contain' }} />
                         </div>
                       )}
 

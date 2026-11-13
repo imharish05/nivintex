@@ -53,6 +53,8 @@ const Footer = () => (
         text-decoration: none;
         letter-spacing: 0.3px;
         transition: opacity 0.2s;
+        display: inline-block;
+        padding: 4px 0;
       }
       .ft-brand-phone:hover { opacity: 0.75; }
 
@@ -158,7 +160,9 @@ const Footer = () => (
       }
       @media (max-width: 520px) {
         .ft-main { grid-template-columns: 1fr; padding: 36px 18px 20px; gap: 26px; }
-        .ft-bottom { padding: 18px 18px; text-align: center; justify-content: center; }
+        .ft-bottom { padding: 18px 18px 76px; text-align: center; justify-content: center; }
+        .ft-soc { width: 44px; height: 44px; font-size: 14px; }
+        .ft-link { padding: 4px 0; margin-bottom: 10px; }
       }
     `}</style>
 
